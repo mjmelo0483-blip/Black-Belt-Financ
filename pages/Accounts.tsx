@@ -11,7 +11,12 @@ const Accounts: React.FC = () => {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [loadingStatement, setLoadingStatement] = useState(false);
   const [viewMode, setViewMode] = useState<'summary' | 'statement'>('summary');
-  const [newAccount, setNewAccount] = useState({ name: '', type: 'checking', balance: '' });
+  const [newAccount, setNewAccount] = useState({
+    name: '',
+    type: 'checking',
+    balance: '',
+    initial_balance_date: new Date().toISOString().split('T')[0]
+  });
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -33,12 +38,16 @@ const Accounts: React.FC = () => {
       const promises = accounts.map(acc => getTransactionsUntilDueDate(acc.id, simulationDate));
       const results = await Promise.all(promises);
 
-      results.forEach((res) => {
+      results.forEach((res, index) => {
+        const acc = accounts[index];
         if (res.data) {
           res.data.forEach((t: any) => {
-            // Income adds to balance, Expense subtracts
-            if (t.type === 'income') totalTransactions += t.amount;
-            else totalTransactions -= t.amount;
+            // Only count transactions occurring AFTER the initial balance date
+            // Using logic: if transaction date >= initial_balance_date, then it's a new change
+            if (t.date >= acc.initial_balance_date) {
+              if (t.type === 'income') totalTransactions += t.amount;
+              else totalTransactions -= t.amount;
+            }
           });
         }
       });
@@ -59,6 +68,7 @@ const Accounts: React.FC = () => {
       name: newAccount.name,
       type: newAccount.type,
       balance: parseFloat(newAccount.balance.toString().replace(',', '.')),
+      initial_balance_date: newAccount.initial_balance_date,
     };
 
     let result;
@@ -74,7 +84,12 @@ const Accounts: React.FC = () => {
       alert('Erro: ' + (result.error as any).message);
     } else {
       setIsModalOpen(false);
-      setNewAccount({ name: '', type: 'checking', balance: '' });
+      setNewAccount({
+        name: '',
+        type: 'checking',
+        balance: '',
+        initial_balance_date: new Date().toISOString().split('T')[0]
+      });
       setIsEditing(false);
     }
     setSaving(false);
@@ -86,6 +101,7 @@ const Accounts: React.FC = () => {
       name: selectedAccount.name,
       type: selectedAccount.type,
       balance: selectedAccount.balance.toString().replace('.', ','),
+      initial_balance_date: selectedAccount.initial_balance_date,
     });
     setIsEditing(true);
     setIsModalOpen(true);
@@ -128,27 +144,12 @@ const Accounts: React.FC = () => {
 
       // Let's implement 'Extrato' style: 
       // We will show: ROW | DATE | DESC | VALUE | BALANCE_AFTER_TRANSACTION
-      // But to do this correctly, we need a baseline.
+      // We start from the account.balance (Initial Balance) on initial_balance_date.
 
-      // OPTION 1: Back-calculate from current balance (since we have it). 
-      // OPTION 2: Calculate forward from an arbitrary zero? No.
+      const statementRelevants = statement.filter((t: any) => t.date >= account.initial_balance_date);
+      let runningBalance = account.balance;
 
-      // Let's assume the user wants to see the running balance evolution.
-      // If we sort by Date ASC, we need the Balance BEFORE the first transaction to start.
-      // We don't have that stored explicitly (we only have current balance).
-
-      // Workaround: 
-      // 1. Calculate Total Realized Income - Total Realized Expense from the list.
-      // 2. Initial Balance (Theoretical) = Current Balance - (Income - Expense).
-      // 3. Then loop forward.
-
-      const totalRealized = statement.reduce((acc: number, t: any) => {
-        return acc + (t.type === 'income' ? t.amount : -t.amount);
-      }, 0);
-
-      let runningBalance = account.balance - totalRealized;
-
-      const statementWithBalance = statement.map((t: any) => {
+      const statementWithBalance = statementRelevants.map((t: any) => {
         runningBalance += (t.type === 'income' ? t.amount : -t.amount);
         return { ...t, balanceAfter: runningBalance };
       });
@@ -525,6 +526,17 @@ const Accounts: React.FC = () => {
                     onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value })}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-[#92adc9] uppercase tracking-wider text-[10px]">Data do Saldo Inicial</label>
+                <input
+                  required
+                  type="date"
+                  className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-4 px-4 text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                  value={newAccount.initial_balance_date}
+                  onChange={(e) => setNewAccount({ ...newAccount, initial_balance_date: e.target.value })}
+                />
               </div>
 
               <div className="flex gap-4 pt-6">

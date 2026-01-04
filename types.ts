@@ -13,10 +13,11 @@ export interface Transaction {
 export interface Account {
   id: string;
   name: string;
-  type: 'Checking' | 'Savings' | 'Investments' | 'Wallet';
+  type: 'checking' | 'savings' | 'investment' | 'cash' | 'credit';
   balance: number;
-  color: string;
-  institution: string;
+  initial_balance_date: string;
+  institution?: string;
+  color?: string;
   lastDigits?: string;
 }
 
