@@ -51,6 +51,26 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     const [isRecurring, setIsRecurring] = useState(false);
     const [recurrenceCount, setRecurrenceCount] = useState('1');
 
+    // Sincroniza o estado quando o initialData mudar ou o modal abrir
+    React.useEffect(() => {
+        if (isOpen) {
+            setType(initialData?.type || 'expense');
+            setStatus(initialData?.status || 'completed');
+            setAmount(initialData?.amount?.toString() || '');
+            setDate(initialData?.date || getLocalDate());
+            setDueDate(initialData?.due_date || getLocalDate());
+            setDescription(initialData?.description || '');
+            setCategoryId(initialData?.category_id || '');
+            setAccountId(initialData?.account_id || '');
+            setToAccountId('');
+            setPaymentMethod(initialData?.payment_method || 'debito');
+            setCardId(initialData?.card_id || '');
+            setInstallments(initialData?.installments?.toString() || '1');
+            setIsRecurring(false);
+            setRecurrenceCount('1');
+        }
+    }, [isOpen, initialData]);
+
     const addMonths = (dateStr: string, months: number) => {
         const [year, month, day] = dateStr.split('-').map(Number);
         const date = new Date(year, month - 1 + months, day);
