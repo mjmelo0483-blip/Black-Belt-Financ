@@ -158,84 +158,81 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* KPIs e Despesas - lado a lado */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* KPIs - Indicadores Rápidos */}
-        <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-white text-lg font-bold">Indicadores Financeiros</h2>
-              <p className="text-[#92adc9] text-sm">Análise do mês atual</p>
+      {/* KPIs - Indicadores Rápidos - Largura total */}
+      <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-white text-lg font-bold">Indicadores Financeiros</h2>
+            <p className="text-[#92adc9] text-sm">Análise do mês atual</p>
+          </div>
+          <span className="material-symbols-outlined text-primary bg-primary/10 p-2 rounded-xl">insights</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          {/* Taxa de Economia */}
+          <div className="bg-[#1c2a38] rounded-xl p-5 border border-[#324d67]/30 group hover:border-emerald-500/30 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Taxa de Economia</span>
+              <span className="material-symbols-outlined text-emerald-400 text-[20px]">savings</span>
             </div>
-            <span className="material-symbols-outlined text-primary bg-primary/10 p-2 rounded-xl">insights</span>
+            <p className={`text-2xl font-black ${stats.monthlyIncome > 0 ? ((stats.monthlyIncome - stats.monthlyExpenses) / stats.monthlyIncome * 100) >= 0 ? 'text-emerald-400' : 'text-red-400' : 'text-white'}`}>
+              {stats.monthlyIncome > 0 ? Math.round((stats.monthlyIncome - stats.monthlyExpenses) / stats.monthlyIncome * 100) : 0}%
+            </p>
+            <p className="text-[#6384a3] text-xs mt-1">da renda mensal</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Taxa de Economia */}
-            <div className="bg-[#1c2a38] rounded-xl p-5 border border-[#324d67]/30 group hover:border-emerald-500/30 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Taxa de Economia</span>
-                <span className="material-symbols-outlined text-emerald-400 text-[20px]">savings</span>
-              </div>
-              <p className={`text-2xl font-black ${stats.monthlyIncome > 0 ? ((stats.monthlyIncome - stats.monthlyExpenses) / stats.monthlyIncome * 100) >= 0 ? 'text-emerald-400' : 'text-red-400' : 'text-white'}`}>
-                {stats.monthlyIncome > 0 ? Math.round((stats.monthlyIncome - stats.monthlyExpenses) / stats.monthlyIncome * 100) : 0}%
-              </p>
-              <p className="text-[#6384a3] text-xs mt-1">da renda mensal</p>
+          {/* Saldo Disponível */}
+          <div className="bg-[#1c2a38] rounded-xl p-5 border border-[#324d67]/30 group hover:border-primary/30 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Saldo Disponível</span>
+              <span className="material-symbols-outlined text-primary text-[20px]">account_balance_wallet</span>
             </div>
-
-            {/* Saldo Disponível */}
-            <div className="bg-[#1c2a38] rounded-xl p-5 border border-[#324d67]/30 group hover:border-primary/30 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Saldo Disponível</span>
-                <span className="material-symbols-outlined text-primary text-[20px]">account_balance_wallet</span>
-              </div>
-              <p className="text-2xl font-black text-white">{formatCurrency(stats.totalBalance)}</p>
-              <p className="text-[#6384a3] text-xs mt-1">em todas as contas</p>
-            </div>
-
-            {/* Fatura Cartões */}
-            <div className="bg-[#1c2a38] rounded-xl p-5 border border-[#324d67]/30 group hover:border-orange-500/30 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Fatura Cartões</span>
-                <span className="material-symbols-outlined text-orange-400 text-[20px]">credit_card</span>
-              </div>
-              <p className="text-2xl font-black text-orange-400">{formatCurrency(stats.cardBalance || 0)}</p>
-              <p className="text-[#6384a3] text-xs mt-1">em aberto</p>
-            </div>
-
-            {/* Investimentos */}
-            <div className="bg-[#1c2a38] rounded-xl p-5 border border-[#324d67]/30 group hover:border-purple-500/30 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Investimentos</span>
-                <span className="material-symbols-outlined text-purple-400 text-[20px]">trending_up</span>
-              </div>
-              <p className="text-2xl font-black text-purple-400">{formatCurrency(stats.investments)}</p>
-              <p className="text-[#6384a3] text-xs mt-1">patrimônio investido</p>
-            </div>
+            <p className="text-2xl font-black text-white">{formatCurrency(stats.totalBalance)}</p>
+            <p className="text-[#6384a3] text-xs mt-1">em todas as contas</p>
           </div>
 
-          {/* Barra de progresso - relação receita/despesa */}
-          <div className="mt-6 p-4 bg-[#1c2a38] rounded-xl border border-[#324d67]/30">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Receitas vs Despesas</span>
-              <span className="text-white text-sm font-bold">
-                {formatCurrency(stats.monthlyIncome - stats.monthlyExpenses)}
-              </span>
+          {/* Fatura Cartões */}
+          <div className="bg-[#1c2a38] rounded-xl p-5 border border-[#324d67]/30 group hover:border-orange-500/30 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Fatura Cartões</span>
+              <span className="material-symbols-outlined text-orange-400 text-[20px]">credit_card</span>
             </div>
-            <div className="h-3 bg-[#111a22] rounded-full overflow-hidden flex">
-              <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-l-full transition-all duration-500"
-                style={{ width: `${stats.monthlyIncome + stats.monthlyExpenses > 0 ? (stats.monthlyIncome / (stats.monthlyIncome + stats.monthlyExpenses)) * 100 : 50}%` }}
-              />
-              <div
-                className="h-full bg-gradient-to-r from-red-400 to-red-500 rounded-r-full transition-all duration-500"
-                style={{ width: `${stats.monthlyIncome + stats.monthlyExpenses > 0 ? (stats.monthlyExpenses / (stats.monthlyIncome + stats.monthlyExpenses)) * 100 : 50}%` }}
-              />
+            <p className="text-2xl font-black text-orange-400">{formatCurrency(stats.cardBalance || 0)}</p>
+            <p className="text-[#6384a3] text-xs mt-1">em aberto</p>
+          </div>
+
+          {/* Investimentos */}
+          <div className="bg-[#1c2a38] rounded-xl p-5 border border-[#324d67]/30 group hover:border-purple-500/30 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Investimentos</span>
+              <span className="material-symbols-outlined text-purple-400 text-[20px]">trending_up</span>
             </div>
-            <div className="flex justify-between mt-2">
-              <span className="text-emerald-400 text-xs font-bold">{formatCurrency(stats.monthlyIncome)}</span>
-              <span className="text-red-400 text-xs font-bold">{formatCurrency(stats.monthlyExpenses)}</span>
-            </div>
+            <p className="text-2xl font-black text-purple-400">{formatCurrency(stats.investments)}</p>
+            <p className="text-[#6384a3] text-xs mt-1">patrimônio investido</p>
+          </div>
+        </div>
+
+        {/* Barra de progresso - relação receita/despesa */}
+        <div className="mt-6 p-4 bg-[#1c2a38] rounded-xl border border-[#324d67]/30">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Receitas vs Despesas</span>
+            <span className="text-white text-sm font-bold">
+              {formatCurrency(stats.monthlyIncome - stats.monthlyExpenses)}
+            </span>
+          </div>
+          <div className="h-3 bg-[#111a22] rounded-full overflow-hidden flex">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-l-full transition-all duration-500"
+              style={{ width: `${stats.monthlyIncome + stats.monthlyExpenses > 0 ? (stats.monthlyIncome / (stats.monthlyIncome + stats.monthlyExpenses)) * 100 : 50}%` }}
+            />
+            <div
+              className="h-full bg-gradient-to-r from-red-400 to-red-500 rounded-r-full transition-all duration-500"
+              style={{ width: `${stats.monthlyIncome + stats.monthlyExpenses > 0 ? (stats.monthlyExpenses / (stats.monthlyIncome + stats.monthlyExpenses)) * 100 : 50}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-2">
+            <span className="text-emerald-400 text-xs font-bold">{formatCurrency(stats.monthlyIncome)}</span>
+            <span className="text-red-400 text-xs font-bold">{formatCurrency(stats.monthlyExpenses)}</span>
           </div>
         </div>
       </div>
@@ -280,8 +277,8 @@ const Dashboard: React.FC = () => {
                 <div className="h-2 bg-[#111a22] rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${budget.percentage > 100 ? 'bg-gradient-to-r from-red-500 to-red-400' :
-                        budget.percentage > 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
-                          'bg-gradient-to-r from-emerald-500 to-emerald-400'
+                      budget.percentage > 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                        'bg-gradient-to-r from-emerald-500 to-emerald-400'
                       }`}
                     style={{ width: `${Math.min(100, budget.percentage)}%` }}
                   />
@@ -290,7 +287,8 @@ const Dashboard: React.FC = () => {
             ))}
           </div>
         </div>
-      )}
+      )
+      }
 
       {/* Expense Chart - Expandido para toda largura */}
       <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg">
@@ -397,11 +395,12 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 
 export default Dashboard;
+
 
 
 
