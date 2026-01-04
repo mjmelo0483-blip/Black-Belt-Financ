@@ -43,16 +43,28 @@ export const useCards = () => {
         return { data, error };
     };
 
-    const getCardTransactions = async (cardId: string) => {
-        const { data, error } = await supabase
+    const getCardTransactions = async (cardId: string, month?: number, year?: number) => {
+        let query = supabase
             .from('transactions')
             .select(`
                 *,
                 categories (name, icon, color)
             `)
             .eq('card_id', cardId)
-            .eq('payment_method', 'credito')
-            .order('date', { ascending: false });
+            .eq('payment_method', 'credito');
+
+        // Se mês e ano foram fornecidos, filtrar por due_date no período
+        if (month !== undefined && year !== undefined) {
+            const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+            const endOfMonth = new Date(year, month + 1, 0);
+            const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(endOfMonth.getDate()).padStart(2, '0')}`;
+
+            query = query
+                .gte('due_date', startDate)
+                .lte('due_date', endDate);
+        }
+
+        const { data, error } = await query.order('due_date', { ascending: false });
 
         return { data, error };
     };

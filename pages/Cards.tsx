@@ -21,13 +21,45 @@ const Cards: React.FC = () => {
   const [usedLimit, setUsedLimit] = useState(0);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
 
+  // Estado para navegação de fatura por mês
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
   const currentCard = cards[activeCardIndex] || null;
+
+  // Funções de navegação de mês
+  const goToPreviousMonth = () => {
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear(selectedYear - 1);
+    } else {
+      setSelectedMonth(selectedMonth - 1);
+    }
+  };
+
+  const goToNextMonth = () => {
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear(selectedYear + 1);
+    } else {
+      setSelectedMonth(selectedMonth + 1);
+    }
+  };
+
+  const getMonthName = (month: number) => {
+    const months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    return months[month];
+  };
 
   useEffect(() => {
     const loadCardData = async () => {
       if (currentCard) {
         setLoadingTransactions(true);
-        const { data } = await getCardTransactions(currentCard.id);
+        // Buscar transações filtradas pelo mês/ano selecionado
+        const { data } = await getCardTransactions(currentCard.id, selectedMonth, selectedYear);
         const transactions = data || [];
         setCardTransactions(transactions);
 
@@ -42,7 +74,7 @@ const Cards: React.FC = () => {
     };
     loadCardData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCard?.id]);
+  }, [currentCard?.id, selectedMonth, selectedYear]);
 
   const handleNewClick = () => {
     setFormData({
@@ -250,12 +282,44 @@ const Cards: React.FC = () => {
             </div>
 
             <div className="lg:col-span-8 overflow-hidden rounded-xl border border-[#233648] bg-[#16212a] shadow-xl">
-              <div className="p-6 border-b border-[#233648] flex items-center justify-between">
-                <h2 className="text-xl font-bold text-white">Próximas Faturas</h2>
-                <div className="flex gap-2">
-                  <div className="flex gap-2">
-                    <div className="px-3 py-1 bg-primary/10 border border-primary/20 rounded-full text-primary text-[10px] font-black uppercase tracking-widest">Aberta</div>
+              <div className="p-6 border-b border-[#233648]">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-white">Fatura</h2>
+                  <div className="px-3 py-1 bg-primary/10 border border-primary/20 rounded-full text-primary text-[10px] font-black uppercase tracking-widest">
+                    {cardTransactions.length > 0 ? 'Aberta' : 'Sem lançamentos'}
                   </div>
+                </div>
+
+                {/* Seletor de Mês */}
+                <div className="flex items-center justify-between bg-[#111a22] rounded-xl p-4">
+                  <button
+                    onClick={goToPreviousMonth}
+                    className="size-10 rounded-lg bg-[#1c2a38] hover:bg-[#233648] text-[#92adc9] hover:text-white transition-all flex items-center justify-center"
+                  >
+                    <span className="material-symbols-outlined">chevron_left</span>
+                  </button>
+
+                  <div className="text-center">
+                    <p className="text-white font-bold text-lg">
+                      {getMonthName(selectedMonth)} {selectedYear}
+                    </p>
+                    <p className="text-[#92adc9] text-xs">
+                      Vencimento: dia {currentCard?.due_day || 10}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={goToNextMonth}
+                    className="size-10 rounded-lg bg-[#1c2a38] hover:bg-[#233648] text-[#92adc9] hover:text-white transition-all flex items-center justify-center"
+                  >
+                    <span className="material-symbols-outlined">chevron_right</span>
+                  </button>
+                </div>
+
+                {/* Total da Fatura */}
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-[#92adc9] text-sm">Total da fatura:</span>
+                  <span className="text-white font-bold text-xl">{formatCurrency(usedLimit)}</span>
                 </div>
               </div>
               <div className="overflow-x-auto">
