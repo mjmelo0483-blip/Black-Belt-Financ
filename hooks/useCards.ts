@@ -79,5 +79,17 @@ export const useCards = () => {
         return { error };
     };
 
-    return { cards, loading, addCard, updateCard, deleteCard, refresh: fetchCards, getCardTransactions };
+    return { cards, loading, addCard, updateCard, deleteCard, refresh: fetchCards, getCardTransactions, getCardOpenTransactions };
+
+    // Função para buscar todas as transações em aberto do cartão (para calcular limite utilizado)
+    async function getCardOpenTransactions(cardId: string) {
+        const { data, error } = await supabase
+            .from('transactions')
+            .select('amount')
+            .eq('card_id', cardId)
+            .eq('payment_method', 'credito')
+            .eq('status', 'open');
+
+        return { data, error };
+    }
 };

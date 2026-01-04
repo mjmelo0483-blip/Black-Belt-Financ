@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCards } from '../hooks/useCards';
 
 const Cards: React.FC = () => {
-  const { cards, loading, addCard, updateCard, deleteCard, getCardTransactions } = useCards();
+  const { cards, loading, addCard, updateCard, deleteCard, getCardTransactions, getCardOpenTransactions } = useCards();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedCard, setSelectedCard] = useState<any>(null);
@@ -18,7 +18,8 @@ const Cards: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [cardTransactions, setCardTransactions] = useState<any[]>([]);
-  const [usedLimit, setUsedLimit] = useState(0);
+  const [usedLimit, setUsedLimit] = useState(0); // Total de TODAS as faturas em aberto
+  const [invoiceTotal, setInvoiceTotal] = useState(0); // Total da fatura do mês selecionado
   const [loadingTransactions, setLoadingTransactions] = useState(false);
 
   // Estado para navegação de fatura por mês
@@ -54,6 +55,23 @@ const Cards: React.FC = () => {
     return months[month];
   };
 
+  // Buscar limite utilizado (todas as transações em aberto do cartão)
+  useEffect(() => {
+    const loadUsedLimit = async () => {
+      if (currentCard) {
+        const { data } = await getCardOpenTransactions(currentCard.id);
+        const openTransactions = data || [];
+        const totalOpen = openTransactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+        setUsedLimit(totalOpen);
+      } else {
+        setUsedLimit(0);
+      }
+    };
+    loadUsedLimit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCard?.id]);
+
+  // Buscar transações da fatura do mês selecionado
   useEffect(() => {
     const loadCardData = async () => {
       if (currentCard) {
@@ -63,12 +81,13 @@ const Cards: React.FC = () => {
         const transactions = data || [];
         setCardTransactions(transactions);
 
-        const totalUsed = transactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
-        setUsedLimit(totalUsed);
+        // Total da fatura do mês selecionado
+        const monthTotal = transactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+        setInvoiceTotal(monthTotal);
         setLoadingTransactions(false);
       } else {
         setCardTransactions([]);
-        setUsedLimit(0);
+        setInvoiceTotal(0);
         setLoadingTransactions(false);
       }
     };
@@ -319,7 +338,7 @@ const Cards: React.FC = () => {
                 {/* Total da Fatura */}
                 <div className="mt-4 flex items-center justify-between">
                   <span className="text-[#92adc9] text-sm">Total da fatura:</span>
-                  <span className="text-white font-bold text-xl">{formatCurrency(usedLimit)}</span>
+                  <span className="text-white font-bold text-xl">{formatCurrency(invoiceTotal)}</span>
                 </div>
               </div>
               <div className="overflow-x-auto">
