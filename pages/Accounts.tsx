@@ -136,22 +136,31 @@ const Accounts: React.FC = () => {
     setLoadingStatement(true);
     const { data: statement, error: stError } = await getAccountStatement(account.id);
     if (!stError && statement) {
-      // Calculate running balance
-      let currentBalance = account.balance; // Using current balance provided by user as starting point? 
-      // ACTUALLY: The requirement says "Saldo Inicial de cada conta e os lançamentos que estiverem como realizado"
-      // Ideally, Initial Balance + Sum(Realized) = Current Balance.
-      // But typically "Account Balance" stored in DB is the CURRENT balance.
-      // So to show history, we might need to work backwards OR assume the user provided the CURRENT balance and we just show the list of transactions associated.
+      // Extrato: mostra todas as transações realizadas
+      // Saldo é calculado retroativamente: Saldo Atual - transações (do mais recente ao mais antigo)
+      // OU calculado progressivamente: saldo inicial + transações
 
-      // Let's implement 'Extrato' style: 
-      // We will show: ROW | DATE | DESC | VALUE | BALANCE_AFTER_TRANSACTION
-      // We start from the account.balance (Initial Balance) on initial_balance_date.
+      // Ordenar por due_date (data de vencimento) para melhor visualização
+      const sortedStatement = [...statement].sort((a, b) => {
+        const dateA = a.due_date || a.date;
+        const dateB = b.due_date || b.date;
+        return dateA.localeCompare(dateB);
+      });
 
-      const statementRelevants = statement.filter((t: any) => t.date >= account.initial_balance_date);
+      // Calcular saldo progressivamente
+      // Saldo inicial + transações em ordem cronológica
       let runningBalance = account.balance;
 
-      const statementWithBalance = statementRelevants.map((t: any) => {
-        runningBalance += (t.type === 'income' ? t.amount : -t.amount);
+      // Primeiro, subtrair todas as transações para voltar ao "saldo inicial"
+      sortedStatement.forEach((t: any) => {
+        if (t.type === 'income') runningBalance -= t.amount;
+        else runningBalance += t.amount;
+      });
+
+      // Agora recalcular progressivamente
+      const statementWithBalance = sortedStatement.map((t: any) => {
+        if (t.type === 'income') runningBalance += t.amount;
+        else runningBalance -= t.amount;
         return { ...t, balanceAfter: runningBalance };
       });
 
