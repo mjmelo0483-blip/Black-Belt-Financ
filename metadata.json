@@ -1,0 +1,8 @@
+{
+  "name": "Black Belt Financ",
+  "description": "A high-end financial management dashboard featuring multi-account tracking, smart budgeting with AI insights, credit card management, and detailed cash flow analysis.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

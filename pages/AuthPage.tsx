@@ -1,0 +1,131 @@
+import React, { useState } from 'react';
+import { supabase } from '../supabase';
+import { useNavigate } from 'react-router-dom';
+import logo from '../assets/logo.png';
+
+const AuthPage: React.FC = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [isSignUp, setIsSignUp] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const navigate = useNavigate();
+
+    const handleAuth = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+
+        try {
+            if (isSignUp) {
+                const { error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                });
+                if (error) throw error;
+                alert('Verifique seu e-mail para confirmar o cadastro!');
+            } else {
+                const { error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
+                if (error) throw error;
+                navigate('/dashboard');
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0b1218] overflow-hidden">
+            {/* Background elements for premium look */}
+            <div className="absolute top-[-10%] left-[-10%] size-[40%] bg-primary/20 blur-[120px] rounded-full"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] size-[40%] bg-blue-600/10 blur-[120px] rounded-full"></div>
+
+            <div className="w-full max-w-md p-8 bg-[#1a2632]/80 backdrop-blur-xl border border-[#324d67]/50 rounded-2xl shadow-2xl relative z-10">
+                <div className="flex flex-col items-center mb-10">
+                    <div className="size-32 rounded-3xl bg-[#1c2a38] flex items-center justify-center overflow-hidden border border-[#324d67] shadow-lg shadow-black/20 mb-6">
+                        <img
+                            src={logo}
+                            alt="Black Belt Financ Logo"
+                            className="size-full object-cover"
+                        />
+                    </div>
+                    <h1 className="text-2xl font-black text-white tracking-tight uppercase">Black Belt Financ</h1>
+                    <p className="text-[#92adc9] mt-2 text-sm">{isSignUp ? 'Crie sua conta premium' : 'Acesse sua conta'}</p>
+                </div>
+
+                <form onSubmit={handleAuth} className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium text-[#92adc9] mb-2">E-mail</label>
+                        <div className="relative">
+                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#92adc9] text-[20px]">mail</span>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 pl-10 pr-4 text-white placeholder-[#4a6b8a] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                                placeholder="seu@email.com"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-[#92adc9] mb-2">Senha</label>
+                        <div className="relative">
+                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#92adc9] text-[20px]">lock</span>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 pl-10 pr-4 text-white placeholder-[#4a6b8a] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                                placeholder="••••••••"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-500/50 text-red-500 text-sm p-3 rounded-lg flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[18px]">error</span>
+                            {error}
+                        </div>
+                    )}
+
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {loading ? (
+                            <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        ) : (
+                            <>
+                                {isSignUp ? 'Cadastrar' : 'Entrar'}
+                                <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                            </>
+                        )}
+                    </button>
+                </form>
+
+                <div className="mt-8 text-center pt-6 border-t border-[#324d67]/30">
+                    <p className="text-[#92adc9]">
+                        {isSignUp ? 'Já tem uma conta?' : 'Não tem uma conta?'}
+                        <button
+                            onClick={() => setIsSignUp(!isSignUp)}
+                            className="ml-2 text-primary font-bold hover:underline"
+                        >
+                            {isSignUp ? 'Fazer login' : 'Criar conta'}
+                        </button>
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default AuthPage;
