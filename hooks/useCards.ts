@@ -43,6 +43,20 @@ export const useCards = () => {
         return { data, error };
     };
 
+    const getCardTransactions = async (cardId: string) => {
+        const { data, error } = await supabase
+            .from('transactions')
+            .select(`
+                *,
+                categories (name, icon, color)
+            `)
+            .eq('card_id', cardId)
+            .eq('payment_method', 'credito')
+            .order('date', { ascending: false });
+
+        return { data, error };
+    };
+
     const deleteCard = async (id: string) => {
         const { error } = await supabase
             .from('cards')
@@ -53,5 +67,5 @@ export const useCards = () => {
         return { error };
     };
 
-    return { cards, loading, addCard, updateCard, deleteCard, refresh: fetchCards };
+    return { cards, loading, addCard, updateCard, deleteCard, refresh: fetchCards, getCardTransactions };
 };

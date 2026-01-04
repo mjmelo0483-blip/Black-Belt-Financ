@@ -1,9 +1,8 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCards } from '../hooks/useCards';
 
 const Cards: React.FC = () => {
-  const { cards, loading, addCard, updateCard, deleteCard } = useCards();
+  const { cards, loading, addCard, updateCard, deleteCard, getCardTransactions } = useCards();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedCard, setSelectedCard] = useState<any>(null);
@@ -18,8 +17,27 @@ const Cards: React.FC = () => {
   });
   const [saving, setSaving] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
+  const [cardTransactions, setCardTransactions] = useState<any[]>([]);
+  const [usedLimit, setUsedLimit] = useState(0);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
 
   const currentCard = cards[activeCardIndex] || null;
+
+  useEffect(() => {
+    const loadCardData = async () => {
+      if (currentCard) {
+        setLoadingTransactions(true);
+        const { data } = await getCardTransactions(currentCard.id);
+        const transactions = data || [];
+        setCardTransactions(transactions);
+
+        const totalUsed = transactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+        setUsedLimit(totalUsed);
+        setLoadingTransactions(false);
+      }
+    };
+    loadCardData();
+  }, [currentCard, getCardTransactions]);
 
   const handleNewClick = () => {
     setFormData({
@@ -166,9 +184,14 @@ const Cards: React.FC = () => {
                 </div>
                 <h3 className="text-2xl font-bold text-white">{formatCurrency(currentCard.credit_limit)}</h3>
                 <div className="mt-3 w-full bg-[#111a22] rounded-full h-2">
-                  <div className="bg-primary h-2 rounded-full" style={{ width: '0%' }}></div>
+                  <div
+                    className="bg-primary h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min((usedLimit / currentCard.credit_limit) * 100, 100)}%` }}
+                  ></div>
                 </div>
-                <p className="text-xs text-[#92adc9] mt-2 font-medium">R$ 0,00 utilizado (0%)</p>
+                <p className="text-xs text-[#92adc9] mt-2 font-medium">
+                  {formatCurrency(usedLimit)} utilizado ({((usedLimit / currentCard.credit_limit) * 100).toFixed(1)}%)
+                </p>
               </div>
 
               <div className="flex flex-col justify-between rounded-xl bg-[#1c2a38] border border-[#324d67]/30 p-6 shadow-sm">
@@ -178,7 +201,7 @@ const Cards: React.FC = () => {
                   </div>
                   <span className="text-[#92adc9] text-sm font-medium">Limite Disponível</span>
                 </div>
-                <h3 className="text-2xl font-bold text-white">{formatCurrency(currentCard.credit_limit)}</h3>
+                <h3 className="text-2xl font-bold text-white">{formatCurrency(currentCard.credit_limit - usedLimit)}</h3>
                 <p className="text-xs text-[#92adc9] mt-2 italic text-[10px] uppercase font-bold tracking-widest">Liberado para compras</p>
               </div>
             </div>
@@ -225,168 +248,207 @@ const Cards: React.FC = () => {
               <div className="p-6 border-b border-[#233648] flex items-center justify-between">
                 <h2 className="text-xl font-bold text-white">Próximas Faturas</h2>
                 <div className="flex gap-2">
-                  <div className="px-3 py-1 bg-primary/10 border border-primary/20 rounded-full text-primary text-[10px] font-black uppercase tracking-widest">Aberta</div>
+                  <div className="flex gap-2">
+                    <div className="px-3 py-1 bg-primary/10 border border-primary/20 rounded-full text-primary text-[10px] font-black uppercase tracking-widest">Aberta</div>
+                  </div>
                 </div>
-              </div>
-              <div className="p-10 text-center flex flex-col items-center justify-center gap-4">
-                <div className="size-20 rounded-full bg-[#111a22] flex items-center justify-center text-[#324d67] border border-[#233648] mb-2">
-                  <span className="material-symbols-outlined text-[40px]">history</span>
+
+                <div className="overflow-x-auto">
+                  {loadingTransactions ? (
+                    <div className="p-10 flex justify-center">
+                      <div className="size-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                    </div>
+                  ) : cardTransactions.length > 0 ? (
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-[#111a22]/30 border-b border-[#233648]">
+                          <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Data</th>
+                          <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Descrição</th>
+                          <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Categoria</th>
+                          <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest text-right">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#233648]/50">
+                        {cardTransactions.map((t) => (
+                          <tr key={t.id} className="hover:bg-[#111a22]/30 transition-colors">
+                            <td className="px-6 py-4 text-white text-xs whitespace-nowrap">
+                              {new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className="text-white font-bold text-xs truncate max-w-[200px]">{t.description}</p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-[#92adc9] text-[10px] font-bold uppercase">{t.categories?.name || 'Geral'}</span>
+                            </td>
+                            <td className="px-6 py-4 text-right text-white font-black text-xs">
+                              {formatCurrency(t.amount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="p-10 text-center flex flex-col items-center justify-center gap-4">
+                      <div className="size-20 rounded-full bg-[#111a22] flex items-center justify-center text-[#324d67] border border-[#233648] mb-2">
+                        <span className="material-symbols-outlined text-[40px]">history</span>
+                      </div>
+                      <h4 className="text-white font-bold opacity-80">Nenhuma transação registrada neste cartão</h4>
+                      <p className="text-[#92adc9] text-sm max-w-xs">As compras realizadas com este cartão aparecerão aqui automaticamente.</p>
+                    </div>
+                  )}
                 </div>
-                <h4 className="text-white font-bold opacity-80">Nenhuma transação registrada neste cartão</h4>
-                <p className="text-[#92adc9] text-sm max-w-xs">As compras realizadas com este cartão aparecerão aqui automaticamente.</p>
               </div>
             </div>
+          </>
+          ) : (
+          <div className="flex flex-col items-center justify-center py-20 bg-[#1c2a38]/40 border-2 border-dashed border-[#324d67] rounded-3xl gap-6">
+            <div className="size-24 rounded-full bg-[#111a22] flex items-center justify-center text-primary shadow-2xl border border-[#324d67]">
+              <span className="material-symbols-outlined text-[48px]">credit_card_off</span>
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-white font-bold text-2xl">Nenhum cartão cadastrado</h3>
+              <p className="text-[#92adc9] max-w-md mx-auto">Adicione seus cartões de crédito para ter um controle total sobre seus limites e faturas em um só lugar.</p>
+            </div>
+            <button
+              onClick={handleNewClick}
+              className="h-14 px-8 bg-primary hover:bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-primary/20 transition-all flex items-center gap-3 scale-110"
+            >
+              <span className="material-symbols-outlined">add_card</span>
+              Adicionar meu primeiro cartão
+            </button>
           </div>
-        </>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-20 bg-[#1c2a38]/40 border-2 border-dashed border-[#324d67] rounded-3xl gap-6">
-          <div className="size-24 rounded-full bg-[#111a22] flex items-center justify-center text-primary shadow-2xl border border-[#324d67]">
-            <span className="material-symbols-outlined text-[48px]">credit_card_off</span>
-          </div>
-          <div className="text-center space-y-2">
-            <h3 className="text-white font-bold text-2xl">Nenhum cartão cadastrado</h3>
-            <p className="text-[#92adc9] max-w-md mx-auto">Adicione seus cartões de crédito para ter um controle total sobre seus limites e faturas em um só lugar.</p>
-          </div>
-          <button
-            onClick={handleNewClick}
-            className="h-14 px-8 bg-primary hover:bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-primary/20 transition-all flex items-center gap-3 scale-110"
-          >
-            <span className="material-symbols-outlined">add_card</span>
-            Adicionar meu primeiro cartão
-          </button>
-        </div>
       )}
 
-      {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#1a2632] border border-[#324d67] rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
-            <div className="p-6 border-b border-[#324d67]/50 flex justify-between items-center bg-gradient-to-r from-[#1c2a38] to-[#1a2632]">
-              <h2 className="text-white text-xl font-bold">{isEditing ? 'Editar Cartão' : 'Novo Cartão'}</h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="size-8 rounded-full bg-[#111a22] text-[#92adc9] hover:text-white transition-all flex items-center justify-center"
-              >
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
-            </div>
-
-            <form onSubmit={handleSave} className="p-8 space-y-5">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Nome do Cartão</label>
-                <input
-                  autoFocus
-                  required
-                  type="text"
-                  placeholder="Ex: Nexo Black, Nubank, Inter"
-                  className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-[#4a6b8a]"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Bandeira</label>
-                  <select
-                    className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all"
-                    value={formData.brand}
-                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+          {/* Add/Edit Modal */}
+          {isModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-[#1a2632] border border-[#324d67] rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+                <div className="p-6 border-b border-[#324d67]/50 flex justify-between items-center bg-gradient-to-r from-[#1c2a38] to-[#1a2632]">
+                  <h2 className="text-white text-xl font-bold">{isEditing ? 'Editar Cartão' : 'Novo Cartão'}</h2>
+                  <button
+                    onClick={() => setIsModalOpen(false)}
+                    className="size-8 rounded-full bg-[#111a22] text-[#92adc9] hover:text-white transition-all flex items-center justify-center"
                   >
-                    <option value="Visa">Visa</option>
-                    <option value="Mastercard">Mastercard</option>
-                    <option value="Elo">Elo</option>
-                    <option value="American Express">Amex</option>
-                  </select>
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                  </button>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Últimos 4 Dígitos</label>
-                  <input
-                    required
-                    maxLength={4}
-                    type="text"
-                    placeholder="1234"
-                    className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-[#4a6b8a] font-mono"
-                    value={formData.last_digits}
-                    onChange={(e) => setFormData({ ...formData, last_digits: e.target.value.replace(/\D/g, '') })}
-                  />
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Limite de Crédito</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-bold">R$</span>
-                  <input
-                    required
-                    type="text"
-                    placeholder="0,00"
-                    className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 pl-12 pr-4 text-white text-lg font-bold focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-[#4a6b8a]"
-                    value={formData.credit_limit}
-                    onChange={(e) => setFormData({ ...formData, credit_limit: e.target.value })}
-                  />
-                </div>
-              </div>
+                <form onSubmit={handleSave} className="p-8 space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Nome do Cartão</label>
+                    <input
+                      autoFocus
+                      required
+                      type="text"
+                      placeholder="Ex: Nexo Black, Nubank, Inter"
+                      className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-[#4a6b8a]"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Dia Fechamento</label>
-                  <input
-                    required
-                    type="number"
-                    min="1"
-                    max="31"
-                    className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-primary outline-none transition-all"
-                    value={formData.closing_day}
-                    onChange={(e) => setFormData({ ...formData, closing_day: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Dia Vencimento</label>
-                  <input
-                    required
-                    type="number"
-                    min="1"
-                    max="31"
-                    className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-primary outline-none transition-all"
-                    value={formData.due_day}
-                    onChange={(e) => setFormData({ ...formData, due_day: e.target.value })}
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Bandeira</label>
+                      <select
+                        className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all"
+                        value={formData.brand}
+                        onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                      >
+                        <option value="Visa">Visa</option>
+                        <option value="Mastercard">Mastercard</option>
+                        <option value="Elo">Elo</option>
+                        <option value="American Express">Amex</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Últimos 4 Dígitos</label>
+                      <input
+                        required
+                        maxLength={4}
+                        type="text"
+                        placeholder="1234"
+                        className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-[#4a6b8a] font-mono"
+                        value={formData.last_digits}
+                        onChange={(e) => setFormData({ ...formData, last_digits: e.target.value.replace(/\D/g, '') })}
+                      />
+                    </div>
+                  </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Cor do Cartão</label>
-                <input
-                  type="color"
-                  className="w-full h-12 bg-[#111a22] border border-[#324d67] rounded-xl px-1 py-1 cursor-pointer"
-                  value={formData.color}
-                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                />
-              </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Limite de Crédito</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-bold">R$</span>
+                      <input
+                        required
+                        type="text"
+                        placeholder="0,00"
+                        className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 pl-12 pr-4 text-white text-lg font-bold focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-[#4a6b8a]"
+                        value={formData.credit_limit}
+                        onChange={(e) => setFormData({ ...formData, credit_limit: e.target.value })}
+                      />
+                    </div>
+                  </div>
 
-              <div className="flex gap-4 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 h-14 rounded-xl text-[#92adc9] font-bold text-sm hover:bg-[#233648] transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 h-14 bg-primary hover:bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
-                >
-                  {saving ? <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Salvar Cartão'}
-                </button>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Dia Fechamento</label>
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        max="31"
+                        className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                        value={formData.closing_day}
+                        onChange={(e) => setFormData({ ...formData, closing_day: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Dia Vencimento</label>
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        max="31"
+                        className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                        value={formData.due_day}
+                        onChange={(e) => setFormData({ ...formData, due_day: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest">Cor do Cartão</label>
+                    <input
+                      type="color"
+                      className="w-full h-12 bg-[#111a22] border border-[#324d67] rounded-xl px-1 py-1 cursor-pointer"
+                      value={formData.color}
+                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="flex gap-4 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      className="flex-1 h-14 rounded-xl text-[#92adc9] font-bold text-sm hover:bg-[#233648] transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="flex-1 h-14 bg-primary hover:bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
+                    >
+                      {saving ? <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Salvar Cartão'}
+                    </button>
+                  </div>
+                </form>
               </div>
-            </form>
-          </div>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  );
+      );
 };
 
-export default Cards;
+      export default Cards;
