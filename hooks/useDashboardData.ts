@@ -10,6 +10,7 @@ export const useDashboardData = () => {
         monthlyIncome: number;
         totalCards: number;
         usedCards: number;
+        cardBalance: number;
     }>({
         totalBalance: 0,
         dueToday: 0,
@@ -18,6 +19,7 @@ export const useDashboardData = () => {
         monthlyIncome: 0,
         totalCards: 0,
         usedCards: 0,
+        cardBalance: 0,
     });
     const [chartData, setChartData] = useState<any[]>([]);
     const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
@@ -226,7 +228,8 @@ export const useDashboardData = () => {
                 monthlyExpenses: monthlyTotal,
                 monthlyIncome: monthlyIncomeTotal,
                 totalCards: totalCards,
-                usedCards: totalUsedCards
+                usedCards: totalUsedCards,
+                cardBalance: totalUsedCards
             });
             setRecentTransactions(recents || []);
 
