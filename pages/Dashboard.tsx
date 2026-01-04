@@ -195,10 +195,49 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
+          {/* Alocação de Ativos - movido para cá */}
+          <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg">
+            <h2 className="text-white text-lg font-bold mb-4 text-white/90">Alocação de Ativos</h2>
+            <div className="flex flex-col items-center justify-center mb-4 relative">
+              <div className="size-36">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={assetAllocation}
+                      innerRadius={45}
+                      outerRadius={60}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {assetAllocation.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+                <p className="text-[#92adc9] text-[10px] font-medium uppercase">Total</p>
+                <p className="text-white text-base font-bold">{formatCurrency(stats.investments)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {assetAllocation.map((asset, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="size-2.5 rounded-full" style={{ backgroundColor: asset.color }} />
+                  <div>
+                    <p className="text-white text-xs font-bold">{asset.value}%</p>
+                    <p className="text-[#92adc9] text-[10px]">{asset.name}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* New Expense Chart */}
-        <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg flex-1">
+        {/* Expense Chart - Aumentado */}
+        <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-white text-lg font-bold text-white/90">
               Despesas por Categoria ({new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })})
@@ -221,122 +260,85 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          <div className="flex flex-col items-center justify-center mb-6 relative">
-            <div className="size-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={
-                      selectedCategory
+          <div className="flex flex-col lg:flex-row items-center gap-8">
+            <div className="flex flex-col items-center justify-center relative">
+              <div className="size-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={
+                        selectedCategory
+                          ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
+                          : expensesByCategory
+                      }
+                      innerRadius={70}
+                      outerRadius={95}
+                      paddingAngle={5}
+                      dataKey="value"
+                      onClick={(data) => {
+                        if (!selectedCategory && data?.children?.length > 0) {
+                          setSelectedCategory(data.name);
+                        }
+                      }}
+                      style={{ cursor: selectedCategory ? 'default' : 'pointer' }}
+                    >
+                      {(selectedCategory
                         ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
                         : expensesByCategory
-                    }
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                    onClick={(data) => {
-                      if (!selectedCategory && data?.children?.length > 0) {
-                        setSelectedCategory(data.name);
-                      }
-                    }}
-                    style={{ cursor: selectedCategory ? 'default' : 'pointer' }}
-                  >
-                    {(selectedCategory
-                      ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
-                      : expensesByCategory
-                    ).map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#111a22', border: '1px solid #324d67', borderRadius: '8px' }}
-                    itemStyle={{ color: '#fff' }}
-                    formatter={(value: number) => formatCurrency(value)}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                      ).map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#111a22', border: '1px solid #324d67', borderRadius: '8px' }}
+                      itemStyle={{ color: '#fff' }}
+                      formatter={(value: number) => formatCurrency(value)}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+                <p className="text-[#92adc9] text-xs font-medium uppercase">
+                  {selectedCategory ? 'Total Cat.' : 'Total Mês'}
+                </p>
+                <p className="text-white text-2xl font-bold">
+                  {formatCurrency(
+                    selectedCategory
+                      ? expensesByCategory.find(c => c.name === selectedCategory)?.value || 0
+                      : stats.monthlyExpenses
+                  )}
+                </p>
+              </div>
             </div>
-            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <p className="text-[#92adc9] text-xs font-medium uppercase">
-                {selectedCategory ? 'Total Cat.' : 'Total Mês'}
-              </p>
-              <p className="text-white text-xl font-bold">
-                {formatCurrency(
-                  selectedCategory
-                    ? expensesByCategory.find(c => c.name === selectedCategory)?.value || 0
-                    : stats.monthlyExpenses
-                )}
-              </p>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {(selectedCategory
-              ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
-              : expensesByCategory
-            ).slice(0, 6).map((cat: any, i: number) => (
-              <div
-                key={i}
-                className={`flex items-center gap-2 p-2 rounded-lg transition-all ${!selectedCategory && cat.children?.length > 0
+            <div className="flex-1 grid grid-cols-2 lg:grid-cols-3 gap-3">
+              {(selectedCategory
+                ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
+                : expensesByCategory
+              ).slice(0, 9).map((cat: any, i: number) => (
+                <div
+                  key={i}
+                  className={`flex items-center gap-2 p-2 rounded-lg transition-all ${!selectedCategory && cat.children?.length > 0
                     ? 'hover:bg-[#111a22] cursor-pointer'
                     : ''
-                  }`}
-                onClick={() => {
-                  if (!selectedCategory && cat.children?.length > 0) {
-                    setSelectedCategory(cat.name);
-                  }
-                }}
-              >
-                <div className="size-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-white text-sm font-bold">{formatCurrency(cat.value)}</p>
-                  <p className="text-[#92adc9] text-xs truncate">{cat.name}</p>
+                    }`}
+                  onClick={() => {
+                    if (!selectedCategory && cat.children?.length > 0) {
+                      setSelectedCategory(cat.name);
+                    }
+                  }}
+                >
+                  <div className="size-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-white text-sm font-bold">{formatCurrency(cat.value)}</p>
+                    <p className="text-[#92adc9] text-xs truncate">{cat.name}</p>
+                  </div>
+                  {!selectedCategory && cat.children?.length > 0 && (
+                    <span className="material-symbols-outlined text-[#92adc9] text-[16px]">chevron_right</span>
+                  )}
                 </div>
-                {!selectedCategory && cat.children?.length > 0 && (
-                  <span className="material-symbols-outlined text-[#92adc9] text-[16px]">chevron_right</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg flex-1">
-          <h2 className="text-white text-lg font-bold mb-6 text-white/90">Alocação de Ativos</h2>
-          <div className="flex flex-col items-center justify-center mb-6 relative">
-            <div className="size-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={assetAllocation}
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {assetAllocation.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              ))}
             </div>
-            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <p className="text-[#92adc9] text-xs font-medium uppercase">Total</p>
-              <p className="text-white text-xl font-bold">{formatCurrency(stats.investments)}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            {assetAllocation.map((asset, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <div className="size-3 rounded-full" style={{ backgroundColor: asset.color }} />
-                <div>
-                  <p className="text-white text-sm font-bold">{asset.value}%</p>
-                  <p className="text-[#92adc9] text-xs">{asset.name}</p>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </div>
