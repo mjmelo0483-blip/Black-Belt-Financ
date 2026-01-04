@@ -13,6 +13,7 @@ const Transactions: React.FC = () => {
     fetchTransactions,
     saveTransaction,
     saveTransfer,
+    updateTransaction,
     deleteTransaction,
     deleteTransactions,
     loading: metaLoading
@@ -411,6 +412,7 @@ const Transactions: React.FC = () => {
         cards={cards}
         saveTransaction={saveTransaction}
         saveTransfer={saveTransfer}
+        updateTransaction={updateTransaction}
         isEditing={isEditing}
         initialData={currentTransactionId ? transactions.find(t => t.id === currentTransactionId) : null}
       />

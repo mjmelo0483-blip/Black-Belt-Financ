@@ -10,6 +10,7 @@ interface TransactionModalProps {
     cards: any[];
     saveTransaction: (payload: any) => Promise<{ data: any; error: any }>;
     saveTransfer?: (payload: any) => Promise<{ data?: any; error: any }>;
+    updateTransaction?: (id: string, payload: any) => Promise<{ data: any; error: any }>;
     isEditing?: boolean;
     initialData?: any;
 }
@@ -23,6 +24,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     cards,
     saveTransaction,
     saveTransfer,
+    updateTransaction,
     isEditing = false,
     initialData = null
 }) => {
@@ -149,7 +151,9 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
         };
 
         let result;
-        if (((numInstallments > 1 && paymentMethod === 'credito') || (isRecurring && numRecurrences > 1)) && !isEditing) {
+        if (isEditing && initialData?.id && updateTransaction) {
+            result = await updateTransaction(initialData.id, baseTransaction);
+        } else if (((numInstallments > 1 && paymentMethod === 'credito') || (isRecurring && numRecurrences > 1)) && !isEditing) {
             const payload = [];
             const count = (paymentMethod === 'credito') ? numInstallments : numRecurrences;
             const itemAmount = (paymentMethod === 'credito') ? baseTransaction.amount / count : baseTransaction.amount;
