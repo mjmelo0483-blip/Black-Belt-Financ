@@ -289,23 +289,32 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                 <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
                                     <option value="">Sem categoria</option>
                                     {(() => {
-                                        const roots = categories.filter(c => !c.parent_id);
+                                        // Filtra apenas categorias do tipo selecionado
+                                        const typeFiltered = categories.filter(c => c.type === (type === 'transfer' ? 'expense' : type));
+
+                                        const roots = typeFiltered.filter(c => !c.parent_id);
                                         const childrenMap = new Map();
-                                        categories.forEach(c => {
+                                        typeFiltered.forEach(c => {
                                             if (c.parent_id) {
                                                 const existing = childrenMap.get(c.parent_id) || [];
                                                 childrenMap.set(c.parent_id, [...existing, c]);
                                             }
                                         });
 
-                                        return roots.map(root => (
-                                            <React.Fragment key={root.id}>
-                                                <option value={root.id} className="font-bold">{root.name}</option>
-                                                {(childrenMap.get(root.id) || []).map((child: any) => (
-                                                    <option key={child.id} value={child.id}>&nbsp;&nbsp;&nbsp;— {child.name}</option>
-                                                ))}
-                                            </React.Fragment>
-                                        ));
+                                        return roots.map(root => {
+                                            const subcats = childrenMap.get(root.id) || [];
+                                            if (subcats.length === 0) {
+                                                return <option key={root.id} value={root.id}>{root.name}</option>;
+                                            }
+                                            return (
+                                                <optgroup key={root.id} label={root.name} className="bg-[#111a22] font-black italic">
+                                                    <option value={root.id} className="font-bold">{root.name} (Principal)</option>
+                                                    {subcats.map((child: any) => (
+                                                        <option key={child.id} value={child.id}>&nbsp;&nbsp;{child.name}</option>
+                                                    ))}
+                                                </optgroup>
+                                            );
+                                        });
                                     })()}
                                 </select>
                             </label>
