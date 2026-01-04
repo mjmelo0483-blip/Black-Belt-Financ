@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -10,6 +10,7 @@ import { useDashboardData } from '../hooks/useDashboardData';
 const Dashboard: React.FC = () => {
   const { stats, chartData, recentTransactions, assetAllocation, expensesByCategory, loading, refreshData } = useDashboardData();
   const navigate = useNavigate();
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   if (loading) {
     return (
@@ -198,19 +199,53 @@ const Dashboard: React.FC = () => {
 
         {/* New Expense Chart */}
         <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg flex-1">
-          <h2 className="text-white text-lg font-bold mb-6 text-white/90">Despesas por Categoria ({new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })})</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-white text-lg font-bold text-white/90">
+              Despesas por Categoria ({new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })})
+            </h2>
+            {selectedCategory && (
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className="flex items-center gap-1 text-primary hover:text-blue-400 text-sm font-bold transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                Voltar
+              </button>
+            )}
+          </div>
+
+          {selectedCategory && (
+            <div className="mb-4 px-3 py-2 bg-[#111a22] rounded-lg border border-[#324d67]/50">
+              <p className="text-[#92adc9] text-xs uppercase tracking-widest">Categoria Principal</p>
+              <p className="text-white font-bold">{selectedCategory}</p>
+            </div>
+          )}
+
           <div className="flex flex-col items-center justify-center mb-6 relative">
             <div className="size-48">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={expensesByCategory}
+                    data={
+                      selectedCategory
+                        ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
+                        : expensesByCategory
+                    }
                     innerRadius={60}
                     outerRadius={80}
                     paddingAngle={5}
                     dataKey="value"
+                    onClick={(data) => {
+                      if (!selectedCategory && data?.children?.length > 0) {
+                        setSelectedCategory(data.name);
+                      }
+                    }}
+                    style={{ cursor: selectedCategory ? 'default' : 'pointer' }}
                   >
-                    {expensesByCategory.map((entry, index) => (
+                    {(selectedCategory
+                      ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
+                      : expensesByCategory
+                    ).map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                     ))}
                   </Pie>
@@ -223,19 +258,44 @@ const Dashboard: React.FC = () => {
               </ResponsiveContainer>
             </div>
             <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <p className="text-[#92adc9] text-xs font-medium uppercase">Total Mês</p>
-              <p className="text-white text-xl font-bold">{formatCurrency(stats.monthlyExpenses)}</p>
+              <p className="text-[#92adc9] text-xs font-medium uppercase">
+                {selectedCategory ? 'Total Cat.' : 'Total Mês'}
+              </p>
+              <p className="text-white text-xl font-bold">
+                {formatCurrency(
+                  selectedCategory
+                    ? expensesByCategory.find(c => c.name === selectedCategory)?.value || 0
+                    : stats.monthlyExpenses
+                )}
+              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {expensesByCategory.slice(0, 4).map((cat, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <div className="size-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                <div>
+          <div className="grid grid-cols-2 gap-3">
+            {(selectedCategory
+              ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
+              : expensesByCategory
+            ).slice(0, 6).map((cat: any, i: number) => (
+              <div
+                key={i}
+                className={`flex items-center gap-2 p-2 rounded-lg transition-all ${!selectedCategory && cat.children?.length > 0
+                    ? 'hover:bg-[#111a22] cursor-pointer'
+                    : ''
+                  }`}
+                onClick={() => {
+                  if (!selectedCategory && cat.children?.length > 0) {
+                    setSelectedCategory(cat.name);
+                  }
+                }}
+              >
+                <div className="size-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                <div className="min-w-0 flex-1">
                   <p className="text-white text-sm font-bold">{formatCurrency(cat.value)}</p>
-                  <p className="text-[#92adc9] text-xs truncate max-w-[100px]">{cat.name}</p>
+                  <p className="text-[#92adc9] text-xs truncate">{cat.name}</p>
                 </div>
+                {!selectedCategory && cat.children?.length > 0 && (
+                  <span className="material-symbols-outlined text-[#92adc9] text-[16px]">chevron_right</span>
+                )}
               </div>
             ))}
           </div>

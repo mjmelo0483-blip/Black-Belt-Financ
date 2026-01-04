@@ -97,34 +97,74 @@ export const useDashboardData = () => {
 
             const monthlyTotal = expenses?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
-            // 3.1 Fetch Expenses by Category for Chart
+            // 3.1 Fetch Expenses by Category for Chart - grouped by parent categories
             const { data: expensesCat } = await supabase
                 .from('transactions')
                 .select(`
                     amount,
-                    categories (name, color)
+                    category_id,
+                    categories (id, name, color, parent_id)
                 `)
                 .eq('type', 'expense')
                 .is('transfer_id', null)
                 .gte('due_date', formatDate(startOfMonth))
                 .lte('due_date', formatDate(endOfMonth));
 
-            const catMap: Record<string, { value: number, color: string }> = {};
+            // Fetch all categories to get parent names
+            const { data: allCategories } = await supabase
+                .from('categories')
+                .select('id, name, color, parent_id');
+
+            const categoriesMap = new Map(allCategories?.map(c => [c.id, c]) || []);
+
+            // Group by parent category (or self if no parent)
+            const parentCatMap: Record<string, {
+                value: number,
+                color: string,
+                children: Array<{ name: string, value: number, color: string }>
+            }> = {};
+
             expensesCat?.forEach(t => {
                 const cat = Array.isArray(t.categories) ? t.categories[0] : t.categories;
-                const catName = cat?.name || 'Outros';
-                const catColor = cat?.color || '#92adc9';
-                if (!catMap[catName]) {
-                    catMap[catName] = { value: 0, color: catColor };
+                if (!cat) return;
+
+                const catName = cat.name || 'Outros';
+                const catColor = cat.color || '#92adc9';
+                const amount = Number(t.amount);
+
+                // Check if this category has a parent
+                if (cat.parent_id) {
+                    const parentCat = categoriesMap.get(cat.parent_id);
+                    const parentName = parentCat?.name || 'Outros';
+                    const parentColor = parentCat?.color || '#92adc9';
+
+                    if (!parentCatMap[parentName]) {
+                        parentCatMap[parentName] = { value: 0, color: parentColor, children: [] };
+                    }
+                    parentCatMap[parentName].value += amount;
+
+                    // Add to children
+                    const existingChild = parentCatMap[parentName].children.find(c => c.name === catName);
+                    if (existingChild) {
+                        existingChild.value += amount;
+                    } else {
+                        parentCatMap[parentName].children.push({ name: catName, value: amount, color: catColor });
+                    }
+                } else {
+                    // This is a root category
+                    if (!parentCatMap[catName]) {
+                        parentCatMap[catName] = { value: 0, color: catColor, children: [] };
+                    }
+                    parentCatMap[catName].value += amount;
                 }
-                catMap[catName].value += Number(t.amount);
             });
 
-            const catList = Object.entries(catMap)
+            const catList = Object.entries(parentCatMap)
                 .map(([name, data]) => ({
                     name,
                     value: data.value,
-                    color: data.color
+                    color: data.color,
+                    children: data.children.sort((a, b) => b.value - a.value)
                 }))
                 .sort((a, b) => b.value - a.value); // Sort by highest expense
 
