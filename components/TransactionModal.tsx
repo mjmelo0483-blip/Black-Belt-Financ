@@ -139,7 +139,9 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                     ...baseTransaction,
                     amount: itemAmount,
                     description: `${description} (${i}/${count})`,
-                    date: addMonths(date, i - 1),
+                    // For credit card installments, keep the same inclusion date. 
+                    // For recurring payments (non-card), both dates increment.
+                    date: (paymentMethod === 'credito') ? date : addMonths(date, i - 1),
                     due_date: addMonths(dueDate, i - 1),
                     installment_number: i,
                     installments: count
