@@ -110,8 +110,8 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             return;
         }
 
-        const numInstallments = parseInt(installments);
-        const numRecurrences = parseInt(recurrenceCount);
+        const numInstallments = parseInt(installments) || 1;
+        const numRecurrences = parseInt(recurrenceCount) || 1;
 
         const baseTransaction = {
             user_id: user.id,
@@ -228,9 +228,16 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                     </label>
                                     <label className="flex flex-col gap-2">
                                         <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Parcelas</span>
-                                        <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={installments} onChange={(e) => setInstallments(e.target.value)}>
-                                            {[1, 2, 3, 4, 5, 6, 10, 12, 24].map(n => <option key={n} value={n}>{n === 1 ? 'À Vista' : `${n}x`}</option>)}
-                                        </select>
+                                        <div className="relative">
+                                            <input
+                                                className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 pl-4 pr-10 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm font-bold"
+                                                type="number"
+                                                min="1"
+                                                value={installments}
+                                                onChange={(e) => setInstallments(e.target.value)}
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#92adc9] font-bold text-xs">x</span>
+                                        </div>
                                     </label>
                                 </>
                             )}
