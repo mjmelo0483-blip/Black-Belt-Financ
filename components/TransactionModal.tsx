@@ -189,188 +189,192 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-[#111a22] w-full max-w-2xl rounded-3xl border border-[#324d67]/50 shadow-2xl overflow-hidden p-6 md:p-8">
-                <div className="flex items-center justify-between mb-8">
-                    <h2 className="text-white text-2xl font-black tracking-tight">{isEditing ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
-                    <button onClick={onClose} className="size-10 rounded-full hover:bg-white/10 transition-colors flex items-center justify-center text-[#92adc9]">
-                        <span className="material-symbols-outlined">close</span>
-                    </button>
-                </div>
-
-                <div className="flex gap-8 border-b border-[#324d67]/50 mb-8">
-                    <button onClick={() => setType('expense')} className={`pb-3 border-b-2 font-bold text-sm transition-all ${type === 'expense' ? 'border-red-500 text-white' : 'border-transparent text-[#92adc9] hover:text-white'}`}>DESPESA</button>
-                    <button onClick={() => setType('income')} className={`pb-3 border-b-2 font-bold text-sm transition-all ${type === 'income' ? 'border-green-500 text-white' : 'border-transparent text-[#92adc9] hover:text-white'}`}>RECEITA</button>
-                    <button onClick={() => setType('transfer')} className={`pb-3 border-b-2 font-bold text-sm transition-all ${type === 'transfer' ? 'border-primary text-white' : 'border-transparent text-[#92adc9] hover:text-white'}`}>TRANSFERÊNCIA</button>
-                </div>
-
-                <div className="grid gap-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <label className="flex flex-col gap-2">
-                            <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Valor</span>
-                            <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#92adc9] font-medium">R$</span>
-                                <input className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 pl-12 pr-4 text-white text-2xl font-bold focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="0,00" type="text" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                            </div>
-                        </label>
-                        <label className="flex flex-col gap-2">
-                            <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Situação</span>
-                            <div className="flex gap-2 p-1 bg-[#1c2a38] border border-[#324d67] rounded-xl h-[66px]">
-                                <button onClick={() => setStatus('completed')} className={`flex-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${status === 'completed' ? 'bg-green-500 text-white shadow-lg shadow-green-500/20' : 'text-[#6384a3] hover:text-white'}`}>Realizado</button>
-                                <button onClick={() => setStatus('open')} className={`flex-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${status === 'open' ? 'bg-[#111a22] text-[#92adc9]' : 'text-[#6384a3] hover:text-white'}`}>Em Aberto</button>
-                            </div>
-                        </label>
-                        <div className="grid grid-cols-2 gap-4">
-                            <label className="flex flex-col gap-2">
-                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Inclusão</span>
-                                <input className="w-full h-[66px] bg-[#1c2a38] border border-[#324d67] rounded-xl px-4 text-white focus:ring-2 focus:ring-primary outline-none [color-scheme:dark] transition-all text-sm" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                            </label>
-                            <label className="flex flex-col gap-2">
-                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Vencimento</span>
-                                <input className="w-full h-[66px] bg-[#1c2a38] border border-[#324d67] rounded-xl px-4 text-white focus:ring-2 focus:ring-primary outline-none [color-scheme:dark] transition-all text-sm" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                            </label>
-                        </div>
+            <div className="relative bg-[#111a22] w-full max-w-2xl max-h-[90vh] rounded-3xl border border-[#324d67]/50 shadow-2xl overflow-hidden flex flex-col">
+                <div className="p-6 md:p-8 pb-0 shrink-0">
+                    <div className="flex items-center justify-between mb-8">
+                        <h2 className="text-white text-2xl font-black tracking-tight">{isEditing ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
+                        <button onClick={onClose} className="size-10 rounded-full hover:bg-white/10 transition-colors flex items-center justify-center text-[#92adc9]">
+                            <span className="material-symbols-outlined">close</span>
+                        </button>
                     </div>
 
-                    {type !== 'transfer' && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="flex gap-8 border-b border-[#324d67]/50 mb-8">
+                        <button onClick={() => setType('expense')} className={`pb-3 border-b-2 font-bold text-sm transition-all ${type === 'expense' ? 'border-red-500 text-white' : 'border-transparent text-[#92adc9] hover:text-white'}`}>DESPESA</button>
+                        <button onClick={() => setType('income')} className={`pb-3 border-b-2 font-bold text-sm transition-all ${type === 'income' ? 'border-green-500 text-white' : 'border-transparent text-[#92adc9] hover:text-white'}`}>RECEITA</button>
+                        <button onClick={() => setType('transfer')} className={`pb-3 border-b-2 font-bold text-sm transition-all ${type === 'transfer' ? 'border-primary text-white' : 'border-transparent text-[#92adc9] hover:text-white'}`}>TRANSFERÊNCIA</button>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-6 md:px-8 pb-6 md:pb-8">
+                    <div className="grid gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <label className="flex flex-col gap-2">
-                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Forma</span>
-                                <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                                    <option value="debito">Débito</option>
-                                    <option value="pix">Pix</option>
-                                    <option value="credito">Cartão</option>
-                                    <option value="dinheiro">Dinheiro</option>
-                                </select>
-                            </label>
-
-                            {paymentMethod === 'credito' && (
-                                <>
-                                    <label className="flex flex-col gap-2">
-                                        <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Cartão</span>
-                                        <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={cardId} onChange={(e) => setCardId(e.target.value)}>
-                                            <option value="">Selecionar...</option>
-                                            {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </select>
-                                    </label>
-                                    <label className="flex flex-col gap-2">
-                                        <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Parcelas</span>
-                                        <div className="relative">
-                                            <input
-                                                className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 pl-4 pr-10 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm font-bold"
-                                                type="number"
-                                                min="1"
-                                                value={installments}
-                                                onChange={(e) => setInstallments(e.target.value)}
-                                            />
-                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#92adc9] font-bold text-xs">x</span>
-                                        </div>
-                                    </label>
-                                </>
-                            )}
-
-                            {paymentMethod !== 'credito' && !isEditing && (
-                                <div className="flex flex-col gap-2">
-                                    <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Repetir</span>
-                                    <div className="flex gap-2 p-1 bg-[#1c2a38] border border-[#324d67] rounded-xl h-[66px]">
-                                        <button
-                                            onClick={() => setIsRecurring(!isRecurring)}
-                                            className={`flex-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isRecurring ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-[#6384a3] hover:text-white'}`}
-                                        >
-                                            {isRecurring ? 'Sim' : 'Não'}
-                                        </button>
-                                        {isRecurring && (
-                                            <input
-                                                className="w-20 bg-[#111a22] border-none rounded-lg px-2 text-white text-center font-bold outline-none focus:ring-1 focus:ring-primary"
-                                                type="number"
-                                                min="1"
-                                                value={recurrenceCount}
-                                                onChange={(e) => setRecurrenceCount(e.target.value)}
-                                            />
-                                        )}
-                                    </div>
+                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Valor</span>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#92adc9] font-medium">R$</span>
+                                    <input className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 pl-12 pr-4 text-white text-2xl font-bold focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="0,00" type="text" value={amount} onChange={(e) => setAmount(e.target.value)} />
                                 </div>
-                            )}
+                            </label>
+                            <label className="flex flex-col gap-2">
+                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Situação</span>
+                                <div className="flex gap-2 p-1 bg-[#1c2a38] border border-[#324d67] rounded-xl h-[66px]">
+                                    <button onClick={() => setStatus('completed')} className={`flex-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${status === 'completed' ? 'bg-green-500 text-white shadow-lg shadow-green-500/20' : 'text-[#6384a3] hover:text-white'}`}>Realizado</button>
+                                    <button onClick={() => setStatus('open')} className={`flex-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${status === 'open' ? 'bg-[#111a22] text-[#92adc9]' : 'text-[#6384a3] hover:text-white'}`}>Em Aberto</button>
+                                </div>
+                            </label>
+                            <div className="grid grid-cols-2 gap-4">
+                                <label className="flex flex-col gap-2">
+                                    <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Inclusão</span>
+                                    <input className="w-full h-[66px] bg-[#1c2a38] border border-[#324d67] rounded-xl px-4 text-white focus:ring-2 focus:ring-primary outline-none [color-scheme:dark] transition-all text-sm" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                                </label>
+                                <label className="flex flex-col gap-2">
+                                    <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Vencimento</span>
+                                    <input className="w-full h-[66px] bg-[#1c2a38] border border-[#324d67] rounded-xl px-4 text-white focus:ring-2 focus:ring-primary outline-none [color-scheme:dark] transition-all text-sm" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                                </label>
+                            </div>
                         </div>
-                    )}
 
-                    <label className="flex flex-col gap-2">
-                        <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Descrição</span>
-                        <input className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white placeholder:text-[#4a6b8a] outline-none focus:ring-2 focus:ring-primary transition-all" placeholder="Ex: Aluguel..." type="text" value={description} onChange={(e) => setDescription(e.target.value)} />
-                    </label>
+                        {type !== 'transfer' && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <label className="flex flex-col gap-2">
+                                    <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Forma</span>
+                                    <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                                        <option value="debito">Débito</option>
+                                        <option value="pix">Pix</option>
+                                        <option value="credito">Cartão</option>
+                                        <option value="dinheiro">Dinheiro</option>
+                                    </select>
+                                </label>
 
-                    {type === 'transfer' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <label className="flex flex-col gap-2">
-                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Conta de Débito (Origem)</span>
-                                <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-                                    <option value="">Selecione...</option>
-                                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                </select>
-                            </label>
-                            <label className="flex flex-col gap-2">
-                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Conta de Crédito (Destino)</span>
-                                <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
-                                    <option value="">Selecione...</option>
-                                    {accounts.filter(a => a.id !== accountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                </select>
-                            </label>
+                                {paymentMethod === 'credito' && (
+                                    <>
+                                        <label className="flex flex-col gap-2">
+                                            <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Cartão</span>
+                                            <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={cardId} onChange={(e) => setCardId(e.target.value)}>
+                                                <option value="">Selecionar...</option>
+                                                {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex flex-col gap-2">
+                                            <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Parcelas</span>
+                                            <div className="relative">
+                                                <input
+                                                    className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 pl-4 pr-10 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm font-bold"
+                                                    type="number"
+                                                    min="1"
+                                                    value={installments}
+                                                    onChange={(e) => setInstallments(e.target.value)}
+                                                />
+                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#92adc9] font-bold text-xs">x</span>
+                                            </div>
+                                        </label>
+                                    </>
+                                )}
+
+                                {paymentMethod !== 'credito' && !isEditing && (
+                                    <div className="flex flex-col gap-2">
+                                        <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Repetir</span>
+                                        <div className="flex gap-2 p-1 bg-[#1c2a38] border border-[#324d67] rounded-xl h-[66px]">
+                                            <button
+                                                onClick={() => setIsRecurring(!isRecurring)}
+                                                className={`flex-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isRecurring ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-[#6384a3] hover:text-white'}`}
+                                            >
+                                                {isRecurring ? 'Sim' : 'Não'}
+                                            </button>
+                                            {isRecurring && (
+                                                <input
+                                                    className="w-20 bg-[#111a22] border-none rounded-lg px-2 text-white text-center font-bold outline-none focus:ring-1 focus:ring-primary"
+                                                    type="number"
+                                                    min="1"
+                                                    value={recurrenceCount}
+                                                    onChange={(e) => setRecurrenceCount(e.target.value)}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <label className="flex flex-col gap-2">
+                            <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Descrição</span>
+                            <input className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white placeholder:text-[#4a6b8a] outline-none focus:ring-2 focus:ring-primary transition-all" placeholder="Ex: Aluguel..." type="text" value={description} onChange={(e) => setDescription(e.target.value)} />
+                        </label>
+
+                        {type === 'transfer' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <label className="flex flex-col gap-2">
+                                    <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Conta de Débito (Origem)</span>
+                                    <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                                        <option value="">Selecione...</option>
+                                        {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    </select>
+                                </label>
+                                <label className="flex flex-col gap-2">
+                                    <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Conta de Crédito (Destino)</span>
+                                    <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
+                                        <option value="">Selecione...</option>
+                                        {accounts.filter(a => a.id !== accountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    </select>
+                                </label>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <label className="flex flex-col gap-2">
+                                    <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Categoria</span>
+                                    <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                                        <option value="">Sem categoria</option>
+                                        {(() => {
+                                            // Filtra apenas categorias do tipo selecionado
+                                            const typeFiltered = categories.filter(c => c.type === (type === 'transfer' ? 'expense' : type));
+
+                                            const roots = typeFiltered.filter(c => !c.parent_id);
+                                            const childrenMap = new Map();
+                                            typeFiltered.forEach(c => {
+                                                if (c.parent_id) {
+                                                    const existing = childrenMap.get(c.parent_id) || [];
+                                                    childrenMap.set(c.parent_id, [...existing, c]);
+                                                }
+                                            });
+
+                                            return roots.map(root => {
+                                                const subcats = childrenMap.get(root.id) || [];
+                                                if (subcats.length === 0) {
+                                                    return <option key={root.id} value={root.id}>{root.name}</option>;
+                                                }
+                                                return (
+                                                    <optgroup key={root.id} label={root.name} className="bg-[#111a22] font-black italic">
+                                                        <option value={root.id} className="font-bold">{root.name} (Principal)</option>
+                                                        {subcats.map((child: any) => (
+                                                            <option key={child.id} value={child.id}>&nbsp;&nbsp;{child.name}</option>
+                                                        ))}
+                                                    </optgroup>
+                                                );
+                                            });
+                                        })()}
+                                    </select>
+                                </label>
+                                <label className="flex flex-col gap-2">
+                                    <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Conta</span>
+                                    <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                                        <option value="">Selecione...</option>
+                                        {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    </select>
+                                </label>
+                            </div>
+                        )}
+
+                        <div className="flex gap-4 justify-end mt-4">
+                            <button onClick={onClose} className="px-6 h-14 rounded-xl text-[#92adc9] font-bold text-sm hover:text-white transition-all">Cancelar</button>
+                            <button onClick={handleSave} disabled={loading} className="px-10 h-14 rounded-xl bg-primary text-white font-bold text-sm shadow-xl shadow-primary/20 hover:bg-blue-600 transition-all flex items-center justify-center gap-3 disabled:opacity-50">
+                                {loading ? <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : (
+                                    <>
+                                        <span className="material-symbols-outlined text-[20px]">save</span>
+                                        Salvar
+                                    </>
+                                )}
+                            </button>
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <label className="flex flex-col gap-2">
-                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Categoria</span>
-                                <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                                    <option value="">Sem categoria</option>
-                                    {(() => {
-                                        // Filtra apenas categorias do tipo selecionado
-                                        const typeFiltered = categories.filter(c => c.type === (type === 'transfer' ? 'expense' : type));
-
-                                        const roots = typeFiltered.filter(c => !c.parent_id);
-                                        const childrenMap = new Map();
-                                        typeFiltered.forEach(c => {
-                                            if (c.parent_id) {
-                                                const existing = childrenMap.get(c.parent_id) || [];
-                                                childrenMap.set(c.parent_id, [...existing, c]);
-                                            }
-                                        });
-
-                                        return roots.map(root => {
-                                            const subcats = childrenMap.get(root.id) || [];
-                                            if (subcats.length === 0) {
-                                                return <option key={root.id} value={root.id}>{root.name}</option>;
-                                            }
-                                            return (
-                                                <optgroup key={root.id} label={root.name} className="bg-[#111a22] font-black italic">
-                                                    <option value={root.id} className="font-bold">{root.name} (Principal)</option>
-                                                    {subcats.map((child: any) => (
-                                                        <option key={child.id} value={child.id}>&nbsp;&nbsp;{child.name}</option>
-                                                    ))}
-                                                </optgroup>
-                                            );
-                                        });
-                                    })()}
-                                </select>
-                            </label>
-                            <label className="flex flex-col gap-2">
-                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Conta</span>
-                                <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-                                    <option value="">Selecione...</option>
-                                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                </select>
-                            </label>
-                        </div>
-                    )}
-
-                    <div className="flex gap-4 justify-end mt-4">
-                        <button onClick={onClose} className="px-6 h-14 rounded-xl text-[#92adc9] font-bold text-sm hover:text-white transition-all">Cancelar</button>
-                        <button onClick={handleSave} disabled={loading} className="px-10 h-14 rounded-xl bg-primary text-white font-bold text-sm shadow-xl shadow-primary/20 hover:bg-blue-600 transition-all flex items-center justify-center gap-3 disabled:opacity-50">
-                            {loading ? <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : (
-                                <>
-                                    <span className="material-symbols-outlined text-[20px]">save</span>
-                                    Salvar
-                                </>
-                            )}
-                        </button>
                     </div>
                 </div>
             </div>
@@ -379,3 +383,4 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
 };
 
 export default TransactionModal;
+
