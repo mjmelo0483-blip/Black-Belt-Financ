@@ -201,12 +201,14 @@ export const useDashboardData = () => {
 
             const totalCards = cardsData?.reduce((acc, curr) => acc + Number(curr.credit_limit), 0) || 0;
 
-            // 6. Fetch Used Credit (open transactions on credit cards)
+            // 6. Fetch Used Credit (open transactions on credit cards - current month)
             const { data: usedCreditData } = await supabase
                 .from('transactions')
                 .select('amount')
                 .eq('payment_method', 'credito')
-                .eq('status', 'open');
+                .eq('status', 'open')
+                .gte('due_date', formatDate(startOfMonth))
+                .lte('due_date', formatDate(endOfMonth));
 
             const totalUsedCards = usedCreditData?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
