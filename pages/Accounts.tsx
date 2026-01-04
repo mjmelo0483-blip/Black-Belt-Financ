@@ -30,29 +30,31 @@ const Accounts: React.FC = () => {
       if (!simulationDate || accounts.length === 0) return;
       setLoadingSimulation(true);
 
-      // Saldo calculado = Saldo inicial de cada conta + lançamentos realizados com due_date <= data de referência
-      // O balance armazenado na conta É o saldo inicial informado pelo usuário
-      let totalInitialBalance = accounts.reduce((acc, curr) => acc + curr.balance, 0);
-      let totalTransactions = 0;
+      // Saldo calculado = Saldo inicial de cada conta + lançamentos realizados com due_date entre initial_balance_date e data de referência
+      let totalBalance = 0;
 
       const promises = accounts.map(acc => getTransactionsUntilDueDate(acc.id, simulationDate));
       const results = await Promise.all(promises);
 
       results.forEach((res, index) => {
         const acc = accounts[index];
+        let accountBalance = acc.balance; // Saldo inicial
+
         if (res.data) {
           res.data.forEach((t: any) => {
-            // Only count transactions occurring AFTER the initial balance date
-            // Using logic: if transaction date >= initial_balance_date, then it's a new change
-            if (t.date >= acc.initial_balance_date) {
-              if (t.type === 'income') totalTransactions += t.amount;
-              else totalTransactions -= t.amount;
+            // Only count transactions with due_date >= initial_balance_date AND due_date <= simulationDate
+            // The query already filters due_date <= simulationDate, so we just check >= initial_balance_date
+            if (t.due_date && t.due_date >= acc.initial_balance_date) {
+              if (t.type === 'income') accountBalance += t.amount;
+              else accountBalance -= t.amount;
             }
           });
         }
+
+        totalBalance += accountBalance;
       });
 
-      setSimulatedBalance(totalInitialBalance + totalTransactions);
+      setSimulatedBalance(totalBalance);
       setLoadingSimulation(false);
     };
 
