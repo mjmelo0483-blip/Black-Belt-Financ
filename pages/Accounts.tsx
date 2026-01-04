@@ -30,7 +30,7 @@ const Accounts: React.FC = () => {
       if (!simulationDate || accounts.length === 0) return;
       setLoadingSimulation(true);
 
-      // Saldo calculado = Saldo inicial de cada conta + lançamentos realizados com due_date entre initial_balance_date e data de referência
+      // Saldo calculado = Saldo inicial de cada conta + lançamentos realizados (status = completed) com due_date <= data de referência
       let totalBalance = 0;
 
       const promises = accounts.map(acc => getTransactionsUntilDueDate(acc.id, simulationDate));
@@ -42,12 +42,10 @@ const Accounts: React.FC = () => {
 
         if (res.data) {
           res.data.forEach((t: any) => {
-            // Only count transactions with due_date >= initial_balance_date AND due_date <= simulationDate
-            // The query already filters due_date <= simulationDate, so we just check >= initial_balance_date
-            if (t.due_date && t.due_date >= acc.initial_balance_date) {
-              if (t.type === 'income') accountBalance += t.amount;
-              else accountBalance -= t.amount;
-            }
+            // Soma todos os lançamentos realizados com due_date <= simulationDate
+            // A query já filtra por status = 'completed' e due_date <= simulationDate
+            if (t.type === 'income') accountBalance += t.amount;
+            else accountBalance -= t.amount;
           });
         }
 
