@@ -34,10 +34,15 @@ const Cards: React.FC = () => {
         const totalUsed = transactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
         setUsedLimit(totalUsed);
         setLoadingTransactions(false);
+      } else {
+        setCardTransactions([]);
+        setUsedLimit(0);
+        setLoadingTransactions(false);
       }
     };
     loadCardData();
-  }, [currentCard, getCardTransactions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCard?.id]);
 
   const handleNewClick = () => {
     setFormData({
