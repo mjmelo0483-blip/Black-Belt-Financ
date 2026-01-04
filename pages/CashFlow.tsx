@@ -143,14 +143,14 @@ const CashFlow: React.FC = () => {
         <div className="bg-[#233648] p-5 rounded-xl border border-white/5 shadow-sm group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[#92adc9] text-sm font-medium group-hover:text-emerald-400 transition-colors">Entradas</span>
-            <span className="material-symbols-outlined text-emerald-400 bg-emerald-400/10 p-1 rounded-md text-lg">arrow_downward</span>
+            <span className="material-symbols-outlined text-emerald-400 bg-emerald-400/10 p-1 rounded-md text-lg">arrow_upward</span>
           </div>
           <p className="text-white text-2xl font-bold">{formatCurrency(stats.inflow)}</p>
         </div>
         <div className="bg-[#233648] p-5 rounded-xl border border-white/5 shadow-sm group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[#92adc9] text-sm font-medium group-hover:text-red-400 transition-colors">Saídas</span>
-            <span className="material-symbols-outlined text-red-400 bg-red-400/10 p-1 rounded-md text-lg">arrow_upward</span>
+            <span className="material-symbols-outlined text-red-400 bg-red-400/10 p-1 rounded-md text-lg">arrow_downward</span>
           </div>
           <p className="text-white text-2xl font-bold">{formatCurrency(-stats.outflow)}</p>
         </div>
