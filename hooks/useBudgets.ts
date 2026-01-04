@@ -53,14 +53,14 @@ export const useBudgets = () => {
                 `)
                 .eq('month', startOfMonth);
 
-            // 3. Fetch Actual Transactions for current month
+            // 3. Fetch Actual Transactions for current month by due_date
             const { data: transactions } = await supabase
                 .from('transactions')
                 .select('amount, category_id')
                 .eq('type', 'expense')
                 .is('transfer_id', null)
-                .gte('date', startOfMonth)
-                .lte('date', endOfMonth);
+                .gte('due_date', startOfMonth)
+                .lte('due_date', endOfMonth);
 
             // 4. Build category map
             const categoriesMap = new Map(categories?.map(c => [c.id, c]) || []);
