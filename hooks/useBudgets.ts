@@ -22,9 +22,13 @@ export interface CategorySpending {
     actual: number;
 }
 
+export interface ParentCategorySpending extends CategorySpending {
+    children: CategorySpending[];
+}
+
 export const useBudgets = () => {
     const [budgets, setBudgets] = useState<BudgetLimit[]>([]);
-    const [spending, setSpending] = useState<CategorySpending[]>([]);
+    const [spending, setSpending] = useState<ParentCategorySpending[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchData = useCallback(async () => {
@@ -34,7 +38,7 @@ export const useBudgets = () => {
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
             const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-            // 1. Fetch Categories
+            // 1. Fetch Categories with parent_id
             const { data: categories } = await supabase
                 .from('categories')
                 .select('*')
@@ -45,7 +49,7 @@ export const useBudgets = () => {
                 .from('budgets')
                 .select(`
                     *,
-                    categories (name, color, icon)
+                    categories (name, color, icon, parent_id)
                 `)
                 .eq('month', startOfMonth);
 
@@ -58,11 +62,13 @@ export const useBudgets = () => {
                 .gte('date', startOfMonth)
                 .lte('date', endOfMonth);
 
-            // 4. Process Data
-            const spendingMap: Record<string, CategorySpending> = {};
+            // 4. Build category map
+            const categoriesMap = new Map(categories?.map(c => [c.id, c]) || []);
 
+            // 5. Build spending by category
+            const spendingByCategory: Record<string, CategorySpending> = {};
             categories?.forEach(cat => {
-                spendingMap[cat.id] = {
+                spendingByCategory[cat.id] = {
                     category_id: cat.id,
                     name: cat.name,
                     color: cat.color || '#3b82f6',
@@ -72,20 +78,68 @@ export const useBudgets = () => {
                 };
             });
 
+            // Add budget limits
             budgetLimits?.forEach(limit => {
-                if (spendingMap[limit.category_id]) {
-                    spendingMap[limit.category_id].planned = Number(limit.amount);
+                if (spendingByCategory[limit.category_id]) {
+                    spendingByCategory[limit.category_id].planned = Number(limit.amount);
                 }
             });
 
+            // Add actual spending
             transactions?.forEach(t => {
-                if (spendingMap[t.category_id]) {
-                    spendingMap[t.category_id].actual += Number(t.amount);
+                if (spendingByCategory[t.category_id]) {
+                    spendingByCategory[t.category_id].actual += Number(t.amount);
                 }
+            });
+
+            // 6. Group by parent category
+            const parentSpending: Record<string, ParentCategorySpending> = {};
+
+            Object.values(spendingByCategory).forEach(cat => {
+                const category = categoriesMap.get(cat.category_id);
+
+                if (category?.parent_id) {
+                    // This is a subcategory - add to parent
+                    const parentCat = categoriesMap.get(category.parent_id);
+                    if (parentCat) {
+                        if (!parentSpending[parentCat.id]) {
+                            parentSpending[parentCat.id] = {
+                                category_id: parentCat.id,
+                                name: parentCat.name,
+                                color: parentCat.color || '#3b82f6',
+                                icon: parentCat.icon || 'label',
+                                planned: spendingByCategory[parentCat.id]?.planned || 0,
+                                actual: spendingByCategory[parentCat.id]?.actual || 0,
+                                children: []
+                            };
+                        }
+                        parentSpending[parentCat.id].actual += cat.actual;
+                        if (cat.planned > 0 || cat.actual > 0) {
+                            parentSpending[parentCat.id].children.push(cat);
+                        }
+                    }
+                } else {
+                    // This is a root category
+                    if (!parentSpending[cat.category_id]) {
+                        parentSpending[cat.category_id] = {
+                            ...cat,
+                            children: []
+                        };
+                    }
+                }
+            });
+
+            // Sort children within each parent
+            Object.values(parentSpending).forEach(parent => {
+                parent.children.sort((a, b) => b.actual - a.actual);
             });
 
             setBudgets(budgetLimits || []);
-            setSpending(Object.values(spendingMap).filter(s => s.planned > 0 || s.actual > 0));
+            setSpending(
+                Object.values(parentSpending)
+                    .filter(s => s.planned > 0 || s.actual > 0 || s.children.length > 0)
+                    .sort((a, b) => b.actual - a.actual)
+            );
 
         } catch (error) {
             console.error('Error fetching budget data:', error);

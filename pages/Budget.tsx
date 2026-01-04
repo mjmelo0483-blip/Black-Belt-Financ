@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
-import { useBudgets } from '../hooks/useBudgets';
+import { useBudgets, ParentCategorySpending, CategorySpending } from '../hooks/useBudgets';
 import { useCategories } from '../hooks/useCategories';
 
 const Budget: React.FC = () => {
@@ -9,10 +9,20 @@ const Budget: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState({ category_id: '', amount: '' });
   const [saving, setSaving] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
+
+  // Get current view data (parent or children)
+  const currentViewData = selectedCategory
+    ? (spending.find(s => s.category_id === selectedCategory)?.children || [])
+    : spending;
+
+  const currentViewTitle = selectedCategory
+    ? spending.find(s => s.category_id === selectedCategory)?.name || ''
+    : '';
 
   const totalPlanned = spending.reduce((acc, s) => acc + s.planned, 0);
   const totalActual = spending.reduce((acc, s) => acc + s.actual, 0);
@@ -46,6 +56,9 @@ const Budget: React.FC = () => {
 
   const overBudgetCategories = spending.filter(s => s.actual > s.planned && s.planned > 0);
   const healthyCategories = spending.filter(s => s.actual < s.planned * 0.5 && s.planned > 0);
+
+  // Get only parent categories for the modal
+  const parentCategories = categories.filter(c => c.type === 'expense' && !c.parent_id);
 
   return (
     <div className="max-w-7xl mx-auto p-6 lg:p-10 flex flex-col gap-8">
@@ -86,44 +99,117 @@ const Budget: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-[#1c2a38]/80 backdrop-blur-xl rounded-2xl border border-[#324d67]/50 p-8 shadow-xl">
           <div className="flex items-center justify-between mb-8">
-            <h3 className="text-white text-lg font-bold flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">bar_chart</span>
-              Realizado vs. Planejado by Categoria
-            </h3>
+            <div className="flex items-center gap-3">
+              {selectedCategory && (
+                <button
+                  onClick={() => setSelectedCategory(null)}
+                  className="flex items-center gap-1 text-primary hover:text-blue-400 text-sm font-bold transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                  Voltar
+                </button>
+              )}
+              <h3 className="text-white text-lg font-bold flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">bar_chart</span>
+                {selectedCategory ? `Subcategorias de ${currentViewTitle}` : 'Realizado vs. Planejado por Categoria'}
+              </h3>
+            </div>
           </div>
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={spending} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#324d67" horizontal={true} vertical={false} />
-                <XAxis dataKey="name" stroke="#92adc9" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-45} textAnchor="end" height={60} />
-                <YAxis stroke="#92adc9" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$ ${value}`} />
-                <Tooltip
-                  cursor={{ fill: '#111a22', opacity: 0.5 }}
-                  contentStyle={{ backgroundColor: '#111a22', border: '1px solid #324d67', borderRadius: '12px', padding: '12px' }}
-                  itemStyle={{ fontSize: '12px', fontWeight: 'black', textTransform: 'uppercase', padding: '2px 0' }}
-                  labelStyle={{ color: '#92adc9', fontSize: '11px', fontWeight: 'black', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}
-                  formatter={(value: number) => formatCurrency(value)}
-                />
-                <Legend
-                  verticalAlign="top"
-                  align="right"
-                  iconType="circle"
-                  wrapperStyle={{ paddingTop: '0', paddingBottom: '24px' }}
-                  formatter={(value: string, entry: any) => (
-                    <span style={{ color: entry.color }} className="text-[10px] font-black uppercase tracking-widest ml-2">
-                      {value}
-                    </span>
-                  )}
-                />
-                <Bar dataKey="planned" name="Previsto" fill="#475569" radius={[4, 4, 0, 0]} barSize={30} />
-                <Bar dataKey="actual" name="Realizado" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={40}>
-                  {spending.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill="#ef4444" />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+
+          {currentViewData.length > 0 ? (
+            <div className="h-[400px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={currentViewData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#324d67" horizontal={true} vertical={false} />
+                  <XAxis dataKey="name" stroke="#92adc9" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-45} textAnchor="end" height={60} />
+                  <YAxis stroke="#92adc9" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$ ${value}`} />
+                  <Tooltip
+                    cursor={{ fill: '#111a22', opacity: 0.5 }}
+                    contentStyle={{ backgroundColor: '#111a22', border: '1px solid #324d67', borderRadius: '12px', padding: '12px' }}
+                    itemStyle={{ fontSize: '12px', fontWeight: 'black', textTransform: 'uppercase', padding: '2px 0' }}
+                    labelStyle={{ color: '#92adc9', fontSize: '11px', fontWeight: 'black', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                  <Legend
+                    verticalAlign="top"
+                    align="right"
+                    iconType="circle"
+                    wrapperStyle={{ paddingTop: '0', paddingBottom: '24px' }}
+                    formatter={(value: string, entry: any) => (
+                      <span style={{ color: entry.color }} className="text-[10px] font-black uppercase tracking-widest ml-2">
+                        {value}
+                      </span>
+                    )}
+                  />
+                  <Bar dataKey="planned" name="Previsto" fill="#475569" radius={[4, 4, 0, 0]} barSize={30} />
+                  <Bar dataKey="actual" name="Realizado" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={40}>
+                    {currentViewData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill="#ef4444" />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-[300px] text-[#92adc9]">
+              <span className="material-symbols-outlined text-[48px] mb-4">category</span>
+              <p>Nenhuma subcategoria com gastos neste período</p>
+            </div>
+          )}
+
+          {/* Category Cards with drill-down */}
+          {!selectedCategory && (
+            <div className="mt-8 grid grid-cols-2 lg:grid-cols-3 gap-4">
+              {spending.map((cat) => {
+                const percent = cat.planned > 0 ? Math.round((cat.actual / cat.planned) * 100) : 0;
+                const isOver = cat.actual > cat.planned && cat.planned > 0;
+
+                return (
+                  <div
+                    key={cat.category_id}
+                    onClick={() => cat.children.length > 0 && setSelectedCategory(cat.category_id)}
+                    className={`p-4 rounded-xl border transition-all ${cat.children.length > 0
+                        ? 'cursor-pointer hover:bg-[#111a22] border-[#324d67]/50'
+                        : 'border-[#324d67]/30'
+                      } ${isOver ? 'bg-red-500/10 border-red-500/30' : 'bg-[#111a22]/50'}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="size-8 rounded-full flex items-center justify-center"
+                          style={{ backgroundColor: cat.color + '20', color: cat.color }}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">{cat.icon}</span>
+                        </div>
+                        <span className="text-white font-medium text-sm truncate">{cat.name}</span>
+                      </div>
+                      {cat.children.length > 0 && (
+                        <span className="material-symbols-outlined text-[#92adc9] text-[16px]">chevron_right</span>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <p className={`text-lg font-bold ${isOver ? 'text-red-400' : 'text-white'}`}>
+                          {formatCurrency(cat.actual)}
+                        </p>
+                        <p className="text-[#92adc9] text-xs">
+                          de {formatCurrency(cat.planned)}
+                        </p>
+                      </div>
+                      <span className={`text-xs font-bold ${isOver ? 'text-red-400' : percent > 80 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                        {percent}%
+                      </span>
+                    </div>
+                    {cat.children.length > 0 && (
+                      <p className="text-[#6384a3] text-[10px] mt-2 uppercase tracking-wider">
+                        {cat.children.length} subcategoria(s)
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-6">
@@ -159,7 +245,7 @@ const Budget: React.FC = () => {
               <p className="text-[#92adc9] text-sm text-center py-4">Defina suas metas para receber insights personalizados.</p>
             )}
 
-            {healthyCategories.length > 0 && healthyCategories.map(s => (
+            {healthyCategories.length > 0 && healthyCategories.slice(0, 2).map(s => (
               <div key={s.category_id} className="flex gap-4 p-4 rounded-xl bg-primary/10 border border-primary/20">
                 <span className="material-symbols-outlined text-primary">eco</span>
                 <div>
@@ -176,7 +262,7 @@ const Budget: React.FC = () => {
             <div className="relative z-10">
               <h4 className="font-bold text-lg mb-2">Dica Financeira</h4>
               <p className="text-white/80 text-sm leading-relaxed">
-                Categorias sem metas não aparecem no monitoramento. Revise seus limites mensalmente para um controle rigoroso.
+                Defina metas nas categorias principais. Os gastos das subcategorias são somados automaticamente.
               </p>
             </div>
             <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-[100px] opacity-10">trending_up</span>
@@ -197,18 +283,19 @@ const Budget: React.FC = () => {
 
             <form onSubmit={handleSaveLimit} className="p-8 space-y-6">
               <div className="space-y-2">
-                <label className="text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Categoria de Despesa</label>
+                <label className="text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Categoria Principal</label>
                 <select
                   required
                   className="w-full h-14 bg-[#111a22] border border-[#324d67] rounded-xl px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
                   value={modalData.category_id}
                   onChange={(e) => setModalData({ ...modalData, category_id: e.target.value })}
                 >
-                  <option value="">Selecione uma categoria...</option>
-                  {categories.filter(c => c.type === 'expense').map(cat => (
+                  <option value="">Selecione uma categoria principal...</option>
+                  {parentCategories.map(cat => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
+                <p className="text-[#6384a3] text-xs">Os gastos das subcategorias serão somados automaticamente.</p>
               </div>
 
               <div className="space-y-2">
@@ -246,3 +333,4 @@ const Budget: React.FC = () => {
 };
 
 export default Budget;
+
