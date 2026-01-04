@@ -258,10 +258,23 @@ export const useDashboardData = () => {
                 .eq('month', formatDate(startOfMonth));
 
             if (budgetLimits && budgetLimits.length > 0) {
+                // Build category map for parent lookups
+                const catMap = new Map(allCategories?.map(c => [c.id, c]) || []);
+
                 const budgetItems = budgetLimits.map(b => {
-                    // Find actual spending for this category from expensesByCategory
-                    const catSpent = expensesCat?.filter(e => e.category_id === b.category_id)
-                        .reduce((sum, e) => sum + Number(e.amount), 0) || 0;
+                    // Find actual spending: include direct category + subcategories
+                    let catSpent = 0;
+
+                    expensesCat?.forEach(e => {
+                        const expense = e as any;
+                        const expenseCategory = catMap.get(expense.category_id);
+
+                        // Match if direct category or if it's a subcategory of this budget's category
+                        if (expense.category_id === b.category_id ||
+                            expenseCategory?.parent_id === b.category_id) {
+                            catSpent += Number(expense.amount);
+                        }
+                    });
 
                     return {
                         name: b.categories?.name || 'Categoria',
