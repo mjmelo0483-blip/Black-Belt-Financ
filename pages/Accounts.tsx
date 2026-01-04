@@ -401,9 +401,9 @@ const Accounts: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-[#324d67]/50">
+                <div className="rounded-xl border border-[#324d67]/50 max-h-[400px] overflow-y-auto">
                   <table className="w-full text-left border-collapse">
-                    <thead className="bg-[#111a22]">
+                    <thead className="bg-[#111a22] sticky top-0 z-10">
                       <tr>
                         <th className="p-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Data</th>
                         <th className="p-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Descrição</th>
