@@ -296,7 +296,7 @@ const Accounts: React.FC = () => {
       {/* Detail Modal */}
       {isDetailModalOpen && selectedAccount && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-2xl bg-[#1a2632] border border-[#324d67] rounded-3xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="w-full max-w-2xl max-h-[90vh] bg-[#1a2632] border border-[#324d67] rounded-3xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300 flex flex-col">
             <div className="p-8 border-b border-[#324d67]/50 bg-gradient-to-r from-[#1c2a38] to-[#1a2632] flex justify-between items-start">
               <div className="flex gap-4 items-center">
                 <div className="size-14 rounded-2xl bg-gradient-to-br from-primary to-[#094b8e] flex items-center justify-center text-white font-bold text-2xl shadow-xl shadow-primary/20">
@@ -329,7 +329,7 @@ const Accounts: React.FC = () => {
             </div>
 
             {viewMode === 'summary' ? (
-              <div className="p-8 pt-0">
+              <div className="p-8 pt-0 flex-1 overflow-y-auto">
                 <div className="grid grid-cols-2 gap-8 mb-10">
                   <div className="p-6 rounded-2xl bg-[#111a22] border border-[#324d67]/30">
                     <p className="text-[#92adc9] text-xs font-bold uppercase tracking-wider mb-2">Saldo Total</p>
@@ -401,7 +401,7 @@ const Accounts: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="p-8 pt-0">
+              <div className="p-8 pt-0 flex-1 overflow-y-auto">
                 <div className="mb-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-3 items-start">
                   <span className="material-symbols-outlined text-blue-400">info</span>
                   <div className="text-sm text-blue-200">
