@@ -57,7 +57,7 @@ export const useAccounts = () => {
             .select('*')
             .eq('account_id', accountId)
             .eq('status', 'completed')
-            .gt('date', date);
+            .gt('due_date', date);
 
         return { data, error };
     };

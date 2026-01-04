@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAccounts } from '../hooks/useAccounts';
 
 const Accounts: React.FC = () => {
-  const { accounts, loading, addAccount, updateAccount, deleteAccount, getAccountTransactions, getAccountStatement, getTransactionsUntilDueDate } = useAccounts();
+  const { accounts, loading, addAccount, updateAccount, deleteAccount, getAccountTransactions, getAccountStatement, getTransactionsAfterDate } = useAccounts();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<any>(null);
@@ -30,22 +30,23 @@ const Accounts: React.FC = () => {
       if (!simulationDate || accounts.length === 0) return;
       setLoadingSimulation(true);
 
-      // Saldo calculado = Saldo inicial de cada conta + lançamentos realizados (status = completed) com due_date <= data de referência
+      // Saldo na data de referência = Saldo Atual - lançamentos realizados com due_date > data de referência
+      // (Subtraímos as transações que ainda não haviam ocorrido na data de referência)
       let totalBalance = 0;
 
-      const promises = accounts.map(acc => getTransactionsUntilDueDate(acc.id, simulationDate));
+      const promises = accounts.map(acc => getTransactionsAfterDate(acc.id, simulationDate));
       const results = await Promise.all(promises);
 
       results.forEach((res, index) => {
         const acc = accounts[index];
-        let accountBalance = acc.balance; // Saldo inicial
+        let accountBalance = acc.balance; // Saldo atual
 
         if (res.data) {
           res.data.forEach((t: any) => {
-            // Soma todos os lançamentos realizados com due_date <= simulationDate
-            // A query já filtra por status = 'completed' e due_date <= simulationDate
-            if (t.type === 'income') accountBalance += t.amount;
-            else accountBalance -= t.amount;
+            // Reverter as transações que ocorreram DEPOIS da data de referência
+            // Se foi receita, subtrair; se foi despesa, adicionar de volta
+            if (t.type === 'income') accountBalance -= t.amount;
+            else accountBalance += t.amount;
           });
         }
 
