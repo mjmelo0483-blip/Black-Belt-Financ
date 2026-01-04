@@ -202,8 +202,17 @@ export const useDashboardData = () => {
 
             const totalCards = cardsData?.reduce((acc, curr) => acc + Number(curr.credit_limit), 0) || 0;
 
-            // 6. Fetch Used Credit (open transactions on credit cards - current month)
-            const { data: usedCreditData } = await supabase
+            // 6. Fetch Used Credit (ALL open transactions on credit cards - for available limit)
+            const { data: allUsedCreditData } = await supabase
+                .from('transactions')
+                .select('amount')
+                .eq('payment_method', 'credito')
+                .eq('status', 'open');
+
+            const totalUsedCards = allUsedCreditData?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+
+            // 6.1 Fetch current month card balance (for KPI display)
+            const { data: monthUsedCreditData } = await supabase
                 .from('transactions')
                 .select('amount')
                 .eq('payment_method', 'credito')
@@ -211,7 +220,7 @@ export const useDashboardData = () => {
                 .gte('due_date', formatDate(startOfMonth))
                 .lte('due_date', formatDate(endOfMonth));
 
-            const totalUsedCards = usedCreditData?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+            const monthCardBalance = monthUsedCreditData?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
             // 7. Fetch Recent Transactions
             const { data: recents } = await supabase
@@ -232,7 +241,7 @@ export const useDashboardData = () => {
                 monthlyIncome: monthlyIncomeTotal,
                 totalCards: totalCards,
                 usedCards: totalUsedCards,
-                cardBalance: totalUsedCards
+                cardBalance: monthCardBalance
             });
             setRecentTransactions(recents || []);
 
