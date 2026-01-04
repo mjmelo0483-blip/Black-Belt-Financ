@@ -25,6 +25,7 @@ export const useDashboardData = () => {
     const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
     const [assetAllocation, setAssetAllocation] = useState<any[]>([]);
     const [expensesByCategory, setExpensesByCategory] = useState<any[]>([]);
+    const [budgetProgress, setBudgetProgress] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchData = useCallback(async () => {
@@ -250,6 +251,32 @@ export const useDashboardData = () => {
                 { name: 'Aguardando Ativos', value: 100, color: '#324d67' }
             ]);
 
+            // 8. Fetch Budget Progress (limits vs actual spending)
+            const { data: budgetLimits } = await supabase
+                .from('budgets')
+                .select('*, categories (name, color, icon)')
+                .eq('month', formatDate(startOfMonth));
+
+            if (budgetLimits && budgetLimits.length > 0) {
+                const budgetItems = budgetLimits.map(b => {
+                    // Find actual spending for this category from expensesByCategory
+                    const catSpent = expensesCat?.filter(e => e.category_id === b.category_id)
+                        .reduce((sum, e) => sum + Number(e.amount), 0) || 0;
+
+                    return {
+                        name: b.categories?.name || 'Categoria',
+                        color: b.categories?.color || '#137fec',
+                        icon: b.categories?.icon || 'category',
+                        limit: Number(b.amount),
+                        spent: catSpent,
+                        percentage: b.amount > 0 ? Math.round((catSpent / b.amount) * 100) : 0
+                    };
+                }).sort((a, b) => b.percentage - a.percentage).slice(0, 4);
+                setBudgetProgress(budgetItems);
+            } else {
+                setBudgetProgress([]);
+            }
+
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
         } finally {
@@ -267,6 +294,7 @@ export const useDashboardData = () => {
         recentTransactions,
         assetAllocation,
         expensesByCategory,
+        budgetProgress,
         loading,
         refreshData: fetchData
     };

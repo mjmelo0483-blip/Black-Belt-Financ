@@ -8,7 +8,7 @@ import StatCard from '../components/StatCard';
 import { useDashboardData } from '../hooks/useDashboardData';
 
 const Dashboard: React.FC = () => {
-  const { stats, chartData, recentTransactions, assetAllocation, expensesByCategory, loading, refreshData } = useDashboardData();
+  const { stats, chartData, recentTransactions, assetAllocation, expensesByCategory, budgetProgress, loading, refreshData } = useDashboardData();
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
@@ -238,110 +238,162 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Expense Chart - Expandido para toda largura */}
-        <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg lg:col-span-3">
+      {/* Metas de Orçamento - barras de progresso */}
+      {budgetProgress.length > 0 && (
+        <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-white text-lg font-bold text-white/90">
-              Despesas por Categoria ({new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })})
-            </h2>
-            {selectedCategory && (
-              <button
-                onClick={() => setSelectedCategory(null)}
-                className="flex items-center gap-1 text-primary hover:text-blue-400 text-sm font-bold transition-colors"
-              >
-                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-                Voltar
-              </button>
-            )}
+            <div>
+              <h2 className="text-white text-lg font-bold">Metas de Orçamento</h2>
+              <p className="text-[#92adc9] text-sm">Progresso do mês atual</p>
+            </div>
+            <button
+              onClick={() => navigate('/budget')}
+              className="text-primary hover:text-blue-400 text-sm font-bold transition-colors flex items-center gap-1"
+            >
+              Ver todos
+              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
           </div>
 
-          {selectedCategory && (
-            <div className="mb-4 px-3 py-2 bg-[#111a22] rounded-lg border border-[#324d67]/50">
-              <p className="text-[#92adc9] text-xs uppercase tracking-widest">Categoria Principal</p>
-              <p className="text-white font-bold">{selectedCategory}</p>
-            </div>
-          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {budgetProgress.map((budget: any, index: number) => (
+              <div key={index} className="bg-[#1c2a38] rounded-xl p-4 border border-[#324d67]/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <span
+                    className="material-symbols-outlined text-[18px]"
+                    style={{ color: budget.color }}
+                  >
+                    {budget.icon}
+                  </span>
+                  <span className="text-white text-sm font-medium truncate">{budget.name}</span>
+                </div>
 
-          <div className="flex flex-col lg:flex-row items-center gap-8">
-            <div className="flex flex-col items-center justify-center relative">
-              <div className="size-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={
-                        selectedCategory
-                          ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
-                          : expensesByCategory
-                      }
-                      innerRadius={85}
-                      outerRadius={115}
-                      paddingAngle={5}
-                      dataKey="value"
-                      onClick={(data) => {
-                        if (!selectedCategory && data?.children?.length > 0) {
-                          setSelectedCategory(data.name);
-                        }
-                      }}
-                      style={{ cursor: selectedCategory ? 'default' : 'pointer' }}
-                    >
-                      {(selectedCategory
+                <div className="flex justify-between text-xs mb-2">
+                  <span className="text-[#92adc9]">{formatCurrency(budget.spent)} de {formatCurrency(budget.limit)}</span>
+                  <span className={`font-bold ${budget.percentage > 100 ? 'text-red-400' : budget.percentage > 80 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                    {budget.percentage}%
+                  </span>
+                </div>
+
+                <div className="h-2 bg-[#111a22] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${budget.percentage > 100 ? 'bg-gradient-to-r from-red-500 to-red-400' :
+                        budget.percentage > 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                          'bg-gradient-to-r from-emerald-500 to-emerald-400'
+                      }`}
+                    style={{ width: `${Math.min(100, budget.percentage)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Expense Chart - Expandido para toda largura */}
+      <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white text-lg font-bold text-white/90">
+            Despesas por Categoria ({new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })})
+          </h2>
+          {selectedCategory && (
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className="flex items-center gap-1 text-primary hover:text-blue-400 text-sm font-bold transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+              Voltar
+            </button>
+          )}
+        </div>
+
+        {selectedCategory && (
+          <div className="mb-4 px-3 py-2 bg-[#111a22] rounded-lg border border-[#324d67]/50">
+            <p className="text-[#92adc9] text-xs uppercase tracking-widest">Categoria Principal</p>
+            <p className="text-white font-bold">{selectedCategory}</p>
+          </div>
+        )}
+
+        <div className="flex flex-col lg:flex-row items-center gap-8">
+          <div className="flex flex-col items-center justify-center relative">
+            <div className="size-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={
+                      selectedCategory
                         ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
                         : expensesByCategory
-                      ).map((entry: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#111a22', border: '1px solid #324d67', borderRadius: '8px' }}
-                      itemStyle={{ color: '#fff' }}
-                      formatter={(value: number) => formatCurrency(value)}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                <p className="text-[#92adc9] text-sm font-medium uppercase">
-                  {selectedCategory ? 'Total Cat.' : 'Total Mês'}
-                </p>
-                <p className="text-white text-3xl font-bold">
-                  {formatCurrency(
-                    selectedCategory
-                      ? expensesByCategory.find(c => c.name === selectedCategory)?.value || 0
-                      : stats.monthlyExpenses
-                  )}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {(selectedCategory
-                ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
-                : expensesByCategory
-              ).slice(0, 12).map((cat: any, i: number) => (
-                <div
-                  key={i}
-                  className={`flex items-center gap-2 p-2 rounded-lg transition-all ${!selectedCategory && cat.children?.length > 0
-                    ? 'hover:bg-[#111a22] cursor-pointer'
-                    : ''
-                    }`}
-                  onClick={() => {
-                    if (!selectedCategory && cat.children?.length > 0) {
-                      setSelectedCategory(cat.name);
                     }
-                  }}
-                >
-                  <div className="size-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-white text-sm font-bold">{formatCurrency(cat.value)}</p>
-                    <p className="text-[#92adc9] text-xs truncate">{cat.name}</p>
-                  </div>
-                  {!selectedCategory && cat.children?.length > 0 && (
-                    <span className="material-symbols-outlined text-[#92adc9] text-[16px]">chevron_right</span>
-                  )}
-                </div>
-              ))}
+                    innerRadius={85}
+                    outerRadius={115}
+                    paddingAngle={5}
+                    dataKey="value"
+                    onClick={(data) => {
+                      if (!selectedCategory && data?.children?.length > 0) {
+                        setSelectedCategory(data.name);
+                      }
+                    }}
+                    style={{ cursor: selectedCategory ? 'default' : 'pointer' }}
+                  >
+                    {(selectedCategory
+                      ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
+                      : expensesByCategory
+                    ).map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#111a22', border: '1px solid #324d67', borderRadius: '8px' }}
+                    itemStyle={{ color: '#fff' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
+            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+              <p className="text-[#92adc9] text-sm font-medium uppercase">
+                {selectedCategory ? 'Total Cat.' : 'Total Mês'}
+              </p>
+              <p className="text-white text-3xl font-bold">
+                {formatCurrency(
+                  selectedCategory
+                    ? expensesByCategory.find(c => c.name === selectedCategory)?.value || 0
+                    : stats.monthlyExpenses
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {(selectedCategory
+              ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
+              : expensesByCategory
+            ).slice(0, 12).map((cat: any, i: number) => (
+              <div
+                key={i}
+                className={`flex items-center gap-2 p-2 rounded-lg transition-all ${!selectedCategory && cat.children?.length > 0
+                  ? 'hover:bg-[#111a22] cursor-pointer'
+                  : ''
+                  }`}
+                onClick={() => {
+                  if (!selectedCategory && cat.children?.length > 0) {
+                    setSelectedCategory(cat.name);
+                  }
+                }}
+              >
+                <div className="size-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-white text-sm font-bold">{formatCurrency(cat.value)}</p>
+                  <p className="text-[#92adc9] text-xs truncate">{cat.name}</p>
+                </div>
+                {!selectedCategory && cat.children?.length > 0 && (
+                  <span className="material-symbols-outlined text-[#92adc9] text-[16px]">chevron_right</span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -350,5 +402,6 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+
 
 
