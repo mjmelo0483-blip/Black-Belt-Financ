@@ -94,52 +94,6 @@ const Dashboard: React.FC = () => {
               </ResponsiveContainer>
             </div>
           </div>
-
-          <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-white text-lg font-bold text-white/90">Lançamentos Recentes</h2>
-              <button onClick={() => navigate('/transactions')} className="text-primary text-sm font-bold hover:underline">Ver Todos</button>
-            </div>
-            <div className="space-y-3">
-              {recentTransactions.length > 0 ? (
-                recentTransactions.map((t, i) => (
-                  <div key={i} className={`flex items-center justify-between p-3 rounded-lg bg-[#111a22] hover:bg-[#1a2632] transition-colors border-l-4 ${t.type === 'expense' ? 'border-red-500' : 'border-green-500'}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="size-10 rounded-full bg-[#233648] flex items-center justify-center text-white">
-                        <span className="material-symbols-outlined">{t.categories?.icon || 'receipt_long'}</span>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-white font-medium text-sm leading-tight text-white/90">{t.description}</p>
-                          {t.payment_method && (
-                            <span className="px-1.5 py-0.5 rounded bg-[#1a2632] text-[#6384a3] text-[8px] font-black uppercase tracking-tighter border border-[#324d67]/30">
-                              {t.payment_method === 'credito' ? 'Cartão' : t.payment_method === 'pix' ? 'Pix' : 'Débito'}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <p className="text-[#92adc9] text-[9px] font-black uppercase tracking-widest leading-none">INC: {new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
-                          {t.due_date && (
-                            <p className="text-[#92adc9] text-[9px] font-black uppercase tracking-widest leading-none">VENC: {new Date(t.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className={`font-bold ${t.type === 'expense' ? 'text-white' : 'text-green-400'}`}>
-                        {t.type === 'expense' ? '-' : '+'} {formatCurrency(t.amount)}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-10">
-                  <span className="material-symbols-outlined text-[48px] text-[#324d67]">history</span>
-                  <p className="text-[#92adc9] mt-2">Nenhum lançamento encontrado</p>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         <div className="flex flex-col gap-6">
@@ -236,8 +190,8 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Expense Chart - Aumentado */}
-        <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg lg:col-span-2">
+        {/* Expense Chart - Expandido para toda largura */}
+        <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-white text-lg font-bold text-white/90">
               Despesas por Categoria ({new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })})
@@ -262,7 +216,7 @@ const Dashboard: React.FC = () => {
 
           <div className="flex flex-col lg:flex-row items-center gap-8">
             <div className="flex flex-col items-center justify-center relative">
-              <div className="size-56">
+              <div className="size-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -271,8 +225,8 @@ const Dashboard: React.FC = () => {
                           ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
                           : expensesByCategory
                       }
-                      innerRadius={70}
-                      outerRadius={95}
+                      innerRadius={85}
+                      outerRadius={115}
                       paddingAngle={5}
                       dataKey="value"
                       onClick={(data) => {
@@ -298,10 +252,10 @@ const Dashboard: React.FC = () => {
                 </ResponsiveContainer>
               </div>
               <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                <p className="text-[#92adc9] text-xs font-medium uppercase">
+                <p className="text-[#92adc9] text-sm font-medium uppercase">
                   {selectedCategory ? 'Total Cat.' : 'Total Mês'}
                 </p>
-                <p className="text-white text-2xl font-bold">
+                <p className="text-white text-3xl font-bold">
                   {formatCurrency(
                     selectedCategory
                       ? expensesByCategory.find(c => c.name === selectedCategory)?.value || 0
@@ -311,11 +265,11 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex-1 grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-4">
               {(selectedCategory
                 ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
                 : expensesByCategory
-              ).slice(0, 9).map((cat: any, i: number) => (
+              ).slice(0, 12).map((cat: any, i: number) => (
                 <div
                   key={i}
                   className={`flex items-center gap-2 p-2 rounded-lg transition-all ${!selectedCategory && cat.children?.length > 0
