@@ -199,7 +199,7 @@ const CashFlow: React.FC = () => {
         )
       }
 
-      <div className="bg-[#111a22] border border-[#233648] rounded-xl overflow-hidden flex-1 shadow-sm overflow-x-auto">
+      <div className="bg-[#111a22] border border-[#233648] rounded-xl overflow-hidden flex-1 shadow-sm overflow-x-auto overflow-y-auto max-h-[500px]">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#1a2632] border-b border-[#233648]">
