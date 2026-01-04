@@ -73,7 +73,7 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="w-full h-[300px]">
+            <div className="w-full h-[450px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData}>
                   <defs>
