@@ -24,8 +24,8 @@ const Budget: React.FC = () => {
     ? spending.find(s => s.category_id === selectedCategory)?.name || ''
     : '';
 
-  const totalPlanned = spending.reduce((acc, s) => acc + s.planned, 0);
-  const totalActual = spending.reduce((acc, s) => acc + s.actual, 0);
+  const totalPlanned = currentViewData.reduce((acc, s) => acc + s.planned, 0);
+  const totalActual = currentViewData.reduce((acc, s) => acc + s.actual, 0);
   const remaining = totalPlanned - totalActual;
   const percentUsed = totalPlanned > 0 ? Math.round((totalActual / totalPlanned) * 100) : 0;
 
@@ -100,14 +100,14 @@ const Budget: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
-          { label: 'Orçamento Total', val: formatCurrency(totalPlanned), icon: 'account_balance_wallet', detail: 'Planejado para o mês', color: 'text-primary' },
-          { label: 'Total Gasto', val: formatCurrency(totalActual), icon: 'payments', detail: `${percentUsed}% do total planejado`, color: 'text-orange-500' },
-          { label: 'Restante', val: formatCurrency(remaining), icon: 'savings', detail: remaining < 0 ? 'Meta excedida' : 'Disponível para gastar', color: remaining < 0 ? 'text-red-500' : 'text-emerald-500' }
+          { label: selectedCategory ? `Orçamento: ${currentViewTitle}` : 'Orçamento Total', val: formatCurrency(totalPlanned), icon: 'account_balance_wallet', detail: selectedCategory ? 'Planejado para esta categoria' : 'Planejado para o mês', color: 'text-primary' },
+          { label: selectedCategory ? `Gasto: ${currentViewTitle}` : 'Total Gasto', val: formatCurrency(totalActual), icon: 'payments', detail: `${percentUsed}% do planejado`, color: 'text-orange-500' },
+          { label: 'Restante', val: formatCurrency(remaining), icon: 'savings', detail: remaining < 0 ? 'Meta excedida' : 'Disponível no orçamento', color: remaining < 0 ? 'text-red-500' : 'text-emerald-500' }
         ].map((s, i) => (
           <div key={i} className="flex flex-col gap-2 rounded-2xl p-6 border border-[#324d67]/50 bg-[#1c2a38]/80 backdrop-blur-xl shadow-lg relative overflow-hidden group">
             <div className="flex justify-between items-start relative z-10">
-              <p className="text-[#92adc9] text-[10px] font-black uppercase tracking-widest">{s.label}</p>
-              <span className={`material-symbols-outlined ${s.color} text-[24px]`}>{s.icon}</span>
+              <p className="text-[#92adc9] text-[10px] font-black uppercase tracking-widest truncate mr-4">{s.label}</p>
+              <span className={`material-symbols-outlined ${s.color} text-[24px] shrink-0`}>{s.icon}</span>
             </div>
             <p className="text-white text-3xl font-black mt-2 tracking-tight relative z-10">{s.val}</p>
             <p className="text-[#6384a3] text-xs font-medium mt-1 relative z-10">{s.detail}</p>
