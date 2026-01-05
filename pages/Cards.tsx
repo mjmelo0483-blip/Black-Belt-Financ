@@ -190,9 +190,6 @@ const Cards: React.FC = () => {
           >
             <span className="material-symbols-outlined text-[20px]">add_card</span> Adicionar Cartão
           </button>
-          <button className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 transition-colors shadow-lg shadow-primary/20">
-            <span className="material-symbols-outlined text-[20px]">attach_money</span> Pagar Fatura
-          </button>
         </div>
       </div>
 
