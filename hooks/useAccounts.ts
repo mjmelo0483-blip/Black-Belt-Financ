@@ -113,7 +113,11 @@ export const useAccounts = () => {
             return { data, error };
         } catch (err: any) {
             console.error('Unexpected error in updateAccount:', err);
-            return { error: err };
+            let message = err.message || 'Erro inesperado ao atualizar conta';
+            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
+                message = 'Erro de rede: "Failed to fetch". Tente desativar AdBlockers e recarregar a página.';
+            }
+            return { error: { message } };
         }
     };
 

@@ -20,17 +20,34 @@ export const useCategories = () => {
     }, []);
 
     const addCategory = async (category: any) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!user) return { error: { message: 'Usuário não autenticado' } };
+        try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) {
+                console.error('Session fetch error:', sessionError);
+                return { error: sessionError };
+            }
+            const user = session?.user;
+            if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-        const { data, error } = await supabase
-            .from('categories')
-            .insert([{ ...category, user_id: user.id }])
-            .select();
+            const { data, error } = await supabase
+                .from('categories')
+                .insert([{ ...category, user_id: user.id }])
+                .select();
 
-        if (!error) fetchCategories();
-        return { data, error };
+            if (error) {
+                console.error('Category insert error:', error);
+            } else {
+                fetchCategories();
+            }
+            return { data, error };
+        } catch (err: any) {
+            console.error('Unexpected error in addCategory:', err);
+            let message = err.message || 'Erro inesperado ao adicionar categoria';
+            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
+                message = 'Erro de rede: "Failed to fetch". Verifique se há extensões (AdBlockers) bloqueando a conexão e recarregue a página.';
+            }
+            return { error: { message } };
+        }
     };
 
     const updateCategory = async (id: string, updates: any) => {

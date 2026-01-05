@@ -58,7 +58,11 @@ export const useInvestments = () => {
             return { data, error };
         } catch (err: any) {
             console.error('Unexpected error in addInvestment:', err);
-            return { error: err };
+            let message = err.message || 'Erro inesperado ao adicionar investimento';
+            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
+                message = 'Erro de rede: "Failed to fetch". Verifique se há AdBlockers bloqueando o Supabase e recarregue a página.';
+            }
+            return { error: { message } };
         }
     };
 
@@ -78,7 +82,11 @@ export const useInvestments = () => {
             return { data, error };
         } catch (err: any) {
             console.error('Unexpected error in updateInvestment:', err);
-            return { error: err };
+            let message = err.message || 'Erro inesperado ao atualizar investimento';
+            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
+                message = 'Erro de rede: "Failed to fetch". Verifique extensões do navegador e tente novamente.';
+            }
+            return { error: { message } };
         }
     };
 

@@ -146,7 +146,11 @@ export const useTransactions = () => {
         } catch (err: any) {
             console.error('Unexpected error in saveTransaction:', err);
             setLoading(false);
-            return { error: { message: err.message || 'Erro inexperado ao salvar transação' } };
+            let message = err.message || 'Erro inexperado ao salvar transação';
+            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
+                message = 'Erro de rede: "Failed to fetch". Isso geralmente ocorre se um AdBlocker ou extensão de privacidade estiver bloqueando a conexão com o Supabase. Por favor, tente desativar suas extensões e recarregar a página.';
+            }
+            return { error: { message } };
         }
     };
 
@@ -231,7 +235,11 @@ export const useTransactions = () => {
         } catch (err: any) {
             console.error('Unexpected error in saveInvestmentTransaction:', err);
             setLoading(false);
-            return { error: { message: err.message || 'Erro inexperado ao salvar investimento' } };
+            let message = err.message || 'Erro inexperado ao salvar investimento';
+            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
+                message = 'Erro de rede: "Failed to fetch". Isso pode ser causado por extensões do navegador bloqueando a requisição. Tente desativar AdBlockers e recarregar.';
+            }
+            return { error: { message } };
         }
     };
 
@@ -301,7 +309,11 @@ export const useTransactions = () => {
         } catch (err: any) {
             console.error('Unexpected error in saveTransfer:', err);
             setLoading(false);
-            return { error: { message: err.message || 'Erro inexperado ao salvar transferência' } };
+            let message = err.message || 'Erro inexperado ao salvar transferência';
+            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
+                message = 'Erro de rede: "Failed to fetch". Verifique se há extensões bloqueando a conexão e tente novamente.';
+            }
+            return { error: { message } };
         }
     };
 

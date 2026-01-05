@@ -51,7 +51,11 @@ export const useCards = () => {
             return { data, error };
         } catch (err: any) {
             console.error('Unexpected error in addCard:', err);
-            return { error: err };
+            let message = err.message || 'Erro inesperado ao adicionar cartão';
+            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
+                message = 'Erro de rede: "Failed to fetch". Verifique extensões de bloqueio de anúncios e tente novamente.';
+            }
+            return { error: { message } };
         }
     };
 
@@ -71,7 +75,11 @@ export const useCards = () => {
             return { data, error };
         } catch (err: any) {
             console.error('Unexpected error in updateCard:', err);
-            return { error: err };
+            let message = err.message || 'Erro inesperado ao atualizar cartão';
+            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
+                message = 'Erro de rede: "Failed to fetch". Tente desativar extensões do navegador e recarregar.';
+            }
+            return { error: { message } };
         }
     };
 
