@@ -30,7 +30,10 @@ export const useTransactions = () => {
         description?: string;
         accountId?: string;
         categoryId?: string;
+        subcategoryId?: string;
+        paymentMethod?: string;
         status?: string;
+        types?: string[];
     }) => {
         setLoading(true);
 
@@ -74,11 +77,28 @@ export const useTransactions = () => {
         if (activeFilters?.accountId) {
             query = query.eq('account_id', activeFilters.accountId);
         }
-        if (activeFilters?.categoryId) {
-            query = query.eq('category_id', activeFilters.categoryId);
-        }
         if (activeFilters?.status) {
             query = query.eq('status', activeFilters.status);
+        }
+        if (activeFilters?.paymentMethod) {
+            query = query.eq('payment_method', activeFilters.paymentMethod);
+        }
+        if (activeFilters?.types && activeFilters.types.length > 0) {
+            query = query.in('type', activeFilters.types);
+        }
+
+        // Subcategory filter has priority over Category filter
+        if (activeFilters?.subcategoryId) {
+            query = query.eq('category_id', activeFilters.subcategoryId);
+        } else if (activeFilters?.categoryId) {
+            // Find all subcategories for this parent
+            const { data: subcats } = await supabase
+                .from('categories')
+                .select('id')
+                .eq('parent_id', activeFilters.categoryId);
+
+            const categoryIds = [activeFilters.categoryId, ...(subcats?.map(s => s.id) || [])];
+            query = query.in('category_id', categoryIds);
         }
 
         const { data, error } = await query;
@@ -96,12 +116,12 @@ export const useTransactions = () => {
     }, []);
 
     const saveTransaction = async (transaction: any) => {
-        const transactions = Array.isArray(transaction) ? transaction : [transaction];
+        const transactionsList = Array.isArray(transaction) ? transaction : [transaction];
 
         setLoading(true);
         const { data, error } = await supabase
             .from('transactions')
-            .insert(transactions)
+            .insert(transactionsList)
             .select();
 
         if (!error) fetchTransactions();
@@ -122,7 +142,6 @@ export const useTransactions = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-        // Get current investment value
         const { data: investment, error: fetchError } = await supabase
             .from('investments')
             .select('value, quantity')
@@ -134,18 +153,12 @@ export const useTransactions = () => {
         }
 
         const isApplication = transaction.operationType === 'application';
-
-        // Calculate new investment value
-        // For application: increase value. For redemption: decrease value
         const currentTotalValue = investment.value * investment.quantity;
         const newTotalValue = isApplication
             ? currentTotalValue + transaction.amount
             : currentTotalValue - transaction.amount;
-
-        // Update value per unit (keeping quantity the same)
         const newValuePerUnit = newTotalValue / investment.quantity;
 
-        // Create transaction for the bank account
         const accountTransaction = {
             user_id: user.id,
             amount: transaction.amount,
@@ -154,7 +167,7 @@ export const useTransactions = () => {
             description: transaction.description || (isApplication ? 'Aplicação em investimento' : 'Resgate de investimento'),
             category_id: null,
             account_id: transaction.accountId,
-            type: isApplication ? 'expense' : 'income', // Application = money out, Redemption = money in
+            type: isApplication ? 'expense' : 'income',
             payment_method: 'investimento',
             status: transaction.status,
             investment_id: transaction.investmentId
@@ -162,7 +175,6 @@ export const useTransactions = () => {
 
         setLoading(true);
 
-        // Insert transaction
         const { data: txData, error: txError } = await supabase
             .from('transactions')
             .insert([accountTransaction])
@@ -173,14 +185,12 @@ export const useTransactions = () => {
             return { error: txError };
         }
 
-        // Update investment value
         const { error: invError } = await supabase
             .from('investments')
             .update({ value: newValuePerUnit })
             .eq('id', transaction.investmentId);
 
         if (invError) {
-            console.error('Error updating investment:', invError);
             setLoading(false);
             return { error: invError };
         }
@@ -202,7 +212,6 @@ export const useTransactions = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-        // Generate unique transfer_id
         const transferId = crypto.randomUUID();
 
         const debitTransaction = {
@@ -271,7 +280,6 @@ export const useTransactions = () => {
     }) => {
         setLoading(true);
 
-        // 1. Fetch original transaction to revert its impact
         const { data: oldTx, error: oldTxError } = await supabase
             .from('transactions')
             .select('*')
@@ -283,7 +291,6 @@ export const useTransactions = () => {
             return { error: { message: 'Transação original não encontrada' } };
         }
 
-        // 2. Fetch investment
         const { data: investment, error: invFetchError } = await supabase
             .from('investments')
             .select('value, quantity')
@@ -296,14 +303,11 @@ export const useTransactions = () => {
         }
 
         const currentTotal = investment.value * investment.quantity;
-
-        // 3. Revert old impact
         const wasApplication = oldTx.type === 'expense';
         let revertedTotal = wasApplication
             ? currentTotal - Number(oldTx.amount)
             : currentTotal + Number(oldTx.amount);
 
-        // 4. Apply new impact
         const isApplication = transaction.operationType === 'application';
         let newTotal = isApplication
             ? revertedTotal + transaction.amount
@@ -311,7 +315,6 @@ export const useTransactions = () => {
 
         const newValuePerUnit = newTotal / investment.quantity;
 
-        // 5. Update Transaction
         const { data: updatedTx, error: txError } = await supabase
             .from('transactions')
             .update({
@@ -332,7 +335,6 @@ export const useTransactions = () => {
             return { error: txError };
         }
 
-        // 6. Update Investment
         const { error: invError } = await supabase
             .from('investments')
             .update({ value: newValuePerUnit })
@@ -355,17 +357,11 @@ export const useTransactions = () => {
         setLoading(true);
 
         try {
-            // 1. Fetch transactions to be deleted to check for investment links
             const { data: txsToDelete, error: fetchError } = await supabase
                 .from('transactions')
                 .select('amount, type, investment_id')
                 .in('id', ids);
 
-            if (fetchError) {
-                console.error('Error fetching transactions for deletion:', fetchError);
-            }
-
-            // 2. Revert impact on investments
             if (txsToDelete && txsToDelete.length > 0) {
                 for (const tx of txsToDelete) {
                     if (tx.investment_id) {
@@ -378,9 +374,6 @@ export const useTransactions = () => {
                         if (inv && !invFetchError) {
                             const isApplication = tx.type === 'expense';
                             const currentTotal = Number(inv.value) * Number(inv.quantity || 1);
-
-                            // Revert: if was application (money out), then total was increased. To revert, subtract.
-                            // If was redemption (money in), then total was decreased. To revert, add.
                             const newTotal = isApplication
                                 ? currentTotal - Number(tx.amount)
                                 : currentTotal + Number(tx.amount);
@@ -388,20 +381,15 @@ export const useTransactions = () => {
                             const quantity = Number(inv.quantity || 1);
                             const newValue = quantity > 0 ? newTotal / quantity : newTotal;
 
-                            const { error: updateError } = await supabase
+                            await supabase
                                 .from('investments')
                                 .update({ value: newValue })
                                 .eq('id', tx.investment_id);
-
-                            if (updateError) {
-                                console.error('Error reverting investment value during deletion:', updateError);
-                            }
                         }
                     }
                 }
             }
 
-            // 3. Perform the actual deletion
             const { error } = await supabase
                 .from('transactions')
                 .delete()
@@ -409,14 +397,11 @@ export const useTransactions = () => {
 
             if (!error) {
                 await fetchTransactions();
-            } else {
-                console.error('Error deleting transactions:', error);
             }
 
             setLoading(false);
             return { error };
         } catch (err: any) {
-            console.error('Catch error in deleteTransaction:', err);
             setLoading(false);
             return { error: err };
         }

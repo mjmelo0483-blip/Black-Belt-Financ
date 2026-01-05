@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTransactions } from '../hooks/useTransactions';
 import { useInvestments } from '../hooks/useInvestments';
-import { supabase } from '../supabase';
 import TransactionModal from '../components/TransactionModal';
 
 const Transactions: React.FC = () => {
@@ -19,13 +18,11 @@ const Transactions: React.FC = () => {
     updateInvestmentTransaction,
     deleteTransaction,
     deleteTransactions,
-    loading: metaLoading
   } = useTransactions();
 
   const { investments, refreshInvestments } = useInvestments();
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentTransactionId, setCurrentTransactionId] = useState<string | null>(null);
@@ -40,6 +37,11 @@ const Transactions: React.FC = () => {
   const [filterMinAmount, setFilterMinAmount] = useState('');
   const [filterMaxAmount, setFilterMaxAmount] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterCategoryId, setFilterCategoryId] = useState('');
+  const [filterSubcategoryId, setFilterSubcategoryId] = useState('');
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
+  const [filterTypes, setFilterTypes] = useState<string[]>([]);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   const location = useLocation();
 
@@ -63,7 +65,11 @@ const Transactions: React.FC = () => {
       dueEndDate: filterDueEndDate,
       minAmount: filterMinAmount ? parseFloat(filterMinAmount) : undefined,
       maxAmount: filterMaxAmount ? parseFloat(filterMaxAmount) : undefined,
-      status: filterStatus
+      status: filterStatus,
+      categoryId: filterCategoryId,
+      subcategoryId: filterSubcategoryId,
+      paymentMethod: filterPaymentMethod,
+      types: filterTypes.length > 0 ? filterTypes : undefined
     });
   };
 
@@ -77,7 +83,11 @@ const Transactions: React.FC = () => {
     setFilterMinAmount('');
     setFilterMaxAmount('');
     setFilterStatus('');
-    fetchTransactions();
+    setFilterCategoryId('');
+    setFilterSubcategoryId('');
+    setFilterPaymentMethod('');
+    setFilterTypes([]);
+    fetchTransactions({});
   };
 
   const handleEdit = (t: any) => {
@@ -93,7 +103,7 @@ const Transactions: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Deseley realmente excluir este lançamento?')) {
+    if (window.confirm('Deseja realmente excluir este lançamento?')) {
       await deleteTransaction(id);
       refreshInvestments();
     }
@@ -125,6 +135,38 @@ const Transactions: React.FC = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0);
+
+  const exportToCSV = () => {
+    if (transactions.length === 0) return;
+
+    const headers = ['Descrição', 'Valor', 'Tipo', 'Inclusão', 'Vencimento', 'Categoria', 'Conta', 'Forma', 'Situação'];
+    const rows = transactions.map(t => [
+      t.description,
+      t.amount.toString().replace('.', ','),
+      t.type === 'income' ? 'Receita' : t.type === 'expense' ? 'Despesa' : t.type === 'transfer' ? 'Transferência' : 'Investimento',
+      t.date,
+      t.due_date || '',
+      t.categories?.name || '',
+      t.accounts?.name || '',
+      t.payment_method || '',
+      t.status === 'completed' ? 'Realizado' : 'Em Aberto'
+    ]);
+
+    const csvContent = [headers, ...rows].map(e => e.map(val => `"${val}"`).join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute("href", url);
+    link.setAttribute("download", `lancamentos_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-6 lg:p-10 flex flex-col gap-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -132,19 +174,52 @@ const Transactions: React.FC = () => {
           <h1 className="text-white text-3xl font-black leading-tight tracking-tight">Lançamentos</h1>
           <p className="text-[#92adc9] mt-1">Gerencie e acompanhe todas as suas movimentações financeiras.</p>
         </div>
-        <button
-          onClick={handleOpenModal}
-          className="px-6 h-12 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/20 hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
-        >
-          <span className="material-symbols-outlined text-[20px]">add</span>
-          Novo Lançamento
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={exportToCSV}
+            className="px-6 h-12 rounded-xl border border-[#324d67] text-[#92adc9] font-bold text-sm hover:text-white hover:border-white transition-all flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[20px]">file_download</span>
+            Exportar Excel
+          </button>
+          <button
+            onClick={handleOpenModal}
+            className="px-6 h-12 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/20 hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[20px]">add</span>
+            Novo Lançamento
+          </button>
+        </div>
       </div>
 
-      {/* Filters Section */}
+      {/* Summary Totals */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-[#1c2a38]/80 backdrop-blur-xl rounded-2xl p-6 border border-emerald-500/20 shadow-lg flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <span className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">Total Receitas</span>
+            <span className="material-symbols-outlined text-emerald-400 text-[20px]">trending_up</span>
+          </div>
+          <p className="text-white text-2xl font-black">{formatCurrency(totalIncome)}</p>
+        </div>
+        <div className="bg-[#1c2a38]/80 backdrop-blur-xl rounded-2xl p-6 border border-red-500/20 shadow-lg flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <span className="text-red-400 text-[10px] font-black uppercase tracking-widest">Total Despesas</span>
+            <span className="material-symbols-outlined text-red-400 text-[20px]">trending_down</span>
+          </div>
+          <p className="text-white text-2xl font-black">{formatCurrency(totalExpense)}</p>
+        </div>
+        <div className="bg-[#1c2a38]/80 backdrop-blur-xl rounded-2xl p-6 border border-primary/20 shadow-lg flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <span className="text-primary text-[10px] font-black uppercase tracking-widest">Saldo Líquido</span>
+            <span className="material-symbols-outlined text-primary text-[20px]">account_balance</span>
+          </div>
+          <p className="text-white text-2xl font-black">{formatCurrency(totalIncome - totalExpense)}</p>
+        </div>
+      </div>
+
+      {/* Filters */}
       <div className="bg-[#1c2a38]/80 backdrop-blur-xl rounded-2xl p-6 shadow-2xl border border-[#324d67]/50">
         <div className="flex flex-col gap-8">
-          {/* Row 1: Context & Primary Actions */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 items-end">
             <div className="lg:col-span-4 flex flex-col gap-2">
               <div className="flex items-center gap-1.5 text-[#92adc9] h-4">
@@ -183,10 +258,8 @@ const Transactions: React.FC = () => {
                 value={filterAccountId}
                 onChange={(e) => setFilterAccountId(e.target.value)}
               >
-                <option value="">Todas as contas</option>
-                {accounts.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
+                <option value="">Todas</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
             <div className="lg:col-span-3 flex gap-2 h-[46px]">
@@ -200,14 +273,13 @@ const Transactions: React.FC = () => {
               <button
                 onClick={clearFilters}
                 className="flex-1 h-full rounded-xl border border-[#324d67] text-[#92adc9] hover:text-white hover:border-white transition-all flex items-center justify-center"
-                title="Limpar Filtros"
               >
                 <span className="material-symbols-outlined text-[14px]">filter_alt_off</span>
               </button>
             </div>
           </div>
 
-          {/* Row 2: Values & Dates */}
+          {/* Row 2: Value Range & Date Ranges */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-end">
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1.5 text-[#92adc9] h-4">
@@ -282,139 +354,160 @@ const Transactions: React.FC = () => {
               </div>
             </div>
           </div>
+
+          <div className="lg:col-span-12 flex items-center justify-between pointer-events-none">
+            <div className="h-[1px] flex-1 bg-[#324d67]/30"></div>
+            <button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="pointer-events-auto flex items-center gap-2 px-4 py-2 bg-[#1c2a38] border border-[#324d67] rounded-xl text-[#92adc9] text-[10px] font-black uppercase tracking-widest hover:text-white transition-all mx-4"
+            >
+              <span className="material-symbols-outlined text-[16px]">{showAdvancedFilters ? 'expand_less' : 'expand_more'}</span>
+              {showAdvancedFilters ? 'Ocultar Filtros Avançados' : 'Filtros Avançados'}
+            </button>
+            <div className="h-[1px] flex-1 bg-[#324d67]/30"></div>
+          </div>
+
+          {showAdvancedFilters && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-1.5 text-[#92adc9] h-4">
+                  <span className="material-symbols-outlined text-[16px]">category</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest leading-none">Categoria</span>
+                </div>
+                <select
+                  className="w-full h-[46px] bg-[#111a22] border border-[#324d67] rounded-xl px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
+                  value={filterCategoryId}
+                  onChange={(e) => { setFilterCategoryId(e.target.value); setFilterSubcategoryId(''); }}
+                >
+                  <option value="">Todas</option>
+                  {categories.filter(c => !c.parent_id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-1.5 text-[#92adc9] h-4">
+                  <span className="material-symbols-outlined text-[16px]">subdirectory_arrow_right</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest leading-none">Subcategoria</span>
+                </div>
+                <select
+                  disabled={!filterCategoryId}
+                  className="w-full h-[46px] bg-[#111a22] border border-[#324d67] rounded-xl px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm disabled:opacity-50"
+                  value={filterSubcategoryId}
+                  onChange={(e) => setFilterSubcategoryId(e.target.value)}
+                >
+                  <option value="">Todas</option>
+                  {categories.filter(c => c.parent_id === filterCategoryId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-1.5 text-[#92adc9] h-4">
+                  <span className="material-symbols-outlined text-[16px]">payments</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest leading-none">Forma</span>
+                </div>
+                <select
+                  className="w-full h-[46px] bg-[#111a22] border border-[#324d67] rounded-xl px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
+                  value={filterPaymentMethod}
+                  onChange={(e) => setFilterPaymentMethod(e.target.value)}
+                >
+                  <option value="">Todas</option>
+                  <option value="debito">Débito</option>
+                  <option value="pix">Pix</option>
+                  <option value="credito_v">Crédito</option>
+                  <option value="credito">Cartão</option>
+                  <option value="dinheiro">Dinheiro</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-1.5 text-[#92adc9] h-4">
+                  <span className="material-symbols-outlined text-[16px]">tune</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest leading-none">Tipos</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {['income', 'expense', 'transfer', 'investment'].map(type => (
+                    <button
+                      key={type}
+                      onClick={() => setFilterTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type])}
+                      className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all ${filterTypes.includes(type) ? 'bg-primary/20 border-primary text-white' : 'bg-[#111a22] border-[#324d67] text-[#6384a3]'}`}
+                    >
+                      {type === 'income' ? 'Receita' : type === 'expense' ? 'Despesa' : type === 'transfer' ? 'Transf.' : 'Inv.'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="flex items-center gap-3">
-            <div className="size-8 rounded-full bg-red-500/20 flex items-center justify-center text-red-500">
-              <span className="material-symbols-outlined text-[18px]">check_box</span>
-            </div>
-            <span className="text-red-400 font-bold text-sm">{selectedIds.length} item(s) selecionado(s)</span>
-          </div>
-          <button
-            onClick={handleBulkDelete}
-            className="flex items-center gap-2 px-6 h-10 bg-red-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-600 transition-all shadow-lg shadow-red-500/20 active:scale-95"
-          >
-            <span className="material-symbols-outlined text-[18px]">delete</span>
-            Excluir Selecionados
-          </button>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-center justify-between">
+          <span className="text-red-400 font-bold text-sm">{selectedIds.length} item(s) selecionado(s)</span>
+          <button onClick={handleBulkDelete} className="bg-red-500 text-white px-6 h-10 rounded-xl text-xs font-black uppercase tracking-widest">Excluir Selecionados</button>
         </div>
       )}
 
-      {/* Transactions List */}
+      {/* List */}
       <div className="bg-[#1c2a38]/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-2xl border border-[#324d67]/50">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#111a22]/50 border-b border-[#324d67]/50">
                 <th className="px-6 py-4 w-10">
-                  <input
-                    type="checkbox"
-                    className="rounded bg-[#111a22] border-[#324d67] text-primary focus:ring-offset-[#1c2a38] focus:ring-primary w-4 h-4 cursor-pointer"
-                    checked={transactions.length > 0 && selectedIds.length === transactions.length}
-                    onChange={toggleSelectAll}
-                  />
+                  <input type="checkbox" checked={transactions.length > 0 && selectedIds.length === transactions.length} onChange={toggleSelectAll} className="rounded bg-[#111a22] border-[#324d67] text-primary" />
                 </th>
-                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Descrição</th>
-                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Categoria / Conta</th>
-                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Data / Venc.</th>
-                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Forma</th>
-                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Situação</th>
+                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Descrição / Categoria</th>
+                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Data / Conta</th>
+                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Forma / Situação</th>
                 <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest text-right">Valor</th>
-                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest text-right"></th>
+                <th className="px-6 py-4"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#324d67]/30">
-              {transactions.length > 0 ? (
-                transactions.map((t) => (
-                  <tr key={t.id} className={`hover:bg-[#111a22]/30 transition-colors group ${selectedIds.includes(t.id) ? 'bg-[#111a22]/50' : ''}`}>
-                    <td className="px-6 py-4">
-                      <input
-                        type="checkbox"
-                        className="rounded bg-[#111a22] border-[#324d67] text-primary focus:ring-offset-[#1c2a38] focus:ring-primary w-4 h-4 cursor-pointer"
-                        checked={selectedIds.includes(t.id)}
-                        onChange={() => toggleSelection(t.id)}
-                      />
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="size-9 rounded-full bg-[#111a22] flex items-center justify-center text-white shrink-0">
-                          <span className="material-symbols-outlined text-[20px]">{t.categories?.icon || 'receipt_long'}</span>
-                        </div>
+              {transactions.length > 0 ? transactions.map(t => (
+                <tr key={t.id} className="hover:bg-[#111a22]/30 transition-colors group">
+                  <td className="px-6 py-4">
+                    <input type="checkbox" checked={selectedIds.includes(t.id)} onChange={() => toggleSelection(t.id)} className="rounded bg-[#111a22] border-[#324d67] text-primary" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="size-9 rounded-full bg-[#111a22] flex items-center justify-center text-white"><span className="material-symbols-outlined text-[20px]">{t.categories?.icon || 'receipt_long'}</span></div>
+                      <div>
                         <p className="text-white font-bold text-sm truncate max-w-[200px]">{t.description}</p>
+                        <p className="text-[#92adc9] text-[10px] uppercase tracking-wider">{t.categories?.name || 'Sem categoria'}</p>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <p className="text-white text-xs font-bold">{t.categories?.name || 'Sem categoria'}</p>
-                      <p className="text-[#92adc9] text-[10px] mt-0.5 uppercase tracking-wider">{t.accounts?.name || 'Sem conta'}</p>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs">
-                      <p className="text-white font-medium">Inc: {new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
-                      {t.due_date && <p className="text-[#92adc9] mt-0.5">Venc: {new Date(t.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 rounded-md bg-[#111a22] text-[#6384a3] text-[9px] font-black uppercase tracking-widest border border-[#324d67]/50">
-                        {t.payment_method === 'credito' ? '💳 Cartão' : t.payment_method === 'pix' ? '💎 Pix' : '💰 Débito'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {t.status === 'completed' ? (
-                        <span className="px-2 py-1 rounded-full bg-green-500/10 text-green-400 text-[9px] font-black border border-green-500/20 uppercase tracking-widest">Realizado</span>
-                      ) : (
-                        <span className="px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 text-[9px] font-black border border-orange-500/20 uppercase tracking-widest">Em Aberto</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <p className={`font-black text-sm ${t.type === 'expense' ? 'text-white' : 'text-green-400'}`}>
-                        {t.type === 'expense' ? '-' : '+'} {formatCurrency(t.amount)}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleEdit(t)}
-                          className="size-8 rounded-lg text-[#92adc9] hover:text-white hover:bg-white/10 transition-all flex items-center justify-center"
-                          title="Editar"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">edit</span>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(t.id)}
-                          className="size-8 rounded-lg text-[#92adc9] hover:text-red-400 hover:bg-red-400/10 transition-all flex items-center justify-center"
-                          title="Excluir"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="px-6 py-20 text-center">
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="material-symbols-outlined text-[48px] text-[#324d67]">inbox</span>
-                      <p className="text-[#92adc9] text-sm font-medium">Nenhum lançamento encontrado com estes filtros.</p>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-xs">
+                    <p className="text-white font-medium">{new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                    <p className="text-[#92adc9] uppercase tracking-widest text-[9px] mt-0.5">{t.accounts?.name || 'Sem conta'}</p>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[#6384a3] text-[9px] font-black uppercase tracking-widest">{t.payment_method || 'debito'}</span>
+                      <span className={`text-[8px] font-black uppercase tracking-widest ${t.status === 'completed' ? 'text-green-400' : 'text-orange-400'}`}>{t.status === 'completed' ? 'Realizado' : 'Em Aberto'}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                    <p className={`font-black text-sm ${t.type === 'expense' ? 'text-white' : 'text-green-400'}`}>{t.type === 'expense' ? '-' : '+'} {formatCurrency(t.amount)}</p>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleEdit(t)} className="size-8 rounded-lg text-[#92adc9] hover:text-white hover:bg-white/10 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">edit</span></button>
+                      <button onClick={() => handleDelete(t.id)} className="size-8 rounded-lg text-[#92adc9] hover:text-red-400 hover:bg-red-400/10 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
                     </div>
                   </td>
                 </tr>
+              )) : (
+                <tr><td colSpan={6} className="px-6 py-20 text-center text-[#92adc9] text-sm">Nenhum lançamento encontrado.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Transaction Modal */}
       <TransactionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSave={() => {
-          fetchTransactions();
-          refreshInvestments();
-          setIsModalOpen(false);
-        }}
+        onSave={() => { fetchTransactions({}); refreshInvestments(); setIsModalOpen(false); }}
         accounts={accounts}
         categories={categories}
         cards={cards}
