@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { useProfile } from '../hooks/useProfile';
+import { useNotifications } from '../hooks/useNotifications';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -11,10 +12,13 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const navigate = useNavigate();
   const { profile } = useProfile();
+  const { notifications, markAsRead, clearAll } = useNotifications();
   const [search, setSearch] = useState('');
   const [isBusiness, setIsBusiness] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +75,9 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
               }`}
           >
             <span className="material-symbols-outlined text-[20px]">notifications</span>
-            <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border border-[#111a22]"></span>
+            {unreadCount > 0 && (
+              <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border border-[#111a22]"></span>
+            )}
           </button>
 
           {showNotifications && (
@@ -80,17 +86,31 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
               <div className="absolute right-0 mt-2 w-80 bg-[#233648] border border-[#324d67] rounded-xl shadow-2xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2">
                 <div className="p-4 border-b border-[#324d67] flex justify-between items-center bg-[#1a2b3a]">
                   <h3 className="text-white font-bold text-sm">Notificações</h3>
-                  <span className="text-primary text-[10px] font-black uppercase tracking-widest cursor-pointer hover:underline">Limpar</span>
+                  <span onClick={clearAll} className="text-primary text-[10px] font-black uppercase tracking-widest cursor-pointer hover:underline">Limpar</span>
                 </div>
                 <div className="max-h-96 overflow-y-auto">
-                  <div className="p-4 hover:bg-[#2d445a] transition-colors border-b border-[#324d67]/30 cursor-pointer group">
-                    <p className="text-white text-xs font-semibold group-hover:text-primary transition-colors">Fatura do Cartão Vencendo</p>
-                    <p className="text-[#92adc9] text-[10px] mt-1">Sua fatura do cartão BLACK BELT vence em 2 dias. Evite juros!</p>
-                  </div>
-                  <div className="p-4 hover:bg-[#2d445a] transition-colors border-b border-[#324d67]/30 cursor-pointer group">
-                    <p className="text-white text-xs font-semibold group-hover:text-primary transition-colors">Meta de Orçamento Atingida</p>
-                    <p className="text-[#92adc9] text-[10px] mt-1">Você atingiu 90% do seu orçamento em Lazer.</p>
-                  </div>
+                  {notifications.length > 0 ? (
+                    notifications.map(n => (
+                      <div
+                        key={n.id}
+                        onClick={() => markAsRead(n.id)}
+                        className={`p-4 hover:bg-[#2d445a] transition-colors border-b border-[#324d67]/30 cursor-pointer group ${n.read ? 'opacity-50' : ''}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <p className={`text-xs font-semibold group-hover:text-primary transition-colors ${n.read ? 'text-[#92adc9]' : 'text-white'}`}>
+                            {n.title}
+                          </p>
+                          <span className={`size-2 rounded-full ${n.read ? 'bg-transparent' : 'bg-primary'}`}></span>
+                        </div>
+                        <p className="text-[#92adc9] text-[10px] leading-relaxed">{n.message}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center">
+                      <span className="material-symbols-outlined text-[#324d67] text-[32px] mb-2">notifications_off</span>
+                      <p className="text-[#92adc9] text-xs">Nenhuma notificação por enquanto.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </>
