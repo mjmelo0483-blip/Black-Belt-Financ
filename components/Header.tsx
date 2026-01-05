@@ -17,6 +17,22 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const [isBusiness, setIsBusiness] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const { error } = await supabase.from('accounts').select('id', { count: 'exact', head: true }).limit(1);
+        setIsOnline(!error);
+      } catch {
+        setIsOnline(false);
+      }
+    };
+
+    checkConnection();
+    const interval = setInterval(checkConnection, 30000); // Check every 30s
+    return () => clearInterval(interval);
+  }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -57,6 +73,13 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
       </div>
 
       <div className="flex items-center gap-3 lg:gap-4 justify-end">
+        <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-[#233648] border border-[#324d67]">
+          <div className={`size-2 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#92adc9]">
+            {isOnline ? 'Conectado' : 'Sem Conexão'}
+          </span>
+        </div>
+
         <button
           onClick={() => setIsBusiness(!isBusiness)}
           className={`hidden sm:flex items-center justify-center h-9 px-3 rounded-lg transition-all border font-bold text-xs ${isBusiness
