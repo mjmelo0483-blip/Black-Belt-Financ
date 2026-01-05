@@ -153,7 +153,8 @@ export const useBudgets = () => {
     }, [viewMode]);
 
     const setBudgetLimit = async (categoryId: string, amount: number) => {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (!user) return { error: new Error('User not authenticated') };
 
         const now = new Date();

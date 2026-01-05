@@ -33,7 +33,8 @@ export const useInvestments = () => {
     }, []);
 
     const addInvestment = async (investment: Omit<Investment, 'id' | 'user_id' | 'created_at'>) => {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (!user) return { error: new Error('User not authenticated') };
 
         const { data, error } = await supabase

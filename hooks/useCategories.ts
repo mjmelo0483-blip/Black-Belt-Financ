@@ -20,7 +20,8 @@ export const useCategories = () => {
     }, []);
 
     const addCategory = async (category: any) => {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (!user) return { error: { message: 'Usuário não autenticado' } };
 
         const { data, error } = await supabase

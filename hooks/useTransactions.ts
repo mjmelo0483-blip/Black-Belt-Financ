@@ -116,7 +116,14 @@ export const useTransactions = () => {
     }, []);
 
     const saveTransaction = async (transaction: any) => {
-        const transactionsList = Array.isArray(transaction) ? transaction : [transaction];
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
+        if (!user) return { error: { message: 'Usuário não autenticado' } };
+
+        const transactionsList = (Array.isArray(transaction) ? transaction : [transaction]).map(t => ({
+            ...t,
+            user_id: user.id
+        }));
 
         setLoading(true);
         const { data, error } = await supabase
@@ -139,7 +146,8 @@ export const useTransactions = () => {
         description: string;
         status: 'open' | 'completed';
     }) => {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (!user) return { error: { message: 'Usuário não autenticado' } };
 
         const { data: investment, error: fetchError } = await supabase
@@ -209,7 +217,8 @@ export const useTransactions = () => {
         description: string;
         status: 'open' | 'completed';
     }) => {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (!user) return { error: { message: 'Usuário não autenticado' } };
 
         const transferId = crypto.randomUUID();

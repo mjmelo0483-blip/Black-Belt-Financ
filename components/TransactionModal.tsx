@@ -180,18 +180,10 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
         }
 
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            alert('Usuário não autenticado.');
-            setLoading(false);
-            return;
-        }
-
         const numInstallments = parseInt(installments) || 1;
         const numRecurrences = parseInt(recurrenceCount) || 1;
 
         const baseTransaction = {
-            user_id: user.id,
             amount: parseFloat(amount.replace(',', '.')),
             date,
             due_date: dueDate,
