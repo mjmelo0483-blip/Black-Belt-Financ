@@ -72,8 +72,8 @@ const Budget: React.FC = () => {
             <button
               onClick={() => setViewMode('competencia')}
               className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'competencia'
-                  ? 'bg-primary text-white shadow-lg'
-                  : 'text-[#92adc9] hover:text-white'
+                ? 'bg-primary text-white shadow-lg'
+                : 'text-[#92adc9] hover:text-white'
                 }`}
             >
               Competência
@@ -81,8 +81,8 @@ const Budget: React.FC = () => {
             <button
               onClick={() => setViewMode('caixa')}
               className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'caixa'
-                  ? 'bg-primary text-white shadow-lg'
-                  : 'text-[#92adc9] hover:text-white'
+                ? 'bg-primary text-white shadow-lg'
+                : 'text-[#92adc9] hover:text-white'
                 }`}
             >
               Caixa
@@ -139,9 +139,20 @@ const Budget: React.FC = () => {
           {currentViewData.length > 0 ? (
             <div className="h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={currentViewData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <BarChart data={currentViewData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#324d67" horizontal={true} vertical={false} />
-                  <XAxis dataKey="name" stroke="#92adc9" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-45} textAnchor="end" height={60} />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#92adc9"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                    tick={{ dy: 10 }}
+                  />
                   <YAxis stroke="#92adc9" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$ ${value}`} />
                   <Tooltip
                     cursor={{ fill: '#111a22', opacity: 0.5 }}
