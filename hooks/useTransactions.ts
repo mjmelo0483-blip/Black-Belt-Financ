@@ -116,24 +116,38 @@ export const useTransactions = () => {
     }, []);
 
     const saveTransaction = async (transaction: any) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!user) return { error: { message: 'Usuário não autenticado' } };
+        try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) {
+                console.error('Session fetch error:', sessionError);
+                return { error: sessionError };
+            }
+            const user = session?.user;
+            if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-        const transactionsList = (Array.isArray(transaction) ? transaction : [transaction]).map(t => ({
-            ...t,
-            user_id: user.id
-        }));
+            const transactionsList = (Array.isArray(transaction) ? transaction : [transaction]).map(t => ({
+                ...t,
+                user_id: user.id
+            }));
 
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('transactions')
-            .insert(transactionsList)
-            .select();
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('transactions')
+                .insert(transactionsList)
+                .select();
 
-        if (!error) fetchTransactions();
-        setLoading(false);
-        return { data, error };
+            if (error) {
+                console.error('Transaction insert error:', error);
+            } else {
+                fetchTransactions();
+            }
+            setLoading(false);
+            return { data, error };
+        } catch (err: any) {
+            console.error('Unexpected error in saveTransaction:', err);
+            setLoading(false);
+            return { error: { message: err.message || 'Erro inexperado ao salvar transação' } };
+        }
     };
 
     const saveInvestmentTransaction = async (transaction: {
@@ -146,66 +160,79 @@ export const useTransactions = () => {
         description: string;
         status: 'open' | 'completed';
     }) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!user) return { error: { message: 'Usuário não autenticado' } };
+        try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) {
+                console.error('Session fetch error:', sessionError);
+                return { error: sessionError };
+            }
+            const user = session?.user;
+            if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-        const { data: investment, error: fetchError } = await supabase
-            .from('investments')
-            .select('value, quantity')
-            .eq('id', transaction.investmentId)
-            .single();
+            const { data: investment, error: fetchError } = await supabase
+                .from('investments')
+                .select('value, quantity')
+                .eq('id', transaction.investmentId)
+                .single();
 
-        if (fetchError || !investment) {
-            return { error: { message: 'Investimento não encontrado' } };
-        }
+            if (fetchError || !investment) {
+                console.error('Error fetching investment for transaction:', fetchError);
+                return { error: { message: 'Investimento não encontrado' } };
+            }
 
-        const isApplication = transaction.operationType === 'application';
-        const currentTotalValue = investment.value * investment.quantity;
-        const newTotalValue = isApplication
-            ? currentTotalValue + transaction.amount
-            : currentTotalValue - transaction.amount;
-        const newValuePerUnit = newTotalValue / investment.quantity;
+            const isApplication = transaction.operationType === 'application';
+            const currentTotalValue = investment.value * investment.quantity;
+            const newTotalValue = isApplication
+                ? currentTotalValue + transaction.amount
+                : currentTotalValue - transaction.amount;
+            const newValuePerUnit = newTotalValue / investment.quantity;
 
-        const accountTransaction = {
-            user_id: user.id,
-            amount: transaction.amount,
-            date: transaction.date,
-            due_date: transaction.dueDate,
-            description: transaction.description || (isApplication ? 'Aplicação em investimento' : 'Resgate de investimento'),
-            category_id: null,
-            account_id: transaction.accountId,
-            type: isApplication ? 'expense' : 'income',
-            payment_method: 'investimento',
-            status: transaction.status,
-            investment_id: transaction.investmentId
-        };
+            const accountTransaction = {
+                user_id: user.id,
+                amount: transaction.amount,
+                date: transaction.date,
+                due_date: transaction.dueDate,
+                description: transaction.description || (isApplication ? 'Aplicação em investimento' : 'Resgate de investimento'),
+                category_id: null,
+                account_id: transaction.accountId,
+                type: isApplication ? 'expense' : 'income',
+                payment_method: 'investimento',
+                status: transaction.status,
+                investment_id: transaction.investmentId
+            };
 
-        setLoading(true);
+            setLoading(true);
 
-        const { data: txData, error: txError } = await supabase
-            .from('transactions')
-            .insert([accountTransaction])
-            .select();
+            const { data: txData, error: txError } = await supabase
+                .from('transactions')
+                .insert([accountTransaction])
+                .select();
 
-        if (txError) {
+            if (txError) {
+                console.error('Investment transaction insert error:', txError);
+                setLoading(false);
+                return { error: txError };
+            }
+
+            const { error: invError } = await supabase
+                .from('investments')
+                .update({ value: newValuePerUnit })
+                .eq('id', transaction.investmentId);
+
+            if (invError) {
+                console.error('Investment update error:', invError);
+                setLoading(false);
+                return { error: invError };
+            }
+
+            fetchTransactions();
             setLoading(false);
-            return { error: txError };
-        }
-
-        const { error: invError } = await supabase
-            .from('investments')
-            .update({ value: newValuePerUnit })
-            .eq('id', transaction.investmentId);
-
-        if (invError) {
+            return { data: txData, error: null };
+        } catch (err: any) {
+            console.error('Unexpected error in saveInvestmentTransaction:', err);
             setLoading(false);
-            return { error: invError };
+            return { error: { message: err.message || 'Erro inexperado ao salvar investimento' } };
         }
-
-        fetchTransactions();
-        setLoading(false);
-        return { data: txData, error: null };
     };
 
     const saveTransfer = async (transfer: {
@@ -217,51 +244,65 @@ export const useTransactions = () => {
         description: string;
         status: 'open' | 'completed';
     }) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!user) return { error: { message: 'Usuário não autenticado' } };
+        try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) {
+                console.error('Session fetch error:', sessionError);
+                return { error: sessionError };
+            }
+            const user = session?.user;
+            if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-        const transferId = crypto.randomUUID();
+            const transferId = crypto.randomUUID();
 
-        const debitTransaction = {
-            user_id: user.id,
-            amount: transfer.amount,
-            date: transfer.date,
-            due_date: transfer.dueDate,
-            description: `${transfer.description}`,
-            category_id: null,
-            account_id: transfer.fromAccountId,
-            type: 'expense',
-            payment_method: 'transferencia',
-            status: transfer.status,
-            transfer_id: transferId,
-            transfer_account_id: transfer.toAccountId
-        };
+            const debitTransaction = {
+                user_id: user.id,
+                amount: transfer.amount,
+                date: transfer.date,
+                due_date: transfer.dueDate,
+                description: `${transfer.description}`,
+                category_id: null,
+                account_id: transfer.fromAccountId,
+                type: 'expense',
+                payment_method: 'transferencia',
+                status: transfer.status,
+                transfer_id: transferId,
+                transfer_account_id: transfer.toAccountId
+            };
 
-        const creditTransaction = {
-            user_id: user.id,
-            amount: transfer.amount,
-            date: transfer.date,
-            due_date: transfer.dueDate,
-            description: `${transfer.description}`,
-            category_id: null,
-            account_id: transfer.toAccountId,
-            type: 'income',
-            payment_method: 'transferencia',
-            status: transfer.status,
-            transfer_id: transferId,
-            transfer_account_id: transfer.fromAccountId
-        };
+            const creditTransaction = {
+                user_id: user.id,
+                amount: transfer.amount,
+                date: transfer.date,
+                due_date: transfer.dueDate,
+                description: `${transfer.description}`,
+                category_id: null,
+                account_id: transfer.toAccountId,
+                type: 'income',
+                payment_method: 'transferencia',
+                status: transfer.status,
+                transfer_id: transferId,
+                transfer_account_id: transfer.fromAccountId
+            };
 
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('transactions')
-            .insert([debitTransaction, creditTransaction])
-            .select();
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('transactions')
+                .insert([debitTransaction, creditTransaction])
+                .select();
 
-        if (!error) fetchTransactions();
-        setLoading(false);
-        return { data, error };
+            if (error) {
+                console.error('Transfer insert error:', error);
+            } else {
+                fetchTransactions();
+            }
+            setLoading(false);
+            return { data, error };
+        } catch (err: any) {
+            console.error('Unexpected error in saveTransfer:', err);
+            setLoading(false);
+            return { error: { message: err.message || 'Erro inexperado ao salvar transferência' } };
+        }
     };
 
     const updateTransaction = async (id: string, updates: any) => {

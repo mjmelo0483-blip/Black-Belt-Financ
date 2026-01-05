@@ -7,9 +7,18 @@ export const useAccounts = () => {
 
     const fetchAccounts = async () => {
         setLoading(true);
-        const { data } = await supabase.from('accounts').select('*').order('name');
-        setAccounts(data || []);
-        setLoading(false);
+        try {
+            const { data, error } = await supabase.from('accounts').select('*').order('name');
+            if (error) {
+                console.error('Error fetching accounts:', error);
+            } else {
+                setAccounts(data || []);
+            }
+        } catch (err) {
+            console.error('Unexpected error in fetchAccounts:', err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -17,17 +26,30 @@ export const useAccounts = () => {
     }, []);
 
     const addAccount = async (account: any) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!user) return { error: { message: 'Usuário não autenticado' } };
+        try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) {
+                console.error('Session fetch error:', sessionError);
+                return { error: sessionError };
+            }
+            const user = session?.user;
+            if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-        const { data, error } = await supabase
-            .from('accounts')
-            .insert([{ ...account, user_id: user.id }])
-            .select();
+            const { data, error } = await supabase
+                .from('accounts')
+                .insert([{ ...account, user_id: user.id }])
+                .select();
 
-        if (!error) fetchAccounts();
-        return { data, error };
+            if (error) {
+                console.error('Account insert error:', error);
+            } else {
+                fetchAccounts();
+            }
+            return { data, error };
+        } catch (err: any) {
+            console.error('Unexpected error in addAccount:', err);
+            return { error: err };
+        }
     };
 
     const getAccountTransactions = async (accountId: string) => {
@@ -76,14 +98,23 @@ export const useAccounts = () => {
     };
 
     const updateAccount = async (id: string, updates: any) => {
-        const { data, error } = await supabase
-            .from('accounts')
-            .update(updates)
-            .eq('id', id)
-            .select();
+        try {
+            const { data, error } = await supabase
+                .from('accounts')
+                .update(updates)
+                .eq('id', id)
+                .select();
 
-        if (!error) fetchAccounts();
-        return { data, error };
+            if (error) {
+                console.error('Account update error:', error);
+            } else {
+                fetchAccounts();
+            }
+            return { data, error };
+        } catch (err: any) {
+            console.error('Unexpected error in updateAccount:', err);
+            return { error: err };
+        }
     };
 
     const deleteAccount = async (id: string) => {

@@ -23,38 +23,63 @@ export const useInvestments = () => {
                 .select('*')
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
+            if (error) {
+                console.error('Error fetching investments:', error);
+                throw error;
+            }
             setInvestments(data || []);
         } catch (error) {
-            console.error('Error fetching investments:', error);
+            console.error('Unexpected error in fetchInvestments:', error);
         } finally {
             setLoading(false);
         }
     }, []);
 
     const addInvestment = async (investment: Omit<Investment, 'id' | 'user_id' | 'created_at'>) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!user) return { error: new Error('User not authenticated') };
+        try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) {
+                console.error('Session fetch error:', sessionError);
+                return { error: sessionError };
+            }
+            const user = session?.user;
+            if (!user) return { error: new Error('User not authenticated') };
 
-        const { data, error } = await supabase
-            .from('investments')
-            .insert([{ ...investment, user_id: user.id }])
-            .select();
+            const { data, error } = await supabase
+                .from('investments')
+                .insert([{ ...investment, user_id: user.id }])
+                .select();
 
-        if (!error) fetchInvestments();
-        return { data, error };
+            if (error) {
+                console.error('Investment insert error:', error);
+            } else {
+                fetchInvestments();
+            }
+            return { data, error };
+        } catch (err: any) {
+            console.error('Unexpected error in addInvestment:', err);
+            return { error: err };
+        }
     };
 
     const updateInvestment = async (id: string, updates: Partial<Investment>) => {
-        const { data, error } = await supabase
-            .from('investments')
-            .update(updates)
-            .eq('id', id)
-            .select();
+        try {
+            const { data, error } = await supabase
+                .from('investments')
+                .update(updates)
+                .eq('id', id)
+                .select();
 
-        if (!error) fetchInvestments();
-        return { data, error };
+            if (error) {
+                console.error('Investment update error:', error);
+            } else {
+                fetchInvestments();
+            }
+            return { data, error };
+        } catch (err: any) {
+            console.error('Unexpected error in updateInvestment:', err);
+            return { error: err };
+        }
     };
 
     const deleteInvestment = async (id: string) => {

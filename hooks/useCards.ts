@@ -7,12 +7,21 @@ export const useCards = () => {
 
     const fetchCards = async () => {
         setLoading(true);
-        const { data } = await supabase
-            .from('cards')
-            .select('*')
-            .order('created_at', { ascending: false });
-        setCards(data || []);
-        setLoading(false);
+        try {
+            const { data, error } = await supabase
+                .from('cards')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (error) {
+                console.error('Error fetching cards:', error);
+            } else {
+                setCards(data || []);
+            }
+        } catch (err) {
+            console.error('Unexpected error in fetchCards:', err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -20,28 +29,50 @@ export const useCards = () => {
     }, []);
 
     const addCard = async (card: any) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!user) return { error: { message: 'Usuário não autenticado' } };
+        try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) {
+                console.error('Session fetch error:', sessionError);
+                return { error: sessionError };
+            }
+            const user = session?.user;
+            if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-        const { data, error } = await supabase
-            .from('cards')
-            .insert([{ ...card, user_id: user.id }])
-            .select();
+            const { data, error } = await supabase
+                .from('cards')
+                .insert([{ ...card, user_id: user.id }])
+                .select();
 
-        if (!error) fetchCards();
-        return { data, error };
+            if (error) {
+                console.error('Card insert error:', error);
+            } else {
+                fetchCards();
+            }
+            return { data, error };
+        } catch (err: any) {
+            console.error('Unexpected error in addCard:', err);
+            return { error: err };
+        }
     };
 
     const updateCard = async (id: string, updates: any) => {
-        const { data, error } = await supabase
-            .from('cards')
-            .update(updates)
-            .eq('id', id)
-            .select();
+        try {
+            const { data, error } = await supabase
+                .from('cards')
+                .update(updates)
+                .eq('id', id)
+                .select();
 
-        if (!error) fetchCards();
-        return { data, error };
+            if (error) {
+                console.error('Card update error:', error);
+            } else {
+                fetchCards();
+            }
+            return { data, error };
+        } catch (err: any) {
+            console.error('Unexpected error in updateCard:', err);
+            return { error: err };
+        }
     };
 
     const getCardTransactions = async (cardId: string, month?: number, year?: number) => {
