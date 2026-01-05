@@ -8,8 +8,10 @@ interface TransactionModalProps {
     accounts: any[];
     categories: any[];
     cards: any[];
+    investments?: any[];
     saveTransaction: (payload: any) => Promise<{ data: any; error: any }>;
     saveTransfer?: (payload: any) => Promise<{ data?: any; error: any }>;
+    saveInvestmentTransaction?: (payload: any) => Promise<{ data?: any; error: any }>;
     updateTransaction?: (id: string, payload: any) => Promise<{ data: any; error: any }>;
     isEditing?: boolean;
     initialData?: any;
@@ -22,14 +24,18 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     accounts,
     categories,
     cards,
+    investments = [],
     saveTransaction,
     saveTransfer,
+    saveInvestmentTransaction,
     updateTransaction,
     isEditing = false,
     initialData = null
 }) => {
     const [loading, setLoading] = useState(false);
-    const [type, setType] = useState<'expense' | 'income' | 'transfer'>(initialData?.type || 'expense');
+    const [type, setType] = useState<'expense' | 'income' | 'transfer' | 'investment'>(initialData?.type || 'expense');
+    const [investmentOperationType, setInvestmentOperationType] = useState<'application' | 'redemption'>('application');
+    const [investmentId, setInvestmentId] = useState('');
     const [status, setStatus] = useState<'open' | 'completed'>(initialData?.status || 'completed');
     const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
 
@@ -65,6 +71,8 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             setCategoryId(initialData?.category_id || '');
             setAccountId(initialData?.account_id || '');
             setToAccountId('');
+            setInvestmentId('');
+            setInvestmentOperationType('application');
             setPaymentMethod(initialData?.payment_method || 'debito');
             setCardId(initialData?.card_id || '');
             setInstallments(initialData?.installments?.toString() || '1');
@@ -83,6 +91,38 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     };
 
     const handleSave = async () => {
+        // Validação para investimento
+        if (type === 'investment') {
+            if (!amount || !accountId || !investmentId) {
+                alert('Preencha o valor, conta e investimento.');
+                return;
+            }
+            if (!saveInvestmentTransaction) {
+                alert('Erro: função de investimento não disponível.');
+                return;
+            }
+
+            setLoading(true);
+            const result = await saveInvestmentTransaction({
+                operationType: investmentOperationType,
+                amount: parseFloat(amount.replace(',', '.')),
+                accountId: accountId,
+                investmentId: investmentId,
+                date,
+                dueDate,
+                description: description || (investmentOperationType === 'application' ? 'Aplicação em investimento' : 'Resgate de investimento'),
+                status
+            });
+
+            if (result.error) {
+                alert('Erro ao salvar: ' + result.error.message);
+            } else {
+                onSave();
+            }
+            setLoading(false);
+            return;
+        }
+
         // Validação para transferência
         if (type === 'transfer') {
             if (!amount || !accountId || !toAccountId) {
@@ -202,6 +242,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                         <button onClick={() => setType('expense')} className={`pb-3 border-b-2 font-bold text-sm transition-all ${type === 'expense' ? 'border-red-500 text-white' : 'border-transparent text-[#92adc9] hover:text-white'}`}>DESPESA</button>
                         <button onClick={() => setType('income')} className={`pb-3 border-b-2 font-bold text-sm transition-all ${type === 'income' ? 'border-green-500 text-white' : 'border-transparent text-[#92adc9] hover:text-white'}`}>RECEITA</button>
                         <button onClick={() => setType('transfer')} className={`pb-3 border-b-2 font-bold text-sm transition-all ${type === 'transfer' ? 'border-primary text-white' : 'border-transparent text-[#92adc9] hover:text-white'}`}>TRANSFERÊNCIA</button>
+                        <button onClick={() => setType('investment')} className={`pb-3 border-b-2 font-bold text-sm transition-all ${type === 'investment' ? 'border-purple-500 text-white' : 'border-transparent text-[#92adc9] hover:text-white'}`}>INVESTIMENTO</button>
                     </div>
                 </div>
 
@@ -234,7 +275,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                             </div>
                         </div>
 
-                        {type !== 'transfer' && (
+                        {type !== 'transfer' && type !== 'investment' && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <label className="flex flex-col gap-2">
                                     <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Forma</span>
@@ -296,6 +337,16 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                             </div>
                         )}
 
+                        {type === 'investment' && (
+                            <div className="flex flex-col gap-2 mb-2">
+                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Tipo de Operação</span>
+                                <div className="flex gap-2 p-1 bg-[#1c2a38] border border-[#324d67] rounded-xl h-[54px]">
+                                    <button onClick={() => setInvestmentOperationType('application')} className={`flex-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${investmentOperationType === 'application' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20' : 'text-[#6384a3] hover:text-white'}`}>Aplicação</button>
+                                    <button onClick={() => setInvestmentOperationType('redemption')} className={`flex-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${investmentOperationType === 'redemption' ? 'bg-green-500 text-white shadow-lg shadow-green-500/20' : 'text-[#6384a3] hover:text-white'}`}>Resgate</button>
+                                </div>
+                            </div>
+                        )}
+
                         <label className="flex flex-col gap-2">
                             <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Descrição</span>
                             <input className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white placeholder:text-[#4a6b8a] outline-none focus:ring-2 focus:ring-primary transition-all" placeholder="Ex: Aluguel..." type="text" value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -315,6 +366,23 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                     <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
                                         <option value="">Selecione...</option>
                                         {accounts.filter(a => a.id !== accountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    </select>
+                                </label>
+                            </div>
+                        ) : type === 'investment' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <label className="flex flex-col gap-2">
+                                    <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">{investmentOperationType === 'application' ? 'Conta de Débito' : 'Conta de Crédito'}</span>
+                                    <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                                        <option value="">Selecione...</option>
+                                        {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    </select>
+                                </label>
+                                <label className="flex flex-col gap-2">
+                                    <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Investimento</span>
+                                    <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={investmentId} onChange={(e) => setInvestmentId(e.target.value)}>
+                                        <option value="">Selecione...</option>
+                                        {investments.map(inv => <option key={inv.id} value={inv.id}>{inv.name}</option>)}
                                     </select>
                                 </label>
                             </div>

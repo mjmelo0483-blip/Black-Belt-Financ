@@ -23,6 +23,8 @@ export const useCashFlow = () => {
         initialBalance: 0,
         inflow: 0,
         outflow: 0,
+        investmentIn: 0,
+        investmentOut: 0,
         finalBalance: 0
     });
     const [loading, setLoading] = useState(true);
@@ -153,18 +155,26 @@ export const useCashFlow = () => {
                 projectedBalance = currentBalance - gapIn + gapOut;
             }
 
-            // 4. Calculate In/Out for the CURRENT range
-            const dayInflow = trans?.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-            const dayOutflow = trans?.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+            // 4. Calculate In/Out for the CURRENT range (Excluding transfers and investments from revenue/expense totals)
+            const dayInflow = trans?.filter(t => t.type === 'income' && !t.investment_id && !t.transfer_id).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+            const dayOutflow = trans?.filter(t => t.type === 'expense' && !t.investment_id && !t.transfer_id).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
 
-            // 5. Calculate Final Projected Balance
-            const calculatedFinalBalance = projectedBalance + dayInflow - dayOutflow;
+            // 4.1 Calculate Investment Movements (Applications and Redemptions)
+            const investmentIn = trans?.filter(t => t.type === 'income' && t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+            const investmentOut = trans?.filter(t => t.type === 'expense' && t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+
+            // 5. Calculate Final Projected Balance (MUST include ALL transactions that affect balance)
+            const totalIn = trans?.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+            const totalOut = trans?.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+            const calculatedFinalBalance = projectedBalance + totalIn - totalOut;
 
             setTransactions(trans || []);
             setStats({
                 initialBalance: projectedBalance,
                 inflow: dayInflow,
                 outflow: dayOutflow,
+                investmentIn,
+                investmentOut,
                 finalBalance: calculatedFinalBalance
             });
 

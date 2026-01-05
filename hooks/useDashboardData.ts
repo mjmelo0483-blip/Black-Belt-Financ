@@ -95,6 +95,7 @@ export const useDashboardData = () => {
                 .select('amount')
                 .eq('type', 'expense')
                 .is('transfer_id', null)
+                .is('investment_id', null)
                 .gte('due_date', formatDate(startOfMonth))
                 .lte('due_date', formatDate(endOfMonth));
 
@@ -110,6 +111,7 @@ export const useDashboardData = () => {
                 `)
                 .eq('type', 'expense')
                 .is('transfer_id', null)
+                .is('investment_id', null)
                 .gte('due_date', formatDate(startOfMonth))
                 .lte('due_date', formatDate(endOfMonth));
 
@@ -179,6 +181,7 @@ export const useDashboardData = () => {
                 .select('amount')
                 .eq('type', 'income')
                 .is('transfer_id', null)
+                .is('investment_id', null)
                 .gte('due_date', formatDate(startOfMonth))
                 .lte('due_date', formatDate(endOfMonth));
 
@@ -191,6 +194,7 @@ export const useDashboardData = () => {
                 .eq('type', 'expense')
                 .eq('status', 'open')
                 .is('transfer_id', null)
+                .is('investment_id', null)
                 .eq('due_date', todayStr);
 
             const dueTodayTotal = dueTodayItems?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;

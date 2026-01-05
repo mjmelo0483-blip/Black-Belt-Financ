@@ -6,8 +6,10 @@ export interface Transaction {
   category: string;
   account: string;
   status: 'Confirmed' | 'Pending';
-  type: 'Income' | 'Expense' | 'Transfer';
+  type: 'Income' | 'Expense' | 'Transfer' | 'Investment';
   amount: number;
+  payment_method?: string;
+  investment_id?: string;
 }
 
 export interface Account {

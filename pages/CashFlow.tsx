@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCashFlow } from '../hooks/useCashFlow';
 import { useTransactions } from '../hooks/useTransactions';
+import { useInvestments } from '../hooks/useInvestments';
 import TransactionModal from '../components/TransactionModal';
 
 const CashFlow: React.FC = () => {
@@ -21,7 +22,8 @@ const CashFlow: React.FC = () => {
     viewMode
   } = useCashFlow();
 
-  const { categories, cards, saveTransaction, deleteTransaction, deleteTransactions } = useTransactions();
+  const { categories, cards, saveTransaction, saveTransfer, saveInvestmentTransaction, updateTransaction, deleteTransaction, deleteTransactions } = useTransactions();
+  const { investments, refreshInvestments } = useInvestments();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentTransactionId, setCurrentTransactionId] = useState<string | null>(null);
@@ -132,7 +134,7 @@ const CashFlow: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
         <div className="bg-[#233648] p-5 rounded-xl border border-white/5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[#92adc9] text-sm font-medium">Saldo Inicial</span>
@@ -153,6 +155,15 @@ const CashFlow: React.FC = () => {
             <span className="material-symbols-outlined text-red-400 bg-red-400/10 p-1 rounded-md text-lg">arrow_downward</span>
           </div>
           <p className="text-white text-2xl font-bold">{formatCurrency(-stats.outflow)}</p>
+        </div>
+        <div className="bg-[#233648] p-5 rounded-xl border border-white/5 shadow-sm group">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[#92adc9] text-sm font-medium group-hover:text-purple-400 transition-colors">Investimentos</span>
+            <span className="material-symbols-outlined text-purple-400 bg-purple-400/10 p-1 rounded-md text-lg">payments</span>
+          </div>
+          <p className="text-white text-2xl font-bold">
+            {formatCurrency(stats.investmentIn - stats.investmentOut)}
+          </p>
         </div>
         <div className="bg-gradient-to-br from-[#137fec] to-[#0b5cb0] p-5 rounded-xl border border-primary shadow-lg shadow-blue-900/20 relative overflow-hidden">
           <div className="relative z-10">
@@ -303,12 +314,17 @@ const CashFlow: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onSave={() => {
           refresh();
+          refreshInvestments();
           setIsModalOpen(false);
         }}
         accounts={accounts}
         categories={categories}
         cards={cards}
+        investments={investments}
         saveTransaction={saveTransaction}
+        saveTransfer={saveTransfer}
+        saveInvestmentTransaction={saveInvestmentTransaction}
+        updateTransaction={updateTransaction}
         isEditing={isEditing}
         initialData={currentTransactionId ? transactions.find(t => t.id === currentTransactionId) : null}
       />

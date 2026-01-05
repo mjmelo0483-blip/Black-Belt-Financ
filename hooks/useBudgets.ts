@@ -59,6 +59,7 @@ export const useBudgets = () => {
                 .select('amount, category_id')
                 .eq('type', 'expense')
                 .is('transfer_id', null)
+                .is('investment_id', null)
                 .gte('due_date', startOfMonth)
                 .lte('due_date', endOfMonth);
 

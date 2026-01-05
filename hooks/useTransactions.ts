@@ -101,6 +101,86 @@ export const useTransactions = () => {
         return { data, error };
     };
 
+    const saveInvestmentTransaction = async (transaction: {
+        operationType: 'application' | 'redemption';
+        amount: number;
+        accountId: string;
+        investmentId: string;
+        date: string;
+        dueDate: string;
+        description: string;
+        status: 'open' | 'completed';
+    }) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { error: { message: 'Usuário não autenticado' } };
+
+        // Get current investment value
+        const { data: investment, error: fetchError } = await supabase
+            .from('investments')
+            .select('value, quantity')
+            .eq('id', transaction.investmentId)
+            .single();
+
+        if (fetchError || !investment) {
+            return { error: { message: 'Investimento não encontrado' } };
+        }
+
+        const isApplication = transaction.operationType === 'application';
+
+        // Calculate new investment value
+        // For application: increase value. For redemption: decrease value
+        const currentTotalValue = investment.value * investment.quantity;
+        const newTotalValue = isApplication
+            ? currentTotalValue + transaction.amount
+            : currentTotalValue - transaction.amount;
+
+        // Update value per unit (keeping quantity the same)
+        const newValuePerUnit = newTotalValue / investment.quantity;
+
+        // Create transaction for the bank account
+        const accountTransaction = {
+            user_id: user.id,
+            amount: transaction.amount,
+            date: transaction.date,
+            due_date: transaction.dueDate,
+            description: transaction.description || (isApplication ? 'Aplicação em investimento' : 'Resgate de investimento'),
+            category_id: null,
+            account_id: transaction.accountId,
+            type: isApplication ? 'expense' : 'income', // Application = money out, Redemption = money in
+            payment_method: 'investimento',
+            status: transaction.status,
+            investment_id: transaction.investmentId
+        };
+
+        setLoading(true);
+
+        // Insert transaction
+        const { data: txData, error: txError } = await supabase
+            .from('transactions')
+            .insert([accountTransaction])
+            .select();
+
+        if (txError) {
+            setLoading(false);
+            return { error: txError };
+        }
+
+        // Update investment value
+        const { error: invError } = await supabase
+            .from('investments')
+            .update({ value: newValuePerUnit })
+            .eq('id', transaction.investmentId);
+
+        if (invError) {
+            setLoading(false);
+            return { error: invError };
+        }
+
+        fetchTransactions();
+        setLoading(false);
+        return { data: txData, error: null };
+    };
+
     const saveTransfer = async (transfer: {
         amount: number;
         fromAccountId: string;
@@ -194,5 +274,5 @@ export const useTransactions = () => {
         return { error };
     };
 
-    return { accounts, categories, cards, transactions, fetchTransactions, saveTransaction, saveTransfer, updateTransaction, deleteTransaction, deleteTransactions, loading };
+    return { accounts, categories, cards, transactions, fetchTransactions, saveTransaction, saveTransfer, saveInvestmentTransaction, updateTransaction, deleteTransaction, deleteTransactions, loading };
 };

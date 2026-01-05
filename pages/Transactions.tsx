@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTransactions } from '../hooks/useTransactions';
+import { useInvestments } from '../hooks/useInvestments';
 import { supabase } from '../supabase';
 import TransactionModal from '../components/TransactionModal';
 
@@ -13,11 +14,14 @@ const Transactions: React.FC = () => {
     fetchTransactions,
     saveTransaction,
     saveTransfer,
+    saveInvestmentTransaction,
     updateTransaction,
     deleteTransaction,
     deleteTransactions,
     loading: metaLoading
   } = useTransactions();
+
+  const { investments, refreshInvestments } = useInvestments();
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -405,13 +409,16 @@ const Transactions: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onSave={() => {
           fetchTransactions();
+          refreshInvestments();
           setIsModalOpen(false);
         }}
         accounts={accounts}
         categories={categories}
         cards={cards}
+        investments={investments}
         saveTransaction={saveTransaction}
         saveTransfer={saveTransfer}
+        saveInvestmentTransaction={saveInvestmentTransaction}
         updateTransaction={updateTransaction}
         isEditing={isEditing}
         initialData={currentTransactionId ? transactions.find(t => t.id === currentTransactionId) : null}
