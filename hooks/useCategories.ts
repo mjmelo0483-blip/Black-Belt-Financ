@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
+import { supabase, withRetry } from '../supabase';
 
 export const useCategories = () => {
     const [categories, setCategories] = useState<any[]>([]);
@@ -7,10 +7,12 @@ export const useCategories = () => {
 
     const fetchCategories = async () => {
         setLoading(true);
-        const { data } = await supabase
-            .from('categories')
-            .select('*')
-            .order('name');
+        const { data } = await withRetry(() =>
+            supabase
+                .from('categories')
+                .select('*')
+                .order('name')
+        );
         setCategories(data || []);
         setLoading(false);
     };
@@ -29,10 +31,12 @@ export const useCategories = () => {
             const user = session?.user;
             if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-            const { data, error } = await supabase
-                .from('categories')
-                .insert([{ ...category, user_id: user.id }])
-                .select();
+            const { data, error } = await withRetry(() =>
+                supabase
+                    .from('categories')
+                    .insert([{ ...category, user_id: user.id }])
+                    .select()
+            );
 
             if (error) {
                 console.error('Category insert error:', error);

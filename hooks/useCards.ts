@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
+import { supabase, withRetry } from '../supabase';
 
 export const useCards = () => {
     const [cards, setCards] = useState<any[]>([]);
@@ -8,10 +8,12 @@ export const useCards = () => {
     const fetchCards = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('cards')
-                .select('*')
-                .order('created_at', { ascending: false });
+            const { data, error } = await withRetry(() =>
+                supabase
+                    .from('cards')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+            );
             if (error) {
                 console.error('Error fetching cards:', error);
             } else {
@@ -38,10 +40,12 @@ export const useCards = () => {
             const user = session?.user;
             if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-            const { data, error } = await supabase
-                .from('cards')
-                .insert([{ ...card, user_id: user.id }])
-                .select();
+            const { data, error } = await withRetry(() =>
+                supabase
+                    .from('cards')
+                    .insert([{ ...card, user_id: user.id }])
+                    .select()
+            );
 
             if (error) {
                 console.error('Card insert error:', error);

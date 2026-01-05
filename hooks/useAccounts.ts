@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
+import { supabase, withRetry } from '../supabase';
 
 export const useAccounts = () => {
     const [accounts, setAccounts] = useState<any[]>([]);
@@ -8,7 +8,9 @@ export const useAccounts = () => {
     const fetchAccounts = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase.from('accounts').select('*').order('name');
+            const { data, error } = await withRetry(() =>
+                supabase.from('accounts').select('*').order('name')
+            );
             if (error) {
                 console.error('Error fetching accounts:', error);
             } else {
@@ -35,10 +37,12 @@ export const useAccounts = () => {
             const user = session?.user;
             if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-            const { data, error } = await supabase
-                .from('accounts')
-                .insert([{ ...account, user_id: user.id }])
-                .select();
+            const { data, error } = await withRetry(() =>
+                supabase
+                    .from('accounts')
+                    .insert([{ ...account, user_id: user.id }])
+                    .select()
+            );
 
             if (error) {
                 console.error('Account insert error:', error);

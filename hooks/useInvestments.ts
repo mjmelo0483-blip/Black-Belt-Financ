@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabase';
+import { supabase, withRetry } from '../supabase';
 
 export interface Investment {
     id: string;
@@ -18,10 +18,12 @@ export const useInvestments = () => {
     const fetchInvestments = useCallback(async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('investments')
-                .select('*')
-                .order('created_at', { ascending: false });
+            const { data, error } = await withRetry(() =>
+                supabase
+                    .from('investments')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+            );
 
             if (error) {
                 console.error('Error fetching investments:', error);
@@ -45,10 +47,12 @@ export const useInvestments = () => {
             const user = session?.user;
             if (!user) return { error: new Error('User not authenticated') };
 
-            const { data, error } = await supabase
-                .from('investments')
-                .insert([{ ...investment, user_id: user.id }])
-                .select();
+            const { data, error } = await withRetry(() =>
+                supabase
+                    .from('investments')
+                    .insert([{ ...investment, user_id: user.id }])
+                    .select()
+            );
 
             if (error) {
                 console.error('Investment insert error:', error);

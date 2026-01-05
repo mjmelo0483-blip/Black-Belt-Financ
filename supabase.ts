@@ -8,3 +8,33 @@ console.log('--- SUPABASE CLIENT CONFIG (VER: 1.0.2) ---');
 console.log('Project:', supabaseUrl.substring(0, 15) + '...');
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+/**
+ * Helper to retry requests that fail due to network instability (Failed to fetch)
+ */
+export async function withRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    delayMs: number = 1000
+): Promise<T> {
+    let lastError: any;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await operation();
+        } catch (err: any) {
+            lastError = err;
+            const isNetworkError =
+                err.message?.includes('fetch') ||
+                err.name === 'TypeError' ||
+                err.message?.includes('NetworkError');
+
+            if (isNetworkError && i < maxRetries - 1) {
+                console.warn(`Tentativa ${i + 1} falhou devido à rede. Tentando novamente em ${delayMs}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw lastError;
+}

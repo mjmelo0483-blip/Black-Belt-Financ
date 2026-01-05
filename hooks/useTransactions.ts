@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
+import { supabase, withRetry } from '../supabase';
 
 export const useTransactions = () => {
     const [accounts, setAccounts] = useState<any[]>([]);
@@ -101,7 +101,7 @@ export const useTransactions = () => {
             query = query.in('category_id', categoryIds);
         }
 
-        const { data, error } = await query;
+        const { data, error } = await withRetry(() => query);
         if (error) {
             console.error('Error fetching transactions:', error);
         }
@@ -131,10 +131,12 @@ export const useTransactions = () => {
             }));
 
             setLoading(true);
-            const { data, error } = await supabase
-                .from('transactions')
-                .insert(transactionsList)
-                .select();
+            const { data, error } = await withRetry(() =>
+                supabase
+                    .from('transactions')
+                    .insert(transactionsList)
+                    .select()
+            );
 
             if (error) {
                 console.error('Transaction insert error:', error);
