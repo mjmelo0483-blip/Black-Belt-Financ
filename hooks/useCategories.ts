@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, withRetry } from '../supabase';
+import { supabase, withRetry, formatError } from '../supabase';
 
 export const useCategories = () => {
     const [categories, setCategories] = useState<any[]>([]);
@@ -46,11 +46,7 @@ export const useCategories = () => {
             return { data, error };
         } catch (err: any) {
             console.error('Unexpected error in addCategory:', err);
-            let message = err.message || 'Erro inesperado ao adicionar categoria';
-            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
-                message = 'Erro de rede: "Failed to fetch". Verifique se há extensões (AdBlockers) bloqueando a conexão e recarregue a página.';
-            }
-            return { error: { message } };
+            return { error: { message: formatError(err, 'Erro ao adicionar categoria') } };
         }
     };
 

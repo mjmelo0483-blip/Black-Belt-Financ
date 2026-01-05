@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, withRetry } from '../supabase';
+import { supabase, withRetry, formatError } from '../supabase';
 
 export const useCards = () => {
     const [cards, setCards] = useState<any[]>([]);
@@ -52,14 +52,10 @@ export const useCards = () => {
             } else {
                 fetchCards();
             }
-            return { data, error };
+            return { data, error: error ? { message: formatError(error) } : null };
         } catch (err: any) {
             console.error('Unexpected error in addCard:', err);
-            let message = err.message || 'Erro inesperado ao adicionar cartão';
-            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
-                message = 'Erro de rede: "Failed to fetch". Verifique extensões de bloqueio de anúncios e tente novamente.';
-            }
-            return { error: { message } };
+            return { error: { message: formatError(err, 'Erro ao adicionar cartão') } };
         }
     };
 

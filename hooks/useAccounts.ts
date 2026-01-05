@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, withRetry } from '../supabase';
+import { supabase, withRetry, formatError } from '../supabase';
 
 export const useAccounts = () => {
     const [accounts, setAccounts] = useState<any[]>([]);
@@ -114,14 +114,10 @@ export const useAccounts = () => {
             } else {
                 fetchAccounts();
             }
-            return { data, error };
+            return { data, error: error ? { message: formatError(error) } : null };
         } catch (err: any) {
             console.error('Unexpected error in updateAccount:', err);
-            let message = err.message || 'Erro inesperado ao atualizar conta';
-            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
-                message = 'Erro de rede: "Failed to fetch". Tente desativar AdBlockers e recarregar a página.';
-            }
-            return { error: { message } };
+            return { error: { message: formatError(err, 'Erro ao atualizar conta') } };
         }
     };
 

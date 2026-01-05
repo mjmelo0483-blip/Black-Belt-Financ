@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, withRetry } from '../supabase';
+import { supabase, withRetry, formatError } from '../supabase';
 
 export interface Investment {
     id: string;
@@ -59,14 +59,10 @@ export const useInvestments = () => {
             } else {
                 fetchInvestments();
             }
-            return { data, error };
+            return { data, error: error ? { message: formatError(error) } : null };
         } catch (err: any) {
             console.error('Unexpected error in addInvestment:', err);
-            let message = err.message || 'Erro inesperado ao adicionar investimento';
-            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
-                message = 'Erro de rede: "Failed to fetch". Verifique se há AdBlockers bloqueando o Supabase e recarregue a página.';
-            }
-            return { error: { message } };
+            return { error: { message: formatError(err, 'Erro ao adicionar investimento') } };
         }
     };
 

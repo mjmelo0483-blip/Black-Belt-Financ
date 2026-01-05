@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, withRetry } from '../supabase';
+import { supabase, withRetry, formatError } from '../supabase';
 
 export const useTransactions = () => {
     const [accounts, setAccounts] = useState<any[]>([]);
@@ -148,11 +148,7 @@ export const useTransactions = () => {
         } catch (err: any) {
             console.error('Unexpected error in saveTransaction:', err);
             setLoading(false);
-            let message = err.message || 'Erro inexperado ao salvar transação';
-            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
-                message = 'Erro de rede: "Failed to fetch". Isso geralmente ocorre se um AdBlocker ou extensão de privacidade estiver bloqueando a conexão com o Supabase. Por favor, tente desativar suas extensões e recarregar a página.';
-            }
-            return { error: { message } };
+            return { error: { message: formatError(err, 'Erro ao salvar transação') } };
         }
     };
 
@@ -237,11 +233,7 @@ export const useTransactions = () => {
         } catch (err: any) {
             console.error('Unexpected error in saveInvestmentTransaction:', err);
             setLoading(false);
-            let message = err.message || 'Erro inexperado ao salvar investimento';
-            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
-                message = 'Erro de rede: "Failed to fetch". Isso pode ser causado por extensões do navegador bloqueando a requisição. Tente desativar AdBlockers e recarregar.';
-            }
-            return { error: { message } };
+            return { error: { message: formatError(err, 'Erro ao salvar investimento') } };
         }
     };
 
@@ -311,25 +303,29 @@ export const useTransactions = () => {
         } catch (err: any) {
             console.error('Unexpected error in saveTransfer:', err);
             setLoading(false);
-            let message = err.message || 'Erro inexperado ao salvar transferência';
-            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
-                message = 'Erro de rede: "Failed to fetch". Verifique se há extensões bloqueando a conexão e tente novamente.';
-            }
-            return { error: { message } };
+            return { error: { message: formatError(err, 'Erro ao salvar transferência') } };
         }
     };
 
     const updateTransaction = async (id: string, updates: any) => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('transactions')
-            .update(updates)
-            .eq('id', id)
-            .select();
+        try {
+            setLoading(true);
+            const { data, error } = await withRetry(() =>
+                supabase
+                    .from('transactions')
+                    .update(updates)
+                    .eq('id', id)
+                    .select()
+            );
 
-        if (!error) fetchTransactions();
-        setLoading(false);
-        return { data, error };
+            if (!error) fetchTransactions();
+            setLoading(false);
+            return { data, error: error ? { message: formatError(error) } : null };
+        } catch (err: any) {
+            console.error('Unexpected error in updateTransaction:', err);
+            setLoading(false);
+            return { error: { message: formatError(err, 'Erro ao atualizar transação') } };
+        }
     };
 
     const updateInvestmentTransaction = async (id: string, transaction: {
