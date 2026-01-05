@@ -7,6 +7,7 @@ export const useTransactions = () => {
     const [cards, setCards] = useState<any[]>([]);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+    const [currentFilters, setCurrentFilters] = useState<any>(null);
 
     const fetchMetadata = async () => {
         const [accRes, catRes, cardRes] = await Promise.all([
@@ -32,6 +33,13 @@ export const useTransactions = () => {
         status?: string;
     }) => {
         setLoading(true);
+
+        // If filters are provided, save them. If not, use last saved filters.
+        const activeFilters = filters !== undefined ? filters : currentFilters;
+        if (filters !== undefined) {
+            setCurrentFilters(filters);
+        }
+
         let query = supabase
             .from('transactions')
             .select(`
@@ -41,36 +49,36 @@ export const useTransactions = () => {
             `)
             .order('date', { ascending: false });
 
-        if (filters?.incStartDate) {
-            query = query.gte('date', filters.incStartDate);
+        if (activeFilters?.incStartDate) {
+            query = query.gte('date', activeFilters.incStartDate);
         }
-        if (filters?.incEndDate) {
-            query = query.lte('date', filters.incEndDate);
+        if (activeFilters?.incEndDate) {
+            query = query.lte('date', activeFilters.incEndDate);
         }
-        if (filters?.dueStartDate) {
-            query = query.gte('due_date', filters.dueStartDate);
+        if (activeFilters?.dueStartDate) {
+            query = query.gte('due_date', activeFilters.dueStartDate);
         }
-        if (filters?.dueEndDate) {
-            query = query.lte('due_date', filters.dueEndDate);
+        if (activeFilters?.dueEndDate) {
+            query = query.lte('due_date', activeFilters.dueEndDate);
         }
-        if (filters?.minAmount !== undefined && filters?.minAmount !== null) {
-            query = query.gte('amount', filters.minAmount);
+        if (activeFilters?.minAmount !== undefined && activeFilters?.minAmount !== null) {
+            query = query.gte('amount', activeFilters.minAmount);
         }
-        if (filters?.maxAmount !== undefined && filters?.maxAmount !== null) {
-            query = query.lte('amount', filters.maxAmount);
+        if (activeFilters?.maxAmount !== undefined && activeFilters?.maxAmount !== null) {
+            query = query.lte('amount', activeFilters.maxAmount);
         }
 
-        if (filters?.description) {
-            query = query.ilike('description', `%${filters.description}%`);
+        if (activeFilters?.description) {
+            query = query.ilike('description', `%${activeFilters.description}%`);
         }
-        if (filters?.accountId) {
-            query = query.eq('account_id', filters.accountId);
+        if (activeFilters?.accountId) {
+            query = query.eq('account_id', activeFilters.accountId);
         }
-        if (filters?.categoryId) {
-            query = query.eq('category_id', filters.categoryId);
+        if (activeFilters?.categoryId) {
+            query = query.eq('category_id', activeFilters.categoryId);
         }
-        if (filters?.status) {
-            query = query.eq('status', filters.status);
+        if (activeFilters?.status) {
+            query = query.eq('status', activeFilters.status);
         }
 
         const { data, error } = await query;
