@@ -297,6 +297,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                     <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
                                         <option value="debito">Débito</option>
                                         <option value="pix">Pix</option>
+                                        <option value="credito_v">Crédito</option>
                                         <option value="credito">Cartão</option>
                                         <option value="dinheiro">Dinheiro</option>
                                     </select>
