@@ -38,7 +38,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     const [type, setType] = useState<'expense' | 'income' | 'transfer' | 'investment'>(initialData?.type || 'expense');
     const [investmentOperationType, setInvestmentOperationType] = useState<'application' | 'redemption'>('application');
     const [investmentId, setInvestmentId] = useState('');
-    const [status, setStatus] = useState<'open' | 'completed'>(initialData?.status || 'completed');
+    const [status, setStatus] = useState<'open' | 'completed'>(initialData?.status || 'open');
     const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
 
     const getLocalDate = () => {
@@ -65,7 +65,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     React.useEffect(() => {
         if (isOpen) {
             setType(initialData?.type || 'expense');
-            setStatus(initialData?.status || 'completed');
+            setStatus(initialData?.status || 'open');
             setAmount(initialData?.amount?.toString() || '');
             setDate(initialData?.date || getLocalDate());
             setDueDate(initialData?.due_date || getLocalDate());
