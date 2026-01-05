@@ -145,12 +145,6 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           )}
         </div>
 
-        <button
-          onClick={() => navigate('/categories')}
-          className="flex items-center justify-center size-9 rounded-lg bg-[#233648] hover:bg-[#2d445a] text-[#92adc9] hover:text-white transition-colors"
-        >
-          <span className="material-symbols-outlined text-[20px]">settings</span>
-        </button>
 
         <div className="relative">
           <div
