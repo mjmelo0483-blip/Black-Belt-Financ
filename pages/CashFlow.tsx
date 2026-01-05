@@ -23,7 +23,7 @@ const CashFlow: React.FC = () => {
   } = useCashFlow();
 
   const { categories, cards, saveTransaction, saveTransfer, saveInvestmentTransaction, updateTransaction, updateInvestmentTransaction, deleteTransaction, deleteTransactions } = useTransactions();
-  const { investments, refreshInvestments } = useInvestments();
+  const { investments, refresh: refreshInvestments } = useInvestments();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentTransactionId, setCurrentTransactionId] = useState<string | null>(null);

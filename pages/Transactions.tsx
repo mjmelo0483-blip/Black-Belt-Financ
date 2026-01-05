@@ -20,7 +20,7 @@ const Transactions: React.FC = () => {
     deleteTransactions,
   } = useTransactions();
 
-  const { investments, refreshInvestments } = useInvestments();
+  const { investments, refresh: refreshInvestments } = useInvestments();
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -455,8 +455,9 @@ const Transactions: React.FC = () => {
                   <input type="checkbox" checked={transactions.length > 0 && selectedIds.length === transactions.length} onChange={toggleSelectAll} className="rounded bg-[#111a22] border-[#324d67] text-primary" />
                 </th>
                 <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Descrição / Categoria</th>
-                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Data / Conta</th>
-                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Forma / Situação</th>
+                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Data / Venc.</th>
+                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Conta</th>
+                <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Situação</th>
                 <th className="px-6 py-4 text-[#92adc9] text-[10px] font-black uppercase tracking-widest text-right">Valor</th>
                 <th className="px-6 py-4"></th>
               </tr>
@@ -476,14 +477,27 @@ const Transactions: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-xs">
-                    <p className="text-white font-medium">{new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
-                    <p className="text-[#92adc9] uppercase tracking-widest text-[9px] mt-0.5">{t.accounts?.name || 'Sem conta'}</p>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex flex-col">
+                      <span className="text-white font-medium text-xs">
+                        {new Date((t.due_date || t.date) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                      </span>
+                      <span className="text-[#92adc9] text-[10px] font-bold uppercase tracking-tighter">
+                        Inc: {new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-xs text-[#92adc9] uppercase font-bold tracking-widest">
+                    {t.accounts?.name || 'Sem conta'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[#6384a3] text-[9px] font-black uppercase tracking-widest">{t.payment_method || 'debito'}</span>
-                      <span className={`text-[8px] font-black uppercase tracking-widest ${t.status === 'completed' ? 'text-green-400' : 'text-orange-400'}`}>{t.status === 'completed' ? 'Realizado' : 'Em Aberto'}</span>
+                      <span className={`text-[8px] font-black uppercase tracking-widest inline-flex items-center px-1.5 py-0.5 rounded border ${t.status === 'completed' ? 'bg-green-400/10 text-green-400 border-green-400/20' : 'bg-orange-400/10 text-orange-400 border-orange-400/20'}`}>
+                        {t.status === 'completed' ? 'Realizado' : 'Em Aberto'}
+                      </span>
+                      <span className="text-[#6384a3] text-[9px] font-bold uppercase tracking-widest opacity-60">
+                        {t.payment_method || 'debito'}
+                      </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right whitespace-nowrap">
