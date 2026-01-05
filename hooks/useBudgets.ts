@@ -30,6 +30,7 @@ export const useBudgets = () => {
     const [budgets, setBudgets] = useState<BudgetLimit[]>([]);
     const [spending, setSpending] = useState<ParentCategorySpending[]>([]);
     const [loading, setLoading] = useState(true);
+    const [viewMode, setViewMode] = useState<'competencia' | 'caixa'>('caixa');
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -53,15 +54,17 @@ export const useBudgets = () => {
                 `)
                 .eq('month', startOfMonth);
 
-            // 3. Fetch Actual Transactions for current month by due_date
+            // 3. Fetch Actual Transactions for current month
+            const activeDateColumn = viewMode === 'competencia' ? 'date' : 'due_date';
+
             const { data: transactions } = await supabase
                 .from('transactions')
                 .select('amount, category_id')
                 .eq('type', 'expense')
                 .is('transfer_id', null)
                 .is('investment_id', null)
-                .gte('due_date', startOfMonth)
-                .lte('due_date', endOfMonth);
+                .gte(activeDateColumn, startOfMonth)
+                .lte(activeDateColumn, endOfMonth);
 
             // 4. Build category map
             const categoriesMap = new Map(categories?.map(c => [c.id, c]) || []);
@@ -147,7 +150,7 @@ export const useBudgets = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [viewMode]);
 
     const setBudgetLimit = async (categoryId: string, amount: number) => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -180,6 +183,8 @@ export const useBudgets = () => {
         budgets,
         spending,
         loading,
+        viewMode,
+        setViewMode,
         setBudgetLimit,
         refreshBudgets: fetchData
     };

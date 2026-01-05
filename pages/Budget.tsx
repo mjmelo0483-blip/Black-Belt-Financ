@@ -4,7 +4,7 @@ import { useBudgets, ParentCategorySpending, CategorySpending } from '../hooks/u
 import { useCategories } from '../hooks/useCategories';
 
 const Budget: React.FC = () => {
-  const { spending, loading, setBudgetLimit } = useBudgets();
+  const { spending, loading, setBudgetLimit, viewMode, setViewMode } = useBudgets();
   const { categories } = useCategories();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState({ category_id: '', amount: '' });
@@ -67,10 +67,30 @@ const Budget: React.FC = () => {
           <h1 className="text-white text-3xl font-black tracking-tight">Orçamento Mensal</h1>
           <p className="text-[#92adc9] mt-1">Planeje seus gastos e monitore o progresso em tempo real.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="flex bg-[#111a22] p-1 rounded-xl border border-[#324d67]/50">
+            <button
+              onClick={() => setViewMode('competencia')}
+              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'competencia'
+                  ? 'bg-primary text-white shadow-lg'
+                  : 'text-[#92adc9] hover:text-white'
+                }`}
+            >
+              Competência
+            </button>
+            <button
+              onClick={() => setViewMode('caixa')}
+              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'caixa'
+                  ? 'bg-primary text-white shadow-lg'
+                  : 'text-[#92adc9] hover:text-white'
+                }`}
+            >
+              Caixa
+            </button>
+          </div>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/20 hover:bg-blue-600 transition-all"
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/20 hover:bg-blue-600 transition-all w-full sm:w-auto justify-center"
           >
             <span className="material-symbols-outlined text-[20px]">add_task</span>
             Definir Meta
@@ -169,8 +189,8 @@ const Budget: React.FC = () => {
                     key={cat.category_id}
                     onClick={() => cat.children.length > 0 && setSelectedCategory(cat.category_id)}
                     className={`p-4 rounded-xl border transition-all ${cat.children.length > 0
-                        ? 'cursor-pointer hover:bg-[#111a22] border-[#324d67]/50'
-                        : 'border-[#324d67]/30'
+                      ? 'cursor-pointer hover:bg-[#111a22] border-[#324d67]/50'
+                      : 'border-[#324d67]/30'
                       } ${isOver ? 'bg-red-500/10 border-red-500/30' : 'bg-[#111a22]/50'}`}
                   >
                     <div className="flex items-center justify-between mb-2">
