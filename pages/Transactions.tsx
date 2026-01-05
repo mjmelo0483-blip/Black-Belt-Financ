@@ -93,8 +93,9 @@ const Transactions: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Deseja realmente excluir este lançamento?')) {
+    if (window.confirm('Deseley realmente excluir este lançamento?')) {
       await deleteTransaction(id);
+      refreshInvestments();
     }
   };
 
@@ -116,6 +117,7 @@ const Transactions: React.FC = () => {
     if (window.confirm(`Deseja excluir ${selectedIds.length} lançamentos?`)) {
       await deleteTransactions(selectedIds);
       setSelectedIds([]);
+      refreshInvestments();
     }
   };
 

@@ -172,6 +172,7 @@ export const useTransactions = () => {
             .eq('id', transaction.investmentId);
 
         if (invError) {
+            console.error('Error updating investment:', invError);
             setLoading(false);
             return { error: invError };
         }
@@ -341,53 +342,75 @@ export const useTransactions = () => {
 
     const deleteTransaction = async (id: string | string[]) => {
         const ids = Array.isArray(id) ? id : [id];
+        if (ids.length === 0) return { error: null };
+
         setLoading(true);
 
         try {
-            // Find investment transactions in the set
-            const { data: txsToDelete } = await supabase
+            // 1. Fetch transactions to be deleted to check for investment links
+            const { data: txsToDelete, error: fetchError } = await supabase
                 .from('transactions')
                 .select('amount, type, investment_id')
                 .in('id', ids);
 
-            if (txsToDelete) {
+            if (fetchError) {
+                console.error('Error fetching transactions for deletion:', fetchError);
+            }
+
+            // 2. Revert impact on investments
+            if (txsToDelete && txsToDelete.length > 0) {
                 for (const tx of txsToDelete) {
                     if (tx.investment_id) {
-                        // Revert impact on investment
-                        const { data: inv } = await supabase
+                        const { data: inv, error: invFetchError } = await supabase
                             .from('investments')
                             .select('value, quantity')
                             .eq('id', tx.investment_id)
                             .single();
 
-                        if (inv) {
+                        if (inv && !invFetchError) {
                             const isApplication = tx.type === 'expense';
-                            const currentTotal = inv.value * inv.quantity;
+                            const currentTotal = Number(inv.value) * Number(inv.quantity || 1);
+
+                            // Revert: if was application (money out), then total was increased. To revert, subtract.
+                            // If was redemption (money in), then total was decreased. To revert, add.
                             const newTotal = isApplication
                                 ? currentTotal - Number(tx.amount)
                                 : currentTotal + Number(tx.amount);
-                            const newValue = newTotal / inv.quantity;
 
-                            await supabase
+                            const quantity = Number(inv.quantity || 1);
+                            const newValue = quantity > 0 ? newTotal / quantity : newTotal;
+
+                            const { error: updateError } = await supabase
                                 .from('investments')
                                 .update({ value: newValue })
                                 .eq('id', tx.investment_id);
+
+                            if (updateError) {
+                                console.error('Error reverting investment value during deletion:', updateError);
+                            }
                         }
                     }
                 }
             }
 
+            // 3. Perform the actual deletion
             const { error } = await supabase
                 .from('transactions')
                 .delete()
                 .in('id', ids);
 
-            if (!error) fetchTransactions();
+            if (!error) {
+                await fetchTransactions();
+            } else {
+                console.error('Error deleting transactions:', error);
+            }
+
             setLoading(false);
             return { error };
-        } catch (error: any) {
+        } catch (err: any) {
+            console.error('Catch error in deleteTransaction:', err);
             setLoading(false);
-            return { error };
+            return { error: err };
         }
     };
 

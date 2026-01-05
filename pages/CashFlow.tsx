@@ -57,6 +57,7 @@ const CashFlow: React.FC = () => {
     if (window.confirm('Deseja realmente excluir este lançamento?')) {
       await deleteTransaction(id);
       refresh();
+      refreshInvestments();
     }
   };
 
@@ -79,6 +80,7 @@ const CashFlow: React.FC = () => {
       await deleteTransactions(selectedIds);
       setSelectedIds([]);
       refresh();
+      refreshInvestments();
     }
   };
 
