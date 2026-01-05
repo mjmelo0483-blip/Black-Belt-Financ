@@ -317,7 +317,7 @@ const CashFlow: React.FC = () => {
         onSave={() => {
           refresh();
           refreshInvestments();
-          setIsModalOpen(false);
+          if (isEditing) setIsModalOpen(false);
         }}
         accounts={accounts}
         categories={categories}

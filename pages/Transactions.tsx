@@ -521,7 +521,11 @@ const Transactions: React.FC = () => {
       <TransactionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSave={() => { fetchTransactions({}); refreshInvestments(); setIsModalOpen(false); }}
+        onSave={() => {
+          fetchTransactions({});
+          refreshInvestments();
+          if (isEditing) setIsModalOpen(false);
+        }}
         accounts={accounts}
         categories={categories}
         cards={cards}

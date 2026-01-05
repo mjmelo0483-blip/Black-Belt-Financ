@@ -226,6 +226,11 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
         if (result.error) {
             alert('Erro ao salvar: ' + result.error.message);
         } else {
+            if (!isEditing) {
+                setAmount('');
+                setDescription('');
+                // Opcional: Manter o foco no campo de valor
+            }
             onSave();
         }
         setLoading(false);
