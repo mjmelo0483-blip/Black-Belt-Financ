@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabase';
+import { supabase, withRetry, formatError } from '../supabase';
 import { useProfile } from '../hooks/useProfile';
 import { useNotifications } from '../hooks/useNotifications';
 
@@ -22,9 +22,13 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   useEffect(() => {
     const checkConnection = async () => {
       try {
-        const { error } = await supabase.from('accounts').select('id', { count: 'exact', head: true }).limit(1);
+        const { error } = await withRetry(
+          async () => await supabase.from('accounts').select('id', { count: 'exact', head: true }).limit(1),
+          2, // Fewer retries for a quick check
+          500 // Shorter delay
+        );
         setIsOnline(!error);
-      } catch {
+      } catch (err) {
         setIsOnline(false);
       }
     };

@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 
 export const useCards = () => {
     const [cards, setCards] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const fetchCards = async () => {
+    const fetchCards = useCallback(async () => {
         setLoading(true);
         try {
-            const { data, error } = await withRetry(() =>
-                supabase
+            const { data, error } = await withRetry(async () =>
+                await supabase
                     .from('cards')
                     .select('*')
                     .order('created_at', { ascending: false })
@@ -24,13 +24,13 @@ export const useCards = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchCards();
-    }, []);
+    }, [fetchCards]);
 
-    const addCard = async (card: any) => {
+    const addCard = useCallback(async (card: any) => {
         try {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             if (sessionError) {
@@ -40,8 +40,8 @@ export const useCards = () => {
             const user = session?.user;
             if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-            const { data, error } = await withRetry(() =>
-                supabase
+            const { data, error } = await withRetry(async () =>
+                await supabase
                     .from('cards')
                     .insert([{ ...card, user_id: user.id }])
                     .select()
@@ -57,15 +57,17 @@ export const useCards = () => {
             console.error('Unexpected error in addCard:', err);
             return { error: { message: formatError(err, 'Erro ao adicionar cartão') } };
         }
-    };
+    }, [fetchCards]);
 
-    const updateCard = async (id: string, updates: any) => {
+    const updateCard = useCallback(async (id: string, updates: any) => {
         try {
-            const { data, error } = await supabase
-                .from('cards')
-                .update(updates)
-                .eq('id', id)
-                .select();
+            const { data, error } = await withRetry(async () =>
+                await supabase
+                    .from('cards')
+                    .update(updates)
+                    .eq('id', id)
+                    .select()
+            );
 
             if (error) {
                 console.error('Card update error:', error);
@@ -75,15 +77,11 @@ export const useCards = () => {
             return { data, error };
         } catch (err: any) {
             console.error('Unexpected error in updateCard:', err);
-            let message = err.message || 'Erro inesperado ao atualizar cartão';
-            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
-                message = 'Erro de rede: "Failed to fetch". Tente desativar extensões do navegador e recarregar.';
-            }
-            return { error: { message } };
+            return { error: { message: formatError(err, 'Erro ao atualizar cartão') } };
         }
-    };
+    }, [fetchCards]);
 
-    const getCardTransactions = async (cardId: string, month?: number, year?: number) => {
+    const getCardTransactions = useCallback(async (cardId: string, month?: number, year?: number) => {
         let query = supabase
             .from('transactions')
             .select(`
@@ -104,32 +102,35 @@ export const useCards = () => {
                 .lte('due_date', endDate);
         }
 
-        const { data, error } = await query.order('due_date', { ascending: false });
+        const { data, error } = await withRetry(async () => await query.order('due_date', { ascending: false }));
 
         return { data, error };
-    };
+    }, []);
 
-    const deleteCard = async (id: string) => {
-        const { error } = await supabase
-            .from('cards')
-            .delete()
-            .eq('id', id);
+    const deleteCard = useCallback(async (id: string) => {
+        const { error } = await withRetry(async () =>
+            await supabase
+                .from('cards')
+                .delete()
+                .eq('id', id)
+        );
 
         if (!error) fetchCards();
         return { error };
-    };
+    }, [fetchCards]);
 
-    return { cards, loading, addCard, updateCard, deleteCard, refresh: fetchCards, getCardTransactions, getCardOpenTransactions };
-
-    // Função para buscar todas as transações em aberto do cartão (para calcular limite utilizado)
-    async function getCardOpenTransactions(cardId: string) {
-        const { data, error } = await supabase
-            .from('transactions')
-            .select('amount')
-            .eq('card_id', cardId)
-            .eq('payment_method', 'credito')
-            .eq('status', 'open');
+    const getCardOpenTransactions = useCallback(async (cardId: string) => {
+        const { data, error } = await withRetry(async () =>
+            await supabase
+                .from('transactions')
+                .select('amount')
+                .eq('card_id', cardId)
+                .eq('payment_method', 'credito')
+                .eq('status', 'open')
+        );
 
         return { data, error };
-    }
+    }, []);
+
+    return { cards, loading, addCard, updateCard, deleteCard, refresh: fetchCards, getCardTransactions, getCardOpenTransactions };
 };

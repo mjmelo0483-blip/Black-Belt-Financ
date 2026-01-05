@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabase';
+import { supabase, withRetry } from '../supabase';
 
 export const useCashFlow = () => {
     const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'custom'>('daily');
@@ -52,8 +52,12 @@ export const useCashFlow = () => {
     }, [viewMode, selectedDate]);
 
     const fetchMetadata = useCallback(async () => {
-        const { data } = await supabase.from('accounts').select('*');
-        setAccounts(data || []);
+        try {
+            const { data } = await withRetry(async () => await supabase.from('accounts').select('*'));
+            setAccounts(data || []);
+        } catch (err) {
+            console.error('Error fetching metadata in useCashFlow:', err);
+        }
     }, []);
 
     const fetchData = useCallback(async () => {
@@ -61,7 +65,7 @@ export const useCashFlow = () => {
         try {
             const addDays = (dateStr: string, days: number) => {
                 const [y, m, d] = dateStr.split('-').map(Number);
-                const date = new Date(y, m - 1, d + days); // Local time construction
+                const date = new Date(y, m - 1, d + days);
                 const newY = date.getFullYear();
                 const newM = String(date.getMonth() + 1).padStart(2, '0');
                 const newD = String(date.getDate()).padStart(2, '0');
@@ -73,102 +77,91 @@ export const useCashFlow = () => {
             const nextDay = addDays(endDate, 1);
             const nextToday = addDays(todayStr, 1);
 
-            // 1. Fetch transactions for the selected range (Main View)
-            let query = supabase
-                .from('transactions')
-                .select(`
-                    *,
-                    categories (name, icon, color),
-                    accounts:accounts!transactions_account_id_fkey (name)
-                `)
-                .gte('due_date', startDate)
-                .lt('due_date', nextDay); // Use LT Next Day for full coverage
+            // 1. Fetch data with retries
+            const [
+                transRes,
+                accountsRes
+            ] = await withRetry(async () => {
+                let transQuery = supabase
+                    .from('transactions')
+                    .select(`
+                        *,
+                        categories (name, icon, color),
+                        accounts:accounts!transactions_account_id_fkey (name)
+                    `)
+                    .gte('due_date', startDate)
+                    .lt('due_date', nextDay);
 
-            if (accountId) {
-                query = query.eq('account_id', accountId);
-                // query = query.is('transfer_id', null); // Removed to ensure visibility
-            }
+                if (accountId) {
+                    transQuery = transQuery.eq('account_id', accountId);
+                }
 
-            const { data: trans, error: transError } = await query.order('due_date', { ascending: true });
+                let accountsQuery = supabase.from('accounts').select('balance');
+                if (accountId) {
+                    accountsQuery = accountsQuery.eq('id', accountId);
+                }
 
-            if (transError) throw transError;
+                return await Promise.all([
+                    transQuery.order('due_date', { ascending: true }),
+                    accountsQuery
+                ]);
+            });
 
-            // 2. Fetch Current Base Account Balances
-            let accountsQuery = supabase.from('accounts').select('balance');
-            if (accountId) {
-                accountsQuery = accountsQuery.eq('id', accountId);
-            }
-            const { data: accountsData } = await accountsQuery;
-            const currentBalance = accountsData?.reduce((acc, curr) => acc + Number(curr.balance), 0) || 0;
-
-            // 3. Calculate Projected Initial Balance for startDate
-            // Logic: Start with Current Balance.
-            // If startDate > Today: Add expected OPEN flow between Today and StartDate.
-            // If startDate <= Today: Subtract COMPLETED flow between StartDate and Today (Rewind).
+            const trans = transRes.data || [];
+            const accountsData = accountsRes.data || [];
+            const currentBalance = accountsData.reduce((acc: number, curr: any) => acc + Number(curr.balance), 0);
 
             let projectedBalance = currentBalance;
 
             if (startDate > todayStr) {
-                // Future Projection
-                let gapQuery = supabase
-                    .from('transactions')
-                    .select('amount, type')
-                    .eq('status', 'open')
-                    .gte('due_date', todayStr)
-                    .lt('due_date', startDate); // Up to start of startDate
+                const { data: gapTrans } = await withRetry(async () => {
+                    let gapQuery = supabase
+                        .from('transactions')
+                        .select('amount, type')
+                        .eq('status', 'open')
+                        .gte('due_date', todayStr)
+                        .lt('due_date', startDate);
 
-                if (accountId) {
-                    gapQuery = gapQuery.eq('account_id', accountId);
-                } else {
-                    // gapQuery = gapQuery.is('transfer_id', null);
-                }
+                    if (accountId) {
+                        gapQuery = gapQuery.eq('account_id', accountId);
+                    }
+                    return await gapQuery;
+                });
 
-                const { data: gapTrans } = await gapQuery;
                 const gapIn = gapTrans?.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
                 const gapOut = gapTrans?.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
                 projectedBalance = currentBalance + gapIn - gapOut;
 
             } else {
-                // Past Rewind (or Today)
-                // We want Balance at START of startDate.
-                // Subtract COMPLETED transactions from startDate up to NOW.
-                let gapQuery = supabase
-                    .from('transactions')
-                    .select('amount, type')
-                    .eq('status', 'completed')
-                    .gte('due_date', startDate)
-                    .lt('due_date', nextToday); // Include Today fully
+                const { data: gapTrans } = await withRetry(async () => {
+                    let gapQuery = supabase
+                        .from('transactions')
+                        .select('amount, type')
+                        .eq('status', 'completed')
+                        .gte('due_date', startDate)
+                        .lt('due_date', nextToday);
 
-                if (accountId) {
-                    gapQuery = gapQuery.eq('account_id', accountId);
-                } else {
-                    // gapQuery = gapQuery.is('transfer_id', null);
-                }
+                    if (accountId) {
+                        gapQuery = gapQuery.eq('account_id', accountId);
+                    }
+                    return await gapQuery;
+                });
 
-                const { data: gapTrans } = await gapQuery;
                 const gapIn = gapTrans?.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
                 const gapOut = gapTrans?.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-
-                // Reverse the flow to rewind
-                // Current = Initial + In - Out
-                // Initial = Current - In + Out
                 projectedBalance = currentBalance - gapIn + gapOut;
             }
 
-            // 4. Calculate In/Out for the CURRENT range (Excluding transfers and investments from revenue/expense totals)
-            const dayInflow = trans?.filter(t => t.type === 'income' && !t.investment_id && !t.transfer_id).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-            const dayOutflow = trans?.filter(t => t.type === 'expense' && !t.investment_id && !t.transfer_id).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+            const dayInflow = trans.filter(t => t.type === 'income' && !t.investment_id && !t.transfer_id).reduce((acc, t) => acc + Number(t.amount), 0);
+            const dayOutflow = trans.filter(t => t.type === 'expense' && !t.investment_id && !t.transfer_id).reduce((acc, t) => acc + Number(t.amount), 0);
+            const investmentIn = trans.filter(t => t.type === 'income' && t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0);
+            const investmentOut = trans.filter(t => t.type === 'expense' && t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0);
 
-            // 4.1 Calculate Investment Movements (Applications and Redemptions)
-            const investmentIn = trans?.filter(t => t.type === 'income' && t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-            const investmentOut = trans?.filter(t => t.type === 'expense' && t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-
-            // 5. Calculate Final Projected Balance (MUST include ALL transactions that affect balance)
-            const totalIn = trans?.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-            const totalOut = trans?.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+            const totalIn = trans.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0);
+            const totalOut = trans.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0);
             const calculatedFinalBalance = projectedBalance + totalIn - totalOut;
 
-            setTransactions(trans || []);
+            setTransactions(trans);
             setStats({
                 initialBalance: projectedBalance,
                 inflow: dayInflow,
@@ -177,8 +170,6 @@ export const useCashFlow = () => {
                 investmentOut,
                 finalBalance: calculatedFinalBalance
             });
-
-
 
         } catch (error) {
             console.error('Error fetching cash flow:', error);

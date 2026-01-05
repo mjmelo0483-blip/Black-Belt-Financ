@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabase';
+import { supabase, withRetry, formatError } from '../supabase';
 
 export const useDashboardData = () => {
     const [stats, setStats] = useState<{
@@ -37,20 +37,72 @@ export const useDashboardData = () => {
             const d = String(today.getDate()).padStart(2, '0');
             const todayStr = `${y}-${m}-${d}`;
 
-            // 1. Fetch Accounts for Balance
-            const { data: accounts } = await supabase
-                .from('accounts')
-                .select('*');
+            // Helper to format date
+            const formatDate = (date: Date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
 
-            const bankBalance = accounts?.reduce((acc, curr) => acc + Number(curr.balance), 0) || 0;
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-            // 2. Fetch Investments for Total and Allocation
-            const { data: investmentsData } = await supabase
-                .from('investments')
-                .select('*');
+            // 1. Fetch data with retries
+            const [
+                accountsRes,
+                investmentsRes,
+                expensesRes,
+                expensesCatRes,
+                allCategoriesRes,
+                incomeRes,
+                dueTodayRes,
+                cardsRes,
+                allUsedCreditRes,
+                monthUsedCreditRes,
+                recentsRes,
+                budgetLimitsRes
+            ] = await withRetry(async () => await Promise.all([
+                supabase.from('accounts').select('*'),
+                supabase.from('investments').select('*'),
+                supabase.from('transactions').select('amount').eq('type', 'expense').is('transfer_id', null).is('investment_id', null).gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)),
+                supabase.from('transactions').select('amount, category_id, categories(id, name, color, parent_id)').eq('type', 'expense').is('transfer_id', null).is('investment_id', null).gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)),
+                supabase.from('categories').select('id, name, color, parent_id'),
+                supabase.from('transactions').select('amount').eq('type', 'income').is('transfer_id', null).is('investment_id', null).gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)),
+                supabase.from('transactions').select('amount').eq('type', 'expense').eq('status', 'open').is('transfer_id', null).is('investment_id', null).eq('due_date', todayStr),
+                supabase.from('cards').select('credit_limit'),
+                supabase.from('transactions').select('amount').eq('payment_method', 'credito').eq('status', 'open'),
+                supabase.from('transactions').select('amount').eq('payment_method', 'credito').eq('status', 'open').gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)),
+                supabase.from('transactions').select('*, categories(name, icon, color), accounts(name)').order('date', { ascending: false }).limit(5),
+                supabase.from('budgets').select('*, categories(name, color, icon)').eq('month', formatDate(startOfMonth))
+            ]));
 
-            const investmentsTotal = investmentsData?.reduce((acc, curr) => acc + (Number(curr.value) * Number(curr.quantity)), 0) || 0;
+            // 2. Process data
+            const accounts = accountsRes.data || [];
+            const investmentsData = investmentsRes.data || [];
+            const expenses = expensesRes.data || [];
+            const expensesCatData = expensesCatRes.data || [];
+            const allCategories = allCategoriesRes.data || [];
+            const income = incomeRes.data || [];
+            const dueTodayItems = dueTodayRes.data || [];
+            const cardsData = cardsRes.data || [];
+            const allUsedCreditData = allUsedCreditRes.data || [];
+            const monthUsedCreditData = monthUsedCreditRes.data || [];
+            const recents = recentsRes.data || [];
+            const budgetLimits = budgetLimitsRes.data || [];
 
+            // Summaries
+            const bankBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0);
+            const investmentsTotal = investmentsData.reduce((acc, curr) => acc + (Number(curr.value) * Number(curr.quantity)), 0);
+            const monthlyTotal = expenses.reduce((acc, curr) => acc + Number(curr.amount), 0);
+            const monthlyIncomeTotal = income.reduce((acc, curr) => acc + Number(curr.amount), 0);
+            const dueTodayTotal = dueTodayItems.reduce((acc, curr) => acc + Number(curr.amount), 0);
+            const totalCardsLimit = cardsData.reduce((acc, curr) => acc + Number(curr.credit_limit), 0);
+            const totalUsedCards = allUsedCreditData.reduce((acc, curr) => acc + Number(curr.amount), 0);
+            const monthCardBalance = monthUsedCreditData.reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+            // Allocation
             const allocationMap: Record<string, { value: number, color: string, label: string }> = {
                 renda_fixa: { value: 0, color: '#137fec', label: 'Renda Fixa' },
                 acoes: { value: 0, color: '#0bda5b', label: 'Ações' },
@@ -59,7 +111,7 @@ export const useDashboardData = () => {
                 outros: { value: 0, color: '#6d8399', label: 'Outros' }
             };
 
-            investmentsData?.forEach(inv => {
+            investmentsData.forEach(inv => {
                 if (allocationMap[inv.type]) {
                     allocationMap[inv.type].value += (Number(inv.value) * Number(inv.quantity));
                 }
@@ -74,92 +126,28 @@ export const useDashboardData = () => {
                     raw: data.value
                 }));
 
-            // 3. Fetch Monthly Expenses (current month) based on Due Date
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth();
+            // Category group
+            const categoriesMap = new Map(allCategories.map(c => [c.id, c]) || []);
+            const parentCatMap: Record<string, { value: number, color: string, children: any[] }> = {};
 
-            // Format to YYYY-MM-DD using local time to avoid UTC shifts
-            const formatDate = (d: Date) => {
-                const yyyy = d.getFullYear();
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                return `${yyyy}-${mm}-${dd}`;
-            };
-
-            const startOfMonth = new Date(year, month, 1);
-            const endOfMonth = new Date(year, month + 1, 0);
-
-            const { data: expenses } = await supabase
-                .from('transactions')
-                .select('amount')
-                .eq('type', 'expense')
-                .is('transfer_id', null)
-                .is('investment_id', null)
-                .gte('due_date', formatDate(startOfMonth))
-                .lte('due_date', formatDate(endOfMonth));
-
-            const monthlyTotal = expenses?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-
-            // 3.1 Fetch Expenses by Category for Chart - grouped by parent categories
-            const { data: expensesCat } = await supabase
-                .from('transactions')
-                .select(`
-                    amount,
-                    category_id,
-                    categories (id, name, color, parent_id)
-                `)
-                .eq('type', 'expense')
-                .is('transfer_id', null)
-                .is('investment_id', null)
-                .gte('due_date', formatDate(startOfMonth))
-                .lte('due_date', formatDate(endOfMonth));
-
-            // Fetch all categories to get parent names
-            const { data: allCategories } = await supabase
-                .from('categories')
-                .select('id, name, color, parent_id');
-
-            const categoriesMap = new Map(allCategories?.map(c => [c.id, c]) || []);
-
-            // Group by parent category (or self if no parent)
-            const parentCatMap: Record<string, {
-                value: number,
-                color: string,
-                children: Array<{ name: string, value: number, color: string }>
-            }> = {};
-
-            expensesCat?.forEach(t => {
+            expensesCatData.forEach((t: any) => {
                 const cat = Array.isArray(t.categories) ? t.categories[0] : t.categories;
                 if (!cat) return;
-
                 const catName = cat.name || 'Outros';
                 const catColor = cat.color || '#92adc9';
                 const amount = Number(t.amount);
 
-                // Check if this category has a parent
                 if (cat.parent_id) {
                     const parentCat = categoriesMap.get(cat.parent_id);
                     const parentName = parentCat?.name || 'Outros';
                     const parentColor = parentCat?.color || '#92adc9';
-
-                    if (!parentCatMap[parentName]) {
-                        parentCatMap[parentName] = { value: 0, color: parentColor, children: [] };
-                    }
+                    if (!parentCatMap[parentName]) parentCatMap[parentName] = { value: 0, color: parentColor, children: [] };
                     parentCatMap[parentName].value += amount;
-
-                    // Add to children
                     const existingChild = parentCatMap[parentName].children.find(c => c.name === catName);
-                    if (existingChild) {
-                        existingChild.value += amount;
-                    } else {
-                        parentCatMap[parentName].children.push({ name: catName, value: amount, color: catColor });
-                    }
+                    if (existingChild) existingChild.value += amount;
+                    else parentCatMap[parentName].children.push({ name: catName, value: amount, color: catColor });
                 } else {
-                    // This is a root category
-                    if (!parentCatMap[catName]) {
-                        parentCatMap[catName] = { value: 0, color: catColor, children: [] };
-                    }
+                    if (!parentCatMap[catName]) parentCatMap[catName] = { value: 0, color: catColor, children: [] };
                     parentCatMap[catName].value += amount;
                 }
             });
@@ -171,71 +159,26 @@ export const useDashboardData = () => {
                     color: data.color,
                     children: data.children.sort((a, b) => b.value - a.value)
                 }))
-                .sort((a, b) => b.value - a.value); // Sort by highest expense
+                .sort((a, b) => b.value - a.value);
 
-            setExpensesByCategory(catList);
-
-            // 4. Fetch Monthly Income (current month) based on Due Date
-            const { data: income } = await supabase
-                .from('transactions')
-                .select('amount')
-                .eq('type', 'income')
-                .is('transfer_id', null)
-                .is('investment_id', null)
-                .gte('due_date', formatDate(startOfMonth))
-                .lte('due_date', formatDate(endOfMonth));
-
-            const monthlyIncomeTotal = income?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-
-            // 4. Fetch Due Today (open expenses)
-            const { data: dueTodayItems } = await supabase
-                .from('transactions')
-                .select('amount')
-                .eq('type', 'expense')
-                .eq('status', 'open')
-                .is('transfer_id', null)
-                .is('investment_id', null)
-                .eq('due_date', todayStr);
-
-            const dueTodayTotal = dueTodayItems?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-
-            // 5. Fetch Credit Cards for Total Limits
-            const { data: cardsData } = await supabase
-                .from('cards')
-                .select('credit_limit');
-
-            const totalCards = cardsData?.reduce((acc, curr) => acc + Number(curr.credit_limit), 0) || 0;
-
-            // 6. Fetch Used Credit (ALL open transactions on credit cards - for available limit)
-            const { data: allUsedCreditData } = await supabase
-                .from('transactions')
-                .select('amount')
-                .eq('payment_method', 'credito')
-                .eq('status', 'open');
-
-            const totalUsedCards = allUsedCreditData?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-
-            // 6.1 Fetch current month card balance (for KPI display)
-            const { data: monthUsedCreditData } = await supabase
-                .from('transactions')
-                .select('amount')
-                .eq('payment_method', 'credito')
-                .eq('status', 'open')
-                .gte('due_date', formatDate(startOfMonth))
-                .lte('due_date', formatDate(endOfMonth));
-
-            const monthCardBalance = monthUsedCreditData?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-
-            // 7. Fetch Recent Transactions
-            const { data: recents } = await supabase
-                .from('transactions')
-                .select(`
-                    *,
-                    categories (name, icon, color),
-                    accounts (name)
-                `)
-                .order('date', { ascending: false })
-                .limit(5);
+            // Budgets
+            const budgetItems = budgetLimits.map(b => {
+                let catSpent = 0;
+                expensesCatData.forEach((e: any) => {
+                    const expenseCategory = categoriesMap.get(e.category_id);
+                    if (e.category_id === b.category_id || expenseCategory?.parent_id === b.category_id) {
+                        catSpent += Number(e.amount);
+                    }
+                });
+                return {
+                    name: b.categories?.name || 'Categoria',
+                    color: b.categories?.color || '#137fec',
+                    icon: b.categories?.icon || 'category',
+                    limit: Number(b.amount),
+                    spent: catSpent,
+                    percentage: b.amount > 0 ? Math.round((catSpent / b.amount) * 100) : 0
+                };
+            }).sort((a, b) => b.percentage - a.percentage).slice(0, 4);
 
             setStats({
                 totalBalance: bankBalance,
@@ -243,13 +186,14 @@ export const useDashboardData = () => {
                 investments: investmentsTotal,
                 monthlyExpenses: monthlyTotal,
                 monthlyIncome: monthlyIncomeTotal,
-                totalCards: totalCards,
+                totalCards: totalCardsLimit,
                 usedCards: totalUsedCards,
                 cardBalance: monthCardBalance
             });
             setRecentTransactions(recents || []);
-
-            // Balance trend (Bank only)
+            setExpensesByCategory(catList);
+            setBudgetProgress(budgetItems);
+            setAssetAllocation(allocationList.length > 0 ? allocationList : [{ name: 'Aguardando Ativos', value: 100, color: '#324d67' }]);
             setChartData([
                 { name: 'D-6', value: bankBalance * 0.98 },
                 { name: 'D-5', value: bankBalance * 0.99 },
@@ -259,49 +203,6 @@ export const useDashboardData = () => {
                 { name: 'D-1', value: bankBalance * 0.99 },
                 { name: 'Hoje', value: bankBalance },
             ]);
-
-            setAssetAllocation(allocationList.length > 0 ? allocationList : [
-                { name: 'Aguardando Ativos', value: 100, color: '#324d67' }
-            ]);
-
-            // 8. Fetch Budget Progress (limits vs actual spending)
-            const { data: budgetLimits } = await supabase
-                .from('budgets')
-                .select('*, categories (name, color, icon)')
-                .eq('month', formatDate(startOfMonth));
-
-            if (budgetLimits && budgetLimits.length > 0) {
-                // Build category map for parent lookups
-                const catMap = new Map(allCategories?.map(c => [c.id, c]) || []);
-
-                const budgetItems = budgetLimits.map(b => {
-                    // Find actual spending: include direct category + subcategories
-                    let catSpent = 0;
-
-                    expensesCat?.forEach(e => {
-                        const expense = e as any;
-                        const expenseCategory = catMap.get(expense.category_id);
-
-                        // Match if direct category or if it's a subcategory of this budget's category
-                        if (expense.category_id === b.category_id ||
-                            expenseCategory?.parent_id === b.category_id) {
-                            catSpent += Number(expense.amount);
-                        }
-                    });
-
-                    return {
-                        name: b.categories?.name || 'Categoria',
-                        color: b.categories?.color || '#137fec',
-                        icon: b.categories?.icon || 'category',
-                        limit: Number(b.amount),
-                        spent: catSpent,
-                        percentage: b.amount > 0 ? Math.round((catSpent / b.amount) * 100) : 0
-                    };
-                }).sort((a, b) => b.percentage - a.percentage).slice(0, 4);
-                setBudgetProgress(budgetItems);
-            } else {
-                setBudgetProgress([]);
-            }
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error);

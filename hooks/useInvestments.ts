@@ -1,107 +1,93 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 
-export interface Investment {
-    id: string;
-    user_id: string;
-    name: string;
-    type: 'renda_fixa' | 'acoes' | 'fiis' | 'cripto' | 'outros';
-    value: number;
-    quantity: number;
-    created_at: string;
-}
-
 export const useInvestments = () => {
-    const [investments, setInvestments] = useState<Investment[]>([]);
+    const [investments, setInvestments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchInvestments = useCallback(async () => {
         setLoading(true);
         try {
-            const { data, error } = await withRetry(() =>
-                supabase
+            const { data, error } = await withRetry(async () =>
+                await supabase
                     .from('investments')
                     .select('*')
-                    .order('created_at', { ascending: false })
+                    .order('name', { ascending: true })
             );
-
             if (error) {
                 console.error('Error fetching investments:', error);
-                throw error;
+            } else {
+                setInvestments(data || []);
             }
-            setInvestments(data || []);
-        } catch (error) {
-            console.error('Unexpected error in fetchInvestments:', error);
+        } catch (err) {
+            console.error('Unexpected error in fetchInvestments:', err);
         } finally {
             setLoading(false);
         }
     }, []);
 
-    const addInvestment = async (investment: Omit<Investment, 'id' | 'user_id' | 'created_at'>) => {
+    useEffect(() => {
+        fetchInvestments();
+    }, [fetchInvestments]);
+
+    const addInvestment = useCallback(async (investment: any) => {
         try {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError) {
-                console.error('Session fetch error:', sessionError);
-                return { error: sessionError };
-            }
+            if (sessionError) return { error: sessionError };
             const user = session?.user;
-            if (!user) return { error: new Error('User not authenticated') };
+            if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-            const { data, error } = await withRetry(() =>
-                supabase
+            const { data, error } = await withRetry(async () =>
+                await supabase
                     .from('investments')
                     .insert([{ ...investment, user_id: user.id }])
                     .select()
             );
 
-            if (error) {
-                console.error('Investment insert error:', error);
-            } else {
+            if (!error) {
                 fetchInvestments();
             }
             return { data, error: error ? { message: formatError(error) } : null };
         } catch (err: any) {
-            console.error('Unexpected error in addInvestment:', err);
             return { error: { message: formatError(err, 'Erro ao adicionar investimento') } };
         }
-    };
+    }, [fetchInvestments]);
 
-    const updateInvestment = async (id: string, updates: Partial<Investment>) => {
+    const updateInvestment = useCallback(async (id: string, updates: any) => {
         try {
-            const { data, error } = await supabase
-                .from('investments')
-                .update(updates)
-                .eq('id', id)
-                .select();
+            const { data, error } = await withRetry(async () =>
+                await supabase
+                    .from('investments')
+                    .update(updates)
+                    .eq('id', id)
+                    .select()
+            );
 
-            if (error) {
-                console.error('Investment update error:', error);
-            } else {
+            if (!error) {
                 fetchInvestments();
             }
-            return { data, error };
+            return { data, error: error ? { message: formatError(error) } : null };
         } catch (err: any) {
-            console.error('Unexpected error in updateInvestment:', err);
-            let message = err.message || 'Erro inesperado ao atualizar investimento';
-            if (message.includes('fetch') || message.includes('NetworkError') || err.name === 'TypeError') {
-                message = 'Erro de rede: "Failed to fetch". Verifique extensões do navegador e tente novamente.';
-            }
-            return { error: { message } };
+            return { error: { message: formatError(err, 'Erro ao atualizar investimento') } };
         }
-    };
+    }, [fetchInvestments]);
 
-    const deleteInvestment = async (id: string) => {
-        const { error } = await supabase
-            .from('investments')
-            .delete()
-            .eq('id', id);
+    const deleteInvestment = useCallback(async (id: string) => {
+        try {
+            const { error } = await withRetry(async () =>
+                await supabase
+                    .from('investments')
+                    .delete()
+                    .eq('id', id)
+            );
 
-        if (!error) fetchInvestments();
-        return { error };
-    };
-
-    useEffect(() => {
-        fetchInvestments();
+            if (!error) {
+                fetchInvestments();
+            }
+            return { error: error ? { message: formatError(error) } : null };
+        } catch (err: any) {
+            return { error: { message: formatError(err, 'Erro ao deletar investimento') } };
+        }
     }, [fetchInvestments]);
 
     return {
@@ -110,6 +96,6 @@ export const useInvestments = () => {
         addInvestment,
         updateInvestment,
         deleteInvestment,
-        refreshInvestments: fetchInvestments
+        refresh: fetchInvestments
     };
 };

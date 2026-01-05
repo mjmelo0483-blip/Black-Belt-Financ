@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabase';
+import { supabase, withRetry, formatError } from '../supabase';
 
 export interface BudgetLimit {
     id: string;
@@ -40,31 +40,37 @@ export const useBudgets = () => {
             const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
             // 1. Fetch Categories with parent_id
-            const { data: categories } = await supabase
-                .from('categories')
-                .select('*')
-                .eq('type', 'expense');
+            const { data: categories } = await withRetry(async () =>
+                await supabase
+                    .from('categories')
+                    .select('*')
+                    .eq('type', 'expense')
+            );
 
             // 2. Fetch Budget Limits for current month
-            const { data: budgetLimits } = await supabase
-                .from('budgets')
-                .select(`
-                    *,
-                    categories (name, color, icon, parent_id)
-                `)
-                .eq('month', startOfMonth);
+            const { data: budgetLimits } = await withRetry(async () =>
+                await supabase
+                    .from('budgets')
+                    .select(`
+                        *,
+                        categories (name, color, icon, parent_id)
+                    `)
+                    .eq('month', startOfMonth)
+            );
 
             // 3. Fetch Actual Transactions for current month
             const activeDateColumn = viewMode === 'competencia' ? 'date' : 'due_date';
 
-            const { data: transactions } = await supabase
-                .from('transactions')
-                .select('amount, category_id')
-                .eq('type', 'expense')
-                .is('transfer_id', null)
-                .is('investment_id', null)
-                .gte(activeDateColumn, startOfMonth)
-                .lte(activeDateColumn, endOfMonth);
+            const { data: transactions } = await withRetry(async () =>
+                await supabase
+                    .from('transactions')
+                    .select('amount, category_id')
+                    .eq('type', 'expense')
+                    .is('transfer_id', null)
+                    .is('investment_id', null)
+                    .gte(activeDateColumn, startOfMonth)
+                    .lte(activeDateColumn, endOfMonth)
+            );
 
             // 4. Build category map
             const categoriesMap = new Map(categories?.map(c => [c.id, c]) || []);
@@ -103,7 +109,6 @@ export const useBudgets = () => {
                 const category = categoriesMap.get(cat.category_id);
 
                 if (category?.parent_id) {
-                    // This is a subcategory - add to parent
                     const parentCat = categoriesMap.get(category.parent_id);
                     if (parentCat) {
                         if (!parentSpending[parentCat.id]) {
@@ -123,7 +128,6 @@ export const useBudgets = () => {
                         }
                     }
                 } else {
-                    // This is a root category
                     if (!parentSpending[cat.category_id]) {
                         parentSpending[cat.category_id] = {
                             ...cat,
@@ -133,7 +137,6 @@ export const useBudgets = () => {
                 }
             });
 
-            // Sort children within each parent
             Object.values(parentSpending).forEach(parent => {
                 parent.children.sort((a, b) => b.actual - a.actual);
             });
@@ -152,29 +155,35 @@ export const useBudgets = () => {
         }
     }, [viewMode]);
 
-    const setBudgetLimit = async (categoryId: string, amount: number) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!user) return { error: new Error('User not authenticated') };
+    const setBudgetLimit = useCallback(async (categoryId: string, amount: number) => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const user = session?.user;
+            if (!user) return { error: new Error('Usuário não autenticado') };
 
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
-        const { data, error } = await supabase
-            .from('budgets')
-            .upsert({
-                user_id: user.id,
-                category_id: categoryId,
-                amount: amount,
-                month: startOfMonth
-            }, {
-                onConflict: 'user_id, category_id, month'
-            })
-            .select();
+            const { data, error } = await withRetry(async () =>
+                await supabase
+                    .from('budgets')
+                    .upsert({
+                        user_id: user.id,
+                        category_id: categoryId,
+                        amount: amount,
+                        month: startOfMonth
+                    }, {
+                        onConflict: 'user_id, category_id, month'
+                    })
+                    .select()
+            );
 
-        if (!error) fetchData();
-        return { data, error };
-    };
+            if (!error) fetchData();
+            return { data, error };
+        } catch (err: any) {
+            return { error: err };
+        }
+    }, [fetchData]);
 
     useEffect(() => {
         fetchData();
@@ -189,4 +198,5 @@ export const useBudgets = () => {
         setBudgetLimit,
         refreshBudgets: fetchData
     };
+
 };

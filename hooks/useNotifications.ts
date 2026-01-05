@@ -1,88 +1,94 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useBudgets } from './useBudgets';
 import { useCards } from './useCards';
-import { useTransactions } from './useTransactions';
 
 export interface Notification {
     id: string;
+    type: 'budget' | 'card' | 'system';
     title: string;
     message: string;
-    type: 'budget' | 'card' | 'system';
     date: string;
     read: boolean;
+    category?: string;
+    link?: string;
 }
 
 export const useNotifications = () => {
-    const [notifications, setNotifications] = useState<Notification[]>([]);
-    const [loading, setLoading] = useState(true);
     const { spending } = useBudgets();
     const { cards, getCardTransactions } = useCards();
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [loading, setLoading] = useState(false);
 
     const generateNotifications = useCallback(async () => {
+        if (!spending || !cards || !getCardTransactions) return;
         setLoading(true);
-        const newNotifications: Notification[] = [];
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
 
-        // 1. Check Budgets
-        spending.forEach(item => {
-            if (item.planned > 0) {
-                const percentage = (item.actual / item.planned) * 100;
-                if (percentage >= 100) {
-                    newNotifications.push({
-                        id: `budget-over-${item.category_id}`,
-                        title: 'Orçamento Excedido',
-                        message: `Você ultrapassou o limite definido para ${item.name}.`,
-                        type: 'budget',
-                        date: new Date().toISOString(),
-                        read: false
-                    });
-                } else if (percentage >= 80) {
-                    newNotifications.push({
-                        id: `budget-warning-${item.category_id}`,
-                        title: 'Alerta de Orçamento',
-                        message: `Você atingiu ${Math.round(percentage)}% do orçamento de ${item.name}.`,
-                        type: 'budget',
-                        date: new Date().toISOString(),
-                        read: false
-                    });
+        try {
+            const newNotifications: Notification[] = [];
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+
+            // 1. Budget Alerts
+            spending.forEach(cat => {
+                if (cat.planned > 0) {
+                    const percentage = (cat.actual / cat.planned) * 100;
+                    if (percentage >= 80 && percentage < 100) {
+                        newNotifications.push({
+                            id: `budget-${cat.category_id}-80`,
+                            type: 'budget',
+                            title: 'Limite de Orçamento Próximo',
+                            message: `Você atingiu ${percentage.toFixed(0)}% do orçamento planejado para ${cat.name}.`,
+                            date: new Date().toISOString(),
+                            read: false,
+                            category: 'budget',
+                            link: '/budgets'
+                        });
+                    } else if (percentage >= 100) {
+                        newNotifications.push({
+                            id: `budget-${cat.category_id}-100`,
+                            type: 'budget',
+                            title: 'Orçamento Excedido',
+                            message: `Você ultrapassou o orçamento planejado para ${cat.name}.`,
+                            date: new Date().toISOString(),
+                            read: false,
+                            category: 'budget',
+                            link: '/budgets'
+                        });
+                    }
                 }
-            }
-        });
-
-        // 2. Check Credit Card Bills
-        // For each card, we check if there are transactions for the current month due soon
-        for (const card of cards) {
-            // This is a simplified logic. In a real scenario, we'd check against a 'bills' table or specific due dates.
-            // Here we check transactions in the current month that are near the bill due date.
-            // Let's assume the user has to pay the bill around the 'due_day' of the card if it existed, 
-            // but since we only have 'transactions', we look for 'open' transactions with 'due_date' near now.
-
-            // For this implementation, let's look for any 'open' credit transaction due in the next 3 days.
-            const { data: openTxs } = await getCardTransactions(card.id, currentMonth, currentYear);
-            const urgentTxs = openTxs?.filter(t => {
-                if (t.status !== 'open') return false;
-                const dueDate = new Date(t.due_date);
-                const diffTime = dueDate.getTime() - now.getTime();
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                return diffDays >= 0 && diffDays <= 3;
             });
 
-            if (urgentTxs && urgentTxs.length > 0) {
-                newNotifications.push({
-                    id: `card-due-${card.id}`,
-                    title: 'Fatura Próxima ao Vencimento',
-                    message: `Existem lançamentos no cartão ${card.name} vencendo em breve.`,
-                    type: 'card',
-                    date: new Date().toISOString(),
-                    read: false
-                });
+            // 2. Card Bill Alerts
+            for (const card of cards) {
+                try {
+                    const { data: transactions } = await getCardTransactions(card.id, currentMonth, currentYear);
+                    if (transactions && transactions.length > 0) {
+                        const totalBill = transactions.reduce((sum, t) => sum + Number(t.amount), 0);
+                        if (totalBill > card.limit * 0.8) {
+                            newNotifications.push({
+                                id: `card-${card.id}-limit`,
+                                type: 'card',
+                                title: 'Fatura Elevada',
+                                message: `A fatura do cartão ${card.name} está em R$ ${totalBill.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (mais de 80% do limite).`,
+                                date: new Date().toISOString(),
+                                read: false,
+                                category: 'card',
+                                link: '/cards'
+                            });
+                        }
+                    }
+                } catch (cardErr) {
+                    console.error(`Error generating card notifications for ${card.name}:`, cardErr);
+                }
             }
-        }
 
-        setNotifications(newNotifications);
-        setLoading(false);
+            setNotifications(newNotifications);
+        } catch (err) {
+            console.error('Error generating notifications:', err);
+        } finally {
+            setLoading(false);
+        }
     }, [spending, cards, getCardTransactions]);
 
     useEffect(() => {
@@ -102,6 +108,7 @@ export const useNotifications = () => {
     return {
         notifications,
         loading,
+        unreadCount: notifications.filter(n => !n.read).length,
         markAsRead,
         clearAll,
         refresh: generateNotifications
