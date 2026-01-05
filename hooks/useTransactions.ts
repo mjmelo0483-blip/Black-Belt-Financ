@@ -250,29 +250,150 @@ export const useTransactions = () => {
         return { data, error };
     };
 
-    const deleteTransaction = async (id: string) => {
+    const updateInvestmentTransaction = async (id: string, transaction: {
+        operationType: 'application' | 'redemption';
+        amount: number;
+        accountId: string;
+        investmentId: string;
+        date: string;
+        dueDate: string;
+        description: string;
+        status: 'open' | 'completed';
+    }) => {
         setLoading(true);
-        const { error } = await supabase
-            .from('transactions')
-            .delete()
-            .eq('id', id);
 
-        if (!error) fetchTransactions();
+        // 1. Fetch original transaction to revert its impact
+        const { data: oldTx, error: oldTxError } = await supabase
+            .from('transactions')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (oldTxError || !oldTx) {
+            setLoading(false);
+            return { error: { message: 'Transação original não encontrada' } };
+        }
+
+        // 2. Fetch investment
+        const { data: investment, error: invFetchError } = await supabase
+            .from('investments')
+            .select('value, quantity')
+            .eq('id', transaction.investmentId)
+            .single();
+
+        if (invFetchError || !investment) {
+            setLoading(false);
+            return { error: { message: 'Investimento não encontrado' } };
+        }
+
+        const currentTotal = investment.value * investment.quantity;
+
+        // 3. Revert old impact
+        const wasApplication = oldTx.type === 'expense';
+        let revertedTotal = wasApplication
+            ? currentTotal - Number(oldTx.amount)
+            : currentTotal + Number(oldTx.amount);
+
+        // 4. Apply new impact
+        const isApplication = transaction.operationType === 'application';
+        let newTotal = isApplication
+            ? revertedTotal + transaction.amount
+            : revertedTotal - transaction.amount;
+
+        const newValuePerUnit = newTotal / investment.quantity;
+
+        // 5. Update Transaction
+        const { data: updatedTx, error: txError } = await supabase
+            .from('transactions')
+            .update({
+                amount: transaction.amount,
+                date: transaction.date,
+                due_date: transaction.dueDate,
+                description: transaction.description,
+                account_id: transaction.accountId,
+                type: isApplication ? 'expense' : 'income',
+                status: transaction.status,
+                investment_id: transaction.investmentId
+            })
+            .eq('id', id)
+            .select();
+
+        if (txError) {
+            setLoading(false);
+            return { error: txError };
+        }
+
+        // 6. Update Investment
+        const { error: invError } = await supabase
+            .from('investments')
+            .update({ value: newValuePerUnit })
+            .eq('id', transaction.investmentId);
+
+        if (invError) {
+            setLoading(false);
+            return { error: invError };
+        }
+
+        fetchTransactions();
         setLoading(false);
-        return { error };
+        return { data: updatedTx, error: null };
+    };
+
+    const deleteTransaction = async (id: string | string[]) => {
+        const ids = Array.isArray(id) ? id : [id];
+        setLoading(true);
+
+        try {
+            // Find investment transactions in the set
+            const { data: txsToDelete } = await supabase
+                .from('transactions')
+                .select('amount, type, investment_id')
+                .in('id', ids);
+
+            if (txsToDelete) {
+                for (const tx of txsToDelete) {
+                    if (tx.investment_id) {
+                        // Revert impact on investment
+                        const { data: inv } = await supabase
+                            .from('investments')
+                            .select('value, quantity')
+                            .eq('id', tx.investment_id)
+                            .single();
+
+                        if (inv) {
+                            const isApplication = tx.type === 'expense';
+                            const currentTotal = inv.value * inv.quantity;
+                            const newTotal = isApplication
+                                ? currentTotal - Number(tx.amount)
+                                : currentTotal + Number(tx.amount);
+                            const newValue = newTotal / inv.quantity;
+
+                            await supabase
+                                .from('investments')
+                                .update({ value: newValue })
+                                .eq('id', tx.investment_id);
+                        }
+                    }
+                }
+            }
+
+            const { error } = await supabase
+                .from('transactions')
+                .delete()
+                .in('id', ids);
+
+            if (!error) fetchTransactions();
+            setLoading(false);
+            return { error };
+        } catch (error: any) {
+            setLoading(false);
+            return { error };
+        }
     };
 
     const deleteTransactions = async (ids: string[]) => {
-        setLoading(true);
-        const { error } = await supabase
-            .from('transactions')
-            .delete()
-            .in('id', ids);
-
-        if (!error) fetchTransactions();
-        setLoading(false);
-        return { error };
+        return deleteTransaction(ids);
     };
 
-    return { accounts, categories, cards, transactions, fetchTransactions, saveTransaction, saveTransfer, saveInvestmentTransaction, updateTransaction, deleteTransaction, deleteTransactions, loading };
+    return { accounts, categories, cards, transactions, fetchTransactions, saveTransaction, saveTransfer, saveInvestmentTransaction, updateTransaction, updateInvestmentTransaction, deleteTransaction, deleteTransactions, loading };
 };

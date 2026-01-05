@@ -13,6 +13,7 @@ interface TransactionModalProps {
     saveTransfer?: (payload: any) => Promise<{ data?: any; error: any }>;
     saveInvestmentTransaction?: (payload: any) => Promise<{ data?: any; error: any }>;
     updateTransaction?: (id: string, payload: any) => Promise<{ data: any; error: any }>;
+    updateInvestmentTransaction?: (id: string, payload: any) => Promise<{ data?: any; error: any }>;
     isEditing?: boolean;
     initialData?: any;
 }
@@ -29,6 +30,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     saveTransfer,
     saveInvestmentTransaction,
     updateTransaction,
+    updateInvestmentTransaction,
     isEditing = false,
     initialData = null
 }) => {
@@ -71,8 +73,17 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             setCategoryId(initialData?.category_id || '');
             setAccountId(initialData?.account_id || '');
             setToAccountId('');
-            setInvestmentId('');
-            setInvestmentOperationType('application');
+
+            // Investment Specific State
+            if (initialData?.investment_id) {
+                setType('investment');
+                setInvestmentId(initialData.investment_id);
+                setInvestmentOperationType(initialData.type === 'expense' ? 'application' : 'redemption');
+            } else {
+                setInvestmentId('');
+                setInvestmentOperationType('application');
+            }
+
             setPaymentMethod(initialData?.payment_method || 'debito');
             setCardId(initialData?.card_id || '');
             setInstallments(initialData?.installments?.toString() || '1');
@@ -103,7 +114,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             }
 
             setLoading(true);
-            const result = await saveInvestmentTransaction({
+            const payload = {
                 operationType: investmentOperationType,
                 amount: parseFloat(amount.replace(',', '.')),
                 accountId: accountId,
@@ -112,9 +123,13 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                 dueDate,
                 description: description || (investmentOperationType === 'application' ? 'Aplicação em investimento' : 'Resgate de investimento'),
                 status
-            });
+            };
 
-            if (result.error) {
+            const result = isEditing && initialData?.id
+                ? await updateInvestmentTransaction?.(initialData.id, payload)
+                : await saveInvestmentTransaction({ ...payload });
+
+            if (result?.error) {
                 alert('Erro ao salvar: ' + result.error.message);
             } else {
                 onSave();

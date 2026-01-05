@@ -22,7 +22,7 @@ const CashFlow: React.FC = () => {
     viewMode
   } = useCashFlow();
 
-  const { categories, cards, saveTransaction, saveTransfer, saveInvestmentTransaction, updateTransaction, deleteTransaction, deleteTransactions } = useTransactions();
+  const { categories, cards, saveTransaction, saveTransfer, saveInvestmentTransaction, updateTransaction, updateInvestmentTransaction, deleteTransaction, deleteTransactions } = useTransactions();
   const { investments, refreshInvestments } = useInvestments();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -325,6 +325,7 @@ const CashFlow: React.FC = () => {
         saveTransfer={saveTransfer}
         saveInvestmentTransaction={saveInvestmentTransaction}
         updateTransaction={updateTransaction}
+        updateInvestmentTransaction={updateInvestmentTransaction}
         isEditing={isEditing}
         initialData={currentTransactionId ? transactions.find(t => t.id === currentTransactionId) : null}
       />
