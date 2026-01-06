@@ -139,6 +139,7 @@ export const useBudgets = () => {
                             };
                         }
                         parentSpending[parentCat.id].actual += cat.actual;
+                        parentSpending[parentCat.id].planned += cat.planned;
                         if (cat.planned > 0 || cat.actual > 0) {
                             parentSpending[parentCat.id].children.push(cat);
                         }

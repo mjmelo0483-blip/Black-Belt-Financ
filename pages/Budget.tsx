@@ -62,8 +62,12 @@ const Budget: React.FC = () => {
     ? spending.find(s => s.category_id === selectedCategory)?.name || ''
     : '';
 
-  const totalPlanned = currentViewData.reduce((acc, s) => acc + s.planned, 0);
-  const totalActual = currentViewData.reduce((acc, s) => acc + s.actual, 0);
+  const selectedCategoryData = selectedCategory
+    ? spending.find(s => s.category_id === selectedCategory)
+    : null;
+
+  const totalPlanned = selectedCategoryData ? selectedCategoryData.planned : currentViewData.reduce((acc, s) => acc + s.planned, 0);
+  const totalActual = selectedCategoryData ? selectedCategoryData.actual : currentViewData.reduce((acc, s) => acc + s.actual, 0);
   const remaining = totalPlanned - totalActual;
   const percentUsed = totalPlanned > 0 ? Math.round((totalActual / totalPlanned) * 100) : 0;
 
