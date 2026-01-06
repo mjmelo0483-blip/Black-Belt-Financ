@@ -31,13 +31,22 @@ export const useBudgets = () => {
     const [spending, setSpending] = useState<ParentCategorySpending[]>([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'competencia' | 'caixa'>('caixa');
+    const [selectedMonth, setSelectedMonth] = useState<number | null>(new Date().getMonth());
+    const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const now = new Date();
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+            const isAllYear = selectedMonth === null;
+
+            let startDate, endDate;
+            if (isAllYear) {
+                startDate = `${selectedYear}-01-01`;
+                endDate = `${selectedYear}-12-31`;
+            } else {
+                startDate = new Date(selectedYear, selectedMonth, 1).toISOString().split('T')[0];
+                endDate = new Date(selectedYear, selectedMonth + 1, 0).toISOString().split('T')[0];
+            }
 
             // 1. Fetch Categories with parent_id
             const { data: categories } = await withRetry(async () =>
@@ -47,18 +56,25 @@ export const useBudgets = () => {
                     .eq('type', 'expense')
             );
 
-            // 2. Fetch Budget Limits for current month
-            const { data: budgetLimits } = await withRetry(async () =>
-                await supabase
-                    .from('budgets')
-                    .select(`
-                        *,
-                        categories (name, color, icon, parent_id)
-                    `)
-                    .eq('month', startOfMonth)
-            );
+            // 2. Fetch Budget Limits
+            let budgetLimitsQuery = supabase
+                .from('budgets')
+                .select(`
+                    *,
+                    categories (name, color, icon, parent_id)
+                `);
 
-            // 3. Fetch Actual Transactions for current month
+            if (isAllYear) {
+                budgetLimitsQuery = budgetLimitsQuery
+                    .gte('month', `${selectedYear}-01-01`)
+                    .lte('month', `${selectedYear}-12-01`);
+            } else {
+                budgetLimitsQuery = budgetLimitsQuery.eq('month', startDate);
+            }
+
+            const { data: budgetLimitsData } = await withRetry(async () => await budgetLimitsQuery);
+
+            // 3. Fetch Actual Transactions
             const activeDateColumn = viewMode === 'competencia' ? 'date' : 'due_date';
 
             const { data: transactions } = await withRetry(async () =>
@@ -68,8 +84,8 @@ export const useBudgets = () => {
                     .eq('type', 'expense')
                     .is('transfer_id', null)
                     .is('investment_id', null)
-                    .gte(activeDateColumn, startOfMonth)
-                    .lte(activeDateColumn, endOfMonth)
+                    .gte(activeDateColumn, startDate)
+                    .lte(activeDateColumn, endDate)
             );
 
             // 4. Build category map
@@ -88,10 +104,10 @@ export const useBudgets = () => {
                 };
             });
 
-            // Add budget limits
-            budgetLimits?.forEach(limit => {
+            // Add budget limits (sum if all year)
+            budgetLimitsData?.forEach(limit => {
                 if (spendingByCategory[limit.category_id]) {
-                    spendingByCategory[limit.category_id].planned = Number(limit.amount);
+                    spendingByCategory[limit.category_id].planned += Number(limit.amount);
                 }
             });
 
@@ -141,7 +157,7 @@ export const useBudgets = () => {
                 parent.children.sort((a, b) => b.actual - a.actual);
             });
 
-            setBudgets(budgetLimits || []);
+            setBudgets(budgetLimitsData || []);
             setSpending(
                 Object.values(parentSpending)
                     .filter(s => s.planned > 0 || s.actual > 0 || s.children.length > 0)
@@ -153,7 +169,7 @@ export const useBudgets = () => {
         } finally {
             setLoading(false);
         }
-    }, [viewMode]);
+    }, [viewMode, selectedMonth, selectedYear]);
 
     const setBudgetLimit = useCallback(async (categoryId: string, amount: number) => {
         try {
@@ -161,8 +177,9 @@ export const useBudgets = () => {
             const user = session?.user;
             if (!user) return { error: new Error('Usuário não autenticado') };
 
-            const now = new Date();
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+            // We always save to a specific month. If "all year" is selected, we save to the current month of that year.
+            const monthToSave = selectedMonth !== null ? selectedMonth : new Date().getMonth();
+            const startOfMonth = new Date(selectedYear, monthToSave, 1).toISOString().split('T')[0];
 
             const { data, error } = await withRetry(async () =>
                 await supabase
@@ -183,7 +200,7 @@ export const useBudgets = () => {
         } catch (err: any) {
             return { error: err };
         }
-    }, [fetchData]);
+    }, [fetchData, selectedMonth, selectedYear]);
 
     useEffect(() => {
         fetchData();
@@ -195,6 +212,10 @@ export const useBudgets = () => {
         loading,
         viewMode,
         setViewMode,
+        selectedMonth,
+        setSelectedMonth,
+        selectedYear,
+        setSelectedYear,
         setBudgetLimit,
         refreshBudgets: fetchData
     };

@@ -4,7 +4,17 @@ import { useBudgets, ParentCategorySpending, CategorySpending } from '../hooks/u
 import { useCategories } from '../hooks/useCategories';
 
 const Budget: React.FC = () => {
-  const { spending, loading, setBudgetLimit, viewMode, setViewMode } = useBudgets();
+  const {
+    spending,
+    loading,
+    setBudgetLimit,
+    viewMode,
+    setViewMode,
+    selectedMonth,
+    setSelectedMonth,
+    selectedYear,
+    setSelectedYear
+  } = useBudgets();
   const { categories } = useCategories();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState({ category_id: '', amount: '' });
@@ -13,6 +23,34 @@ const Budget: React.FC = () => {
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const getMonthName = (month: number) => {
+    const months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    return months[month];
+  };
+
+  const goToPreviousMonth = () => {
+    if (selectedMonth === null) return;
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear(selectedYear - 1);
+    } else {
+      setSelectedMonth(selectedMonth - 1);
+    }
+  };
+
+  const goToNextMonth = () => {
+    if (selectedMonth === null) return;
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear(selectedYear + 1);
+    } else {
+      setSelectedMonth(selectedMonth + 1);
+    }
   };
 
   // Get current view data (parent or children)
@@ -62,30 +100,30 @@ const Budget: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-6 lg:p-10 flex flex-col gap-8">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-white text-3xl font-black tracking-tight">Orçamento Mensal</h1>
+          <h1 className="text-white text-3xl font-black tracking-tight">Orçamento {selectedMonth === null ? 'Anual' : 'Mensal'}</h1>
           <p className="text-[#92adc9] mt-1">Planeje seus gastos e monitore o progresso em tempo real.</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <div className="flex bg-[#111a22] p-1 rounded-xl border border-[#324d67]/50">
             <button
-              onClick={() => setViewMode('competencia')}
-              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'competencia'
+              onClick={() => setSelectedMonth(new Date().getMonth())}
+              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedMonth !== null
                 ? 'bg-primary text-white shadow-lg'
                 : 'text-[#92adc9] hover:text-white'
                 }`}
             >
-              Competência
+              Mês
             </button>
             <button
-              onClick={() => setViewMode('caixa')}
-              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'caixa'
+              onClick={() => setSelectedMonth(null)}
+              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedMonth === null
                 ? 'bg-primary text-white shadow-lg'
                 : 'text-[#92adc9] hover:text-white'
                 }`}
             >
-              Caixa
+              Ano Todo
             </button>
           </div>
           <button
@@ -98,11 +136,79 @@ const Budget: React.FC = () => {
         </div>
       </div>
 
+      {/* Filtros de Mês e Ano */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between bg-[#1c2a38]/80 backdrop-blur-xl border border-[#324d67]/50 rounded-2xl p-4 gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center bg-[#111a22] rounded-xl p-1 border border-[#324d67]/30">
+            <button
+              onClick={() => setViewMode('competencia')}
+              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'competencia' ? 'bg-[#324d67] text-white shadow-lg' : 'text-[#92adc9] hover:text-white'}`}
+            >
+              Competência
+            </button>
+            <button
+              onClick={() => setViewMode('caixa')}
+              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'caixa' ? 'bg-[#324d67] text-white shadow-lg' : 'text-[#92adc9] hover:text-white'}`}
+            >
+              Caixa
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center gap-4">
+          {selectedMonth !== null && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={goToPreviousMonth}
+                className="size-10 rounded-lg bg-[#111a22] hover:bg-[#233648] text-[#92adc9] hover:text-white transition-all flex items-center justify-center border border-[#324d67]/30"
+              >
+                <span className="material-symbols-outlined">chevron_left</span>
+              </button>
+
+              <div className="text-center min-w-[120px]">
+                <p className="text-white font-bold text-sm">
+                  {getMonthName(selectedMonth)}
+                </p>
+              </div>
+
+              <button
+                onClick={goToNextMonth}
+                className="size-10 rounded-lg bg-[#111a22] hover:bg-[#233648] text-[#92adc9] hover:text-white transition-all flex items-center justify-center border border-[#324d67]/30"
+              >
+                <span className="material-symbols-outlined">chevron_right</span>
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSelectedYear(selectedYear - 1)}
+              className="size-10 rounded-lg bg-[#111a22] hover:bg-[#233648] text-[#92adc9] hover:text-white transition-all flex items-center justify-center border border-[#324d67]/30"
+            >
+              <span className="material-symbols-outlined">chevron_left</span>
+            </button>
+
+            <div className="text-center min-w-[60px]">
+              <p className="text-white font-bold text-sm">
+                {selectedYear}
+              </p>
+            </div>
+
+            <button
+              onClick={() => setSelectedYear(selectedYear + 1)}
+              className="size-10 rounded-lg bg-[#111a22] hover:bg-[#233648] text-[#92adc9] hover:text-white transition-all flex items-center justify-center border border-[#324d67]/30"
+            >
+              <span className="material-symbols-outlined">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
-          { label: selectedCategory ? `Orçamento: ${currentViewTitle}` : 'Orçamento Total', val: formatCurrency(totalPlanned), icon: 'account_balance_wallet', detail: selectedCategory ? 'Planejado para esta categoria' : 'Planejado para o mês', color: 'text-primary' },
-          { label: selectedCategory ? `Gasto: ${currentViewTitle}` : 'Total Gasto', val: formatCurrency(totalActual), icon: 'payments', detail: `${percentUsed}% do planejado`, color: 'text-orange-500' },
-          { label: 'Restante', val: formatCurrency(remaining), icon: 'savings', detail: remaining < 0 ? 'Meta excedida' : 'Disponível no orçamento', color: remaining < 0 ? 'text-red-500' : 'text-emerald-500' }
+          { label: selectedCategory ? `Orçamento: ${currentViewTitle}` : (selectedMonth === null ? 'Orçamento Anual' : 'Orçamento Mensal'), val: formatCurrency(totalPlanned), icon: 'account_balance_wallet', detail: selectedCategory ? 'Planejado para esta categoria' : (selectedMonth === null ? `Total planejado em ${selectedYear}` : 'Planejado para o mês'), color: 'text-primary' },
+          { label: selectedCategory ? `Gasto: ${currentViewTitle}` : (selectedMonth === null ? 'Total Gasto no Ano' : 'Total Gasto no Mês'), val: formatCurrency(totalActual), icon: 'payments', detail: `${percentUsed}% do planejado`, color: 'text-orange-500' },
+          { label: 'Restante', val: formatCurrency(remaining), icon: 'savings', detail: remaining < 0 ? (selectedMonth === null ? 'Meta anual excedida' : 'Meta mensal excedida') : 'Disponível no orçamento', color: remaining < 0 ? 'text-red-500' : 'text-emerald-500' }
         ].map((s, i) => (
           <div key={i} className="flex flex-col gap-2 rounded-2xl p-6 border border-[#324d67]/50 bg-[#1c2a38]/80 backdrop-blur-xl shadow-lg relative overflow-hidden group">
             <div className="flex justify-between items-start relative z-10">
