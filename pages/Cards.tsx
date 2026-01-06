@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useCards } from '../hooks/useCards';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, PieChart, Pie, Tooltip, Cell, Legend } from 'recharts';
 
 const Cards: React.FC = () => {
   const { cards, loading, addCard, updateCard, deleteCard, getCardTransactions, getCardOpenTransactions } = useCards();
@@ -358,46 +358,54 @@ const Cards: React.FC = () => {
 
                 {/* Gráfico de Categorias */}
                 {cardTransactions.length > 0 && (
-                  <div className="mt-8 h-[250px] w-full">
-                    <p className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest mb-4">Gastos por Categoria</p>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={categoryChartData}
-                        layout="vertical"
-                        margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#233648" horizontal={false} />
-                        <XAxis type="number" hide />
-                        <YAxis
-                          type="category"
-                          dataKey="name"
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fill: '#92adc9', fontSize: 10, fontWeight: 'bold' }}
-                          width={80}
-                        />
-                        <Tooltip
-                          cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
-                          contentStyle={{
-                            backgroundColor: '#111a22',
-                            border: '1px solid #233648',
-                            borderRadius: '8px',
-                            fontSize: '12px'
-                          }}
-                          itemStyle={{ color: '#fff' }}
-                          formatter={(value: number) => formatCurrency(value)}
-                        />
-                        <Bar
-                          dataKey="value"
-                          radius={[0, 4, 4, 0]}
-                          barSize={20}
-                        >
-                          {categoryChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <div className="mt-8 flex flex-col md:flex-row items-center justify-center gap-8 min-h-[250px] w-full bg-[#111a22]/30 rounded-2xl p-6 border border-[#233648]/50">
+                    <div className="w-full md:w-1/2 h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={categoryChartData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                            stroke="none"
+                          >
+                            {categoryChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: '#111a22',
+                              border: '1px solid #233648',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              color: '#fff',
+                              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+                            }}
+                            itemStyle={{ color: '#fff' }}
+                            formatter={(value: number) => formatCurrency(value)}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="w-full md:w-1/2 space-y-3">
+                      <p className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest mb-4">Gastos por Categoria</p>
+                      <div className="grid grid-cols-1 gap-2 max-h-[150px] overflow-y-auto pr-2 custom-scrollbar">
+                        {categoryChartData.map((category, index) => (
+                          <div key={index} className="flex items-center justify-between group">
+                            <div className="flex items-center gap-3">
+                              <div className="size-2 rounded-full" style={{ backgroundColor: category.color }}></div>
+                              <span className="text-xs text-[#92adc9] font-medium group-hover:text-white transition-colors">{category.name}</span>
+                            </div>
+                            <span className="text-xs text-white font-bold">{formatCurrency(category.value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
