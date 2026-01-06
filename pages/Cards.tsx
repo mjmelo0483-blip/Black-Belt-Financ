@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useCards } from '../hooks/useCards';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, CartesianGrid } from 'recharts';
 
 const Cards: React.FC = () => {
   const { cards, loading, addCard, updateCard, deleteCard, getCardTransactions, getCardOpenTransactions } = useCards();
@@ -25,6 +26,23 @@ const Cards: React.FC = () => {
   // Estado para navegação de fatura por mês
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  // Dados para o gráfico de categorias
+  const categoryChartData = useMemo(() => {
+    const totals: Record<string, { name: string; value: number; color: string }> = {};
+
+    cardTransactions.forEach(t => {
+      const categoryName = t.categories?.name || 'Geral';
+      const categoryColor = t.categories?.color || '#94a3b8';
+
+      if (!totals[categoryName]) {
+        totals[categoryName] = { name: categoryName, value: 0, color: categoryColor };
+      }
+      totals[categoryName].value += t.amount;
+    });
+
+    return Object.values(totals).sort((a, b) => b.value - a.value);
+  }, [cardTransactions]);
 
   const currentCard = cards[activeCardIndex] || null;
 
@@ -337,6 +355,51 @@ const Cards: React.FC = () => {
                   <span className="text-[#92adc9] text-sm">Total da fatura:</span>
                   <span className="text-white font-bold text-xl">{formatCurrency(invoiceTotal)}</span>
                 </div>
+
+                {/* Gráfico de Categorias */}
+                {cardTransactions.length > 0 && (
+                  <div className="mt-8 h-[250px] w-full">
+                    <p className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest mb-4">Gastos por Categoria</p>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={categoryChartData}
+                        layout="vertical"
+                        margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#233648" horizontal={false} />
+                        <XAxis type="number" hide />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: '#92adc9', fontSize: 10, fontWeight: 'bold' }}
+                          width={80}
+                        />
+                        <Tooltip
+                          cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                          contentStyle={{
+                            backgroundColor: '#111a22',
+                            border: '1px solid #233648',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                          itemStyle={{ color: '#fff' }}
+                          formatter={(value: number) => formatCurrency(value)}
+                        />
+                        <Bar
+                          dataKey="value"
+                          radius={[0, 4, 4, 0]}
+                          barSize={20}
+                        >
+                          {categoryChartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </div>
               <div className="overflow-x-auto">
                 {loadingTransactions ? (
