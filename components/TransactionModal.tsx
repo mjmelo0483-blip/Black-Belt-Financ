@@ -419,7 +419,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                             });
 
                                             return roots.map(root => {
-                                                const subcats = childrenMap.get(root.id) || [];
+                                                const subcats = (childrenMap.get(root.id) || []).sort((a: any, b: any) => a.name.localeCompare(b.name));
                                                 if (subcats.length === 0) {
                                                     return <option key={root.id} value={root.id}>{root.name}</option>;
                                                 }

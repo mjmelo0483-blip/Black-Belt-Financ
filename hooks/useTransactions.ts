@@ -13,7 +13,7 @@ export const useTransactions = () => {
         try {
             const results = await withRetry(async () => await Promise.all([
                 supabase.from('accounts').select('*'),
-                supabase.from('categories').select('*'),
+                supabase.from('categories').select('*').order('name'),
                 supabase.from('cards').select('*'),
             ]));
 
