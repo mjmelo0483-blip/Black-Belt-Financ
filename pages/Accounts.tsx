@@ -369,7 +369,7 @@ const Accounts: React.FC = () => {
                               <p className="text-white font-bold text-sm leading-tight truncate">{t.description || 'Sem descrição'}</p>
                               {t.payment_method && (
                                 <span className="px-1.5 py-0.5 rounded-md bg-[#233648] text-[#92adc9] text-[9px] font-black uppercase tracking-wider">
-                                  {t.payment_method === 'credito' ? '💳 Cartão' : t.payment_method === 'pix' ? '💎 Pix' : '💰 Débito'}
+                                  {t.payment_method === 'credito' ? '💳 Cartão' : t.payment_method === 'pix' ? '💎 Pix' : t.payment_method === 'transferencia' ? '🔄 Transf.' : '💰 Débito'}
                                 </span>
                               )}
                             </div>

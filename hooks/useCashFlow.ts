@@ -87,7 +87,7 @@ export const useCashFlow = () => {
                     .select(`
                         *,
                         categories (name, icon, color),
-                        accounts:accounts!transactions_account_id_fkey (name)
+                        accounts:accounts!transactions_account_id_fkey(name)
                     `)
                     .gte('due_date', startDate)
                     .lt('due_date', nextDay);
@@ -152,8 +152,8 @@ export const useCashFlow = () => {
                 projectedBalance = currentBalance - gapIn + gapOut;
             }
 
-            const dayInflow = trans.filter(t => t.type === 'income' && !t.investment_id && !t.transfer_id).reduce((acc, t) => acc + Number(t.amount), 0);
-            const dayOutflow = trans.filter(t => t.type === 'expense' && !t.investment_id && !t.transfer_id).reduce((acc, t) => acc + Number(t.amount), 0);
+            const dayInflow = trans.filter(t => t.type === 'income' && !t.investment_id && (accountId ? true : !t.transfer_id)).reduce((acc, t) => acc + Number(t.amount), 0);
+            const dayOutflow = trans.filter(t => t.type === 'expense' && !t.investment_id && (accountId ? true : !t.transfer_id)).reduce((acc, t) => acc + Number(t.amount), 0);
             const investmentIn = trans.filter(t => t.type === 'income' && t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0);
             const investmentOut = trans.filter(t => t.type === 'expense' && t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0);
 

@@ -470,7 +470,7 @@ const Transactions: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="size-9 rounded-full bg-[#111a22] flex items-center justify-center text-white"><span className="material-symbols-outlined text-[20px]">{t.categories?.icon || 'receipt_long'}</span></div>
+                      <div className="size-9 rounded-full bg-[#111a22] flex items-center justify-center text-white"><span className="material-symbols-outlined text-[20px]">{t.categories?.icon || (t.transfer_id ? 'sync_alt' : 'receipt_long')}</span></div>
                       <div>
                         <p className="text-white font-bold text-sm truncate max-w-[200px]">{t.description}</p>
                         <p className="text-[#92adc9] text-[10px] uppercase tracking-wider">{t.categories?.name || 'Sem categoria'}</p>

@@ -8,9 +8,7 @@ export const useAccounts = () => {
     const fetchAccounts = async () => {
         setLoading(true);
         try {
-            const { data, error } = await withRetry(() =>
-                supabase.from('accounts').select('*').order('name')
-            );
+            const { data, error } = await withRetry(async () => await supabase.from('accounts').select('*').order('name'));
             if (error) {
                 console.error('Error fetching accounts:', error);
             } else {
@@ -37,8 +35,8 @@ export const useAccounts = () => {
             const user = session?.user;
             if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-            const { data, error } = await withRetry(() =>
-                supabase
+            const { data, error } = await withRetry(async () =>
+                await supabase
                     .from('accounts')
                     .insert([{ ...account, user_id: user.id }])
                     .select()
@@ -59,7 +57,7 @@ export const useAccounts = () => {
     const getAccountTransactions = async (accountId: string) => {
         const { data, error } = await supabase
             .from('transactions')
-            .select('*, categories(name, icon, color)')
+            .select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)')
             .eq('account_id', accountId)
             .order('date', { ascending: false });
 
@@ -69,7 +67,7 @@ export const useAccounts = () => {
     const getAccountStatement = async (accountId: string) => {
         const { data, error } = await supabase
             .from('transactions')
-            .select('*, categories(name, icon, color)')
+            .select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)')
             .eq('account_id', accountId)
             .eq('status', 'completed')
             .order('date', { ascending: true })

@@ -258,7 +258,7 @@ const CashFlow: React.FC = () => {
                     <div className="flex items-center gap-3">
                       <div className={`size-8 rounded-full flex items-center justify-center ${t.type === 'income' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
                         <span className="material-symbols-outlined text-sm">
-                          {t.categories?.icon || (t.type === 'income' ? 'arrow_downward' : 'arrow_upward')}
+                          {t.categories?.icon || (t.transfer_id ? 'sync_alt' : (t.type === 'income' ? 'arrow_downward' : 'arrow_upward'))}
                         </span>
                       </div>
                       <div className="flex flex-col">

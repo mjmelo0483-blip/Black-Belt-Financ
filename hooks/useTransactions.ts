@@ -53,7 +53,7 @@ export const useTransactions = () => {
                 .from('transactions')
                 .select(`
                     *,
-                    accounts:accounts!account_id (name),
+                    accounts:accounts!transactions_account_id_fkey(name),
                     categories (name, icon, color)
                 `)
                 .order('date', { ascending: false });
@@ -326,6 +326,7 @@ export const useTransactions = () => {
                     date: transfer.date,
                     due_date: transfer.dueDate,
                     status: transfer.status,
+                    payment_method: 'transferencia',
                     user_id: user.id,
                     transfer_id: transferId,
                     transfer_account_id: transfer.toAccountId
@@ -339,6 +340,7 @@ export const useTransactions = () => {
                     date: transfer.date,
                     due_date: transfer.dueDate,
                     status: transfer.status,
+                    payment_method: 'transferencia',
                     user_id: user.id,
                     transfer_id: transferId,
                     transfer_account_id: transfer.fromAccountId

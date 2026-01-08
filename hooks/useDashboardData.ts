@@ -74,7 +74,7 @@ export const useDashboardData = () => {
                 supabase.from('cards').select('credit_limit'),
                 supabase.from('transactions').select('amount').eq('payment_method', 'credito').eq('status', 'open'),
                 supabase.from('transactions').select('amount').eq('payment_method', 'credito').eq('status', 'open').gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)),
-                supabase.from('transactions').select('*, categories(name, icon, color), accounts(name)').order('date', { ascending: false }).limit(5),
+                supabase.from('transactions').select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)').order('date', { ascending: false }).limit(5),
                 supabase.from('budgets').select('*, categories(name, color, icon)').eq('month', formatDate(startOfMonth))
             ]));
 
