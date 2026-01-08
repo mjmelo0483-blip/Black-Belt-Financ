@@ -132,6 +132,11 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             if (result?.error) {
                 alert('Erro ao salvar: ' + result.error.message);
             } else {
+                if (!isEditing) {
+                    setAmount('');
+                    setDescription('');
+                    setInvestmentId('');
+                }
                 onSave();
             }
             setLoading(false);
@@ -167,6 +172,11 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             if (result.error) {
                 alert('Erro ao salvar: ' + result.error.message);
             } else {
+                if (!isEditing) {
+                    setAmount('');
+                    setDescription('');
+                    setToAccountId('');
+                }
                 onSave();
             }
             setLoading(false);
@@ -229,7 +239,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             if (!isEditing) {
                 setAmount('');
                 setDescription('');
-                // Opcional: Manter o foco no campo de valor
+                setCategoryId('');
             }
             onSave();
         }
