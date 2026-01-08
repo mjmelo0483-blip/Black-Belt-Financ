@@ -158,18 +158,44 @@ export const useTransactions = () => {
     const updateTransaction = useCallback(async (id: string, updates: any) => {
         setLoading(true);
         try {
-            const { data, error } = await withRetry(async () =>
-                await supabase
-                    .from('transactions')
-                    .update(updates)
-                    .eq('id', id)
-                    .select()
-            );
+            // First, check if it's a transfer to sync both sides
+            const { data: currentTx } = await supabase
+                .from('transactions')
+                .select('transfer_id')
+                .eq('id', id)
+                .single();
 
-            if (!error) {
-                fetchTransactions();
+            if (currentTx?.transfer_id) {
+                // Synchronize common fields for both sides of the transfer
+                const { amount, date, due_date, description, status, payment_method } = updates;
+                const syncUpdates: any = {};
+                if (amount !== undefined) syncUpdates.amount = amount;
+                if (date !== undefined) syncUpdates.date = date;
+                if (due_date !== undefined) syncUpdates.due_date = due_date;
+                if (description !== undefined) syncUpdates.description = description;
+                if (status !== undefined) syncUpdates.status = status;
+                if (payment_method !== undefined) syncUpdates.payment_method = payment_method;
+
+                if (Object.keys(syncUpdates).length > 0) {
+                    await withRetry(async () =>
+                        await supabase
+                            .from('transactions')
+                            .update(syncUpdates)
+                            .eq('transfer_id', currentTx.transfer_id)
+                    );
+                }
+            } else {
+                // Normal update for non-transfer transactions
+                await withRetry(async () =>
+                    await supabase
+                        .from('transactions')
+                        .update(updates)
+                        .eq('id', id)
+                );
             }
-            return { data, error: error ? { message: formatError(error) } : null };
+
+            fetchTransactions();
+            return { data: null, error: null };
         } catch (err: any) {
             return { error: { message: formatError(err, 'Erro ao atualizar transação') } };
         } finally {
@@ -186,11 +212,14 @@ export const useTransactions = () => {
             const { data: txsToDelete, error: fetchError } = await withRetry(async () =>
                 await supabase
                     .from('transactions')
-                    .select('amount, type, investment_id')
+                    .select('amount, type, investment_id, transfer_id')
                     .in('id', ids)
             );
 
             if (txsToDelete && txsToDelete.length > 0) {
+                const transferIds = txsToDelete.map(t => t.transfer_id).filter(Boolean);
+
+                // Handle investment logic (existing)
                 for (const tx of txsToDelete) {
                     if (tx.investment_id) {
                         const { data: inv } = await withRetry(async () =>
@@ -220,19 +249,26 @@ export const useTransactions = () => {
                         }
                     }
                 }
-            }
 
-            const { error } = await withRetry(async () =>
-                await supabase
-                    .from('transactions')
-                    .delete()
-                    .in('id', ids)
-            );
+                // Delete the transactions and their linked transfers
+                const { error } = await withRetry(async () => {
+                    let query = supabase.from('transactions').delete();
+                    if (transferIds.length > 0) {
+                        // Use .or to delete by ID OR by transfer_id to catch both sides
+                        const idList = ids.map(id => `id.eq.${id}`).join(',');
+                        const transList = transferIds.map(tid => `transfer_id.eq.${tid}`).join(',');
+                        return await query.or(`${idList},${transList}`);
+                    } else {
+                        return await query.in('id', ids);
+                    }
+                });
 
-            if (!error) {
-                fetchTransactions();
+                if (!error) {
+                    fetchTransactions();
+                }
+                return { error: error ? { message: formatError(error) } : null };
             }
-            return { error: error ? { message: formatError(error) } : null };
+            return { error: null };
         } catch (err: any) {
             return { error: { message: formatError(err, 'Erro ao deletar transação') } };
         } finally {

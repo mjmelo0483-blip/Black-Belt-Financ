@@ -59,7 +59,7 @@ export const useAccounts = () => {
             .from('transactions')
             .select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)')
             .eq('account_id', accountId)
-            .order('date', { ascending: false });
+            .order('due_date', { ascending: false });
 
         return { data, error };
     };
@@ -70,7 +70,7 @@ export const useAccounts = () => {
             .select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)')
             .eq('account_id', accountId)
             .eq('status', 'completed')
-            .order('date', { ascending: true })
+            .order('due_date', { ascending: true })
             .order('created_at', { ascending: true });
 
         return { data, error };

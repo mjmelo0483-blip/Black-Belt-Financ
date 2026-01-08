@@ -427,7 +427,7 @@ const Accounts: React.FC = () => {
                         statementData.map((row, idx) => (
                           <tr key={idx} className="hover:bg-[#111a22]/50 transition-colors">
                             <td className="p-4 text-white text-xs font-medium border-l-2 border-transparent hover:border-primary">
-                              {new Date(row.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                              {new Date((row.due_date || row.date) + 'T12:00:00').toLocaleDateString('pt-BR')}
                             </td>
                             <td className="p-4">
                               <div className="flex items-center gap-2">
