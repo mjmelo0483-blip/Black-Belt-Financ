@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabase';
+import { supabase, withRetry, formatError } from '../supabase';
 
 export interface Profile {
     id: string;
@@ -31,11 +31,13 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 return;
             }
 
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
+            const { data, error } = await withRetry(async () =>
+                await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .single()
+            );
 
             if (error && error.code !== 'PGRST116') throw error;
 
@@ -47,11 +49,13 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     full_name: session.user.user_metadata?.full_name || '',
                     avatar_url: session.user.user_metadata?.avatar_url || '',
                 };
-                const { data: createdProfile, error: createError } = await supabase
-                    .from('profiles')
-                    .upsert(newProfile)
-                    .select()
-                    .single();
+                const { data: createdProfile, error: createError } = await withRetry(async () =>
+                    await supabase
+                        .from('profiles')
+                        .upsert(newProfile)
+                        .select()
+                        .single()
+                );
 
                 if (createError) throw createError;
                 setProfile(createdProfile);
@@ -68,15 +72,17 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return;
 
-            const { data, error } = await supabase
-                .from('profiles')
-                .update({
-                    ...updates,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', session.user.id)
-                .select()
-                .single();
+            const { data, error } = await withRetry(async () =>
+                await supabase
+                    .from('profiles')
+                    .update({
+                        ...updates,
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', session.user.id)
+                    .select()
+                    .single()
+            );
 
             if (error) throw error;
             setProfile(data);
@@ -96,9 +102,11 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const fileName = `${session.user.id}/${Math.random()}.${fileExt}`;
             const filePath = `${fileName}`;
 
-            const { error: uploadError } = await supabase.storage
-                .from('profiles')
-                .upload(filePath, file);
+            const { error: uploadError } = await withRetry(async () =>
+                await supabase.storage
+                    .from('profiles')
+                    .upload(filePath, file)
+            );
 
             if (uploadError) throw uploadError;
 

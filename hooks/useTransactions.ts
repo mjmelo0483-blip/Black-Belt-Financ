@@ -95,10 +95,12 @@ export const useTransactions = () => {
             if (activeFilters?.subcategoryId) {
                 query = query.eq('category_id', activeFilters.subcategoryId);
             } else if (activeFilters?.categoryId) {
-                const { data: subcats } = await supabase
-                    .from('categories')
-                    .select('id')
-                    .eq('parent_id', activeFilters.categoryId);
+                const { data: subcats } = await withRetry(async () =>
+                    await supabase
+                        .from('categories')
+                        .select('id')
+                        .eq('parent_id', activeFilters.categoryId)
+                );
 
                 const categoryIds = [activeFilters.categoryId, ...(subcats?.map(s => s.id) || [])];
                 query = query.in('category_id', categoryIds);
@@ -159,11 +161,13 @@ export const useTransactions = () => {
         setLoading(true);
         try {
             // First, check if it's a transfer to sync both sides
-            const { data: currentTx } = await supabase
-                .from('transactions')
-                .select('transfer_id')
-                .eq('id', id)
-                .single();
+            const { data: currentTx } = await withRetry(async () =>
+                await supabase
+                    .from('transactions')
+                    .select('transfer_id')
+                    .eq('id', id)
+                    .single()
+            );
 
             if (currentTx?.transfer_id) {
                 // Synchronize common fields for both sides of the transfer
