@@ -17,7 +17,12 @@ const Budget: React.FC = () => {
   } = useBudgets();
   const { categories } = useCategories();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalData, setModalData] = useState({ category_id: '', amount: '' });
+  const [modalData, setModalData] = useState({
+    category_id: '',
+    amount: '',
+    month: (selectedMonth !== null ? selectedMonth : new Date().getMonth()).toString(),
+    year: selectedYear.toString()
+  });
   const [saving, setSaving] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
@@ -77,13 +82,19 @@ const Budget: React.FC = () => {
 
     setSaving(true);
     const amount = parseFloat(modalData.amount.replace(',', '.'));
-    const { error } = await setBudgetLimit(modalData.category_id, amount);
+    const customMonth = new Date(parseInt(modalData.year), parseInt(modalData.month), 1).toISOString().split('T')[0];
+    const { error } = await setBudgetLimit(modalData.category_id, amount, customMonth);
 
     if (error) {
       alert('Erro ao salvar meta: ' + (error as any).message);
     } else {
       setIsModalOpen(false);
-      setModalData({ category_id: '', amount: '' });
+      setModalData({
+        category_id: '',
+        amount: '',
+        month: (selectedMonth !== null ? selectedMonth : new Date().getMonth()).toString(),
+        year: selectedYear.toString()
+      });
     }
     setSaving(false);
   };
@@ -99,8 +110,25 @@ const Budget: React.FC = () => {
   const overBudgetCategories = spending.filter(s => s.actual > s.planned && s.planned > 0);
   const healthyCategories = spending.filter(s => s.actual < s.planned * 0.5 && s.planned > 0);
 
-  // Get only parent categories for the modal
-  const parentCategories = categories.filter(c => c.type === 'expense' && !c.parent_id);
+  // Get all expense categories for the modal
+  const allExpenseCategories = categories.filter(c => c.type === 'expense');
+
+  // Helper to get nested categories for the select
+  const renderCategoryOptions = () => {
+    const parents = allExpenseCategories.filter(c => !c.parent_id);
+    return parents.map(parent => (
+      <React.Fragment key={parent.id}>
+        <option value={parent.id} className="font-bold">{parent.name}</option>
+        {allExpenseCategories
+          .filter(child => child.parent_id === parent.id)
+          .map(child => (
+            <option key={child.id} value={child.id}>
+              &nbsp;&nbsp;&nbsp;{child.name}
+            </option>
+          ))}
+      </React.Fragment>
+    ));
+  };
 
   return (
     <div className="max-w-7xl mx-auto p-6 lg:p-10 flex flex-col gap-8">
@@ -423,20 +451,47 @@ const Budget: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveLimit} className="p-8 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Mês</label>
+                  <select
+                    required
+                    className="w-full h-12 bg-[#111a22] border border-[#324d67] rounded-xl px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
+                    value={modalData.month}
+                    onChange={(e) => setModalData({ ...modalData, month: e.target.value })}
+                  >
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(m => (
+                      <option key={m} value={m}>{getMonthName(m)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Ano</label>
+                  <select
+                    required
+                    className="w-full h-12 bg-[#111a22] border border-[#324d67] rounded-xl px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
+                    value={modalData.year}
+                    onChange={(e) => setModalData({ ...modalData, year: e.target.value })}
+                  >
+                    {[selectedYear - 1, selectedYear, selectedYear + 1].map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <label className="text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Categoria Principal</label>
+                <label className="text-[#92adc9] text-[10px] font-black uppercase tracking-widest">Categoria ou Subcategoria</label>
                 <select
                   required
                   className="w-full h-14 bg-[#111a22] border border-[#324d67] rounded-xl px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
                   value={modalData.category_id}
                   onChange={(e) => setModalData({ ...modalData, category_id: e.target.value })}
                 >
-                  <option value="">Selecione uma categoria principal...</option>
-                  {parentCategories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
+                  <option value="">Selecione uma categoria...</option>
+                  {renderCategoryOptions()}
                 </select>
-                <p className="text-[#6384a3] text-xs">Os gastos das subcategorias serão somados automaticamente.</p>
+                <p className="text-[#6384a3] text-xs">As metas podem ser definidas individualmente.</p>
               </div>
 
               <div className="space-y-2">

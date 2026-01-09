@@ -172,15 +172,20 @@ export const useBudgets = () => {
         }
     }, [viewMode, selectedMonth, selectedYear]);
 
-    const setBudgetLimit = useCallback(async (categoryId: string, amount: number) => {
+    const setBudgetLimit = useCallback(async (categoryId: string, amount: number, customMonth?: string) => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const user = session?.user;
             if (!user) return { error: new Error('Usuário não autenticado') };
 
-            // We always save to a specific month. If "all year" is selected, we save to the current month of that year.
-            const monthToSave = selectedMonth !== null ? selectedMonth : new Date().getMonth();
-            const startOfMonth = new Date(selectedYear, monthToSave, 1).toISOString().split('T')[0];
+            // Use custom month if provided, else use current context
+            let startOfMonth;
+            if (customMonth) {
+                startOfMonth = customMonth;
+            } else {
+                const monthToSave = selectedMonth !== null ? selectedMonth : new Date().getMonth();
+                startOfMonth = new Date(selectedYear, monthToSave, 1).toISOString().split('T')[0];
+            }
 
             const { data, error } = await withRetry(async () =>
                 await supabase

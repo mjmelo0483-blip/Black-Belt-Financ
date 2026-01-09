@@ -7,8 +7,8 @@ export const useCategories = () => {
 
     const fetchCategories = async () => {
         setLoading(true);
-        const { data } = await withRetry(() =>
-            supabase
+        const { data } = await withRetry(async () =>
+            await supabase
                 .from('categories')
                 .select('*')
                 .order('name')
@@ -31,8 +31,8 @@ export const useCategories = () => {
             const user = session?.user;
             if (!user) return { error: { message: 'Usuário não autenticado' } };
 
-            const { data, error } = await withRetry(() =>
-                supabase
+            const { data, error } = await withRetry(async () =>
+                await supabase
                     .from('categories')
                     .insert([{ ...category, user_id: user.id }])
                     .select()
