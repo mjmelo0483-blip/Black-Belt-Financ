@@ -1,218 +1,290 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSales } from '../hooks/useSales';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
+import {
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    BarChart, Bar, Cell, PieChart, Pie, RadialBarChart, RadialBar, Legend
+} from 'recharts';
 
 const SalesDashboard: React.FC = () => {
     const { fetchSales, loading } = useSales();
     const [salesData, setSalesData] = useState<any[]>([]);
+    const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+    const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+    const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
 
     useEffect(() => {
         const load = async () => {
             const { data } = await fetchSales();
-            if (data) setSalesData(data);
+            if (data && data.length > 0) {
+                setSalesData(data);
+                const latest = new Date(data[0].date);
+                setSelectedMonth(latest.getMonth());
+                setSelectedYear(latest.getFullYear());
+            } else if (data) {
+                setSalesData(data);
+            }
         };
         load();
     }, [fetchSales]);
 
-    // KPI Calculations
-    const totalRevenue = salesData.reduce((acc, sale) => acc + Number(sale.total_amount || 0), 0);
-    const totalProfit = salesData.reduce((acc, sale) => {
-        const saleProfit = sale.sale_items?.reduce((itemAcc: number, item: any) => {
-            const cost = Number(item.products?.cost || 0);
-            const price = Number(item.unit_price || 0);
-            return itemAcc + ((price - cost) * item.quantity);
-        }, 0);
-        return acc + (saleProfit || 0);
-    }, 0);
-    const totalSales = salesData.length;
-    const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
-
-    // Aggregate Revenue by Date
-    const revenueByDate = salesData.reduce((acc: any, sale: any) => {
-        const date = sale.date;
-        acc[date] = (acc[date] || 0) + Number(sale.total_amount || 0);
-        return acc;
-    }, {});
-
-    const chartData = Object.entries(revenueByDate)
-        .map(([name, revenue]) => ({ name: formatDate(name as string), revenue }))
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .slice(-7);
-
-    // Aggregate Product Sales
-    const productSales = salesData.reduce((acc: any, sale: any) => {
-        sale.sale_items?.forEach((item: any) => {
-            const prod = item.products;
-            if (!prod) return;
-            if (!acc[prod.code]) {
-                acc[prod.code] = { name: prod.name, code: prod.code, total: 0, count: 0 };
-            }
-            acc[prod.code].total += Number(item.total_price || 0);
-            acc[prod.code].count += Number(item.quantity || 0);
+    // Available Months and Years from data
+    const periods = useMemo(() => {
+        const p = new Set<string>();
+        salesData.forEach(s => {
+            const d = new Date(s.date);
+            p.add(`${d.getMonth()}-${d.getFullYear()}`);
         });
-        return acc;
-    }, {});
+        return Array.from(p).sort();
+    }, [salesData]);
 
-    const topProducts = Object.values(productSales)
-        .sort((a: any, b: any) => b.total - a.total)
-        .slice(0, 5);
+    const categories = useMemo(() => {
+        const c = new Set<string>();
+        salesData.forEach(sale => {
+            sale.sale_items?.forEach((item: any) => {
+                if (item.products?.category) c.add(item.products.category);
+            });
+        });
+        return ['Todas', ...Array.from(c)];
+    }, [salesData]);
 
-    function formatDate(d: string) {
-        return new Date(d).toLocaleDateString('pt-BR', { weekday: 'short' });
-    }
+    // Filtering Data
+    const filteredData = useMemo(() => {
+        return salesData.filter(sale => {
+            const d = new Date(sale.date);
+            const matchesMonth = d.getMonth() === selectedMonth;
+            const matchesYear = d.getFullYear() === selectedYear;
 
-    // Aggregate Payment Methods
-    const paymentMethods = salesData.reduce((acc: any, sale: any) => {
-        const method = sale.payment_method || 'Outros';
-        acc[method] = (acc[method] || 0) + 1;
-        return acc;
-    }, {});
+            if (selectedCategory === 'Todas') return matchesMonth && matchesYear;
 
-    const paymentChartData = Object.entries(paymentMethods).map(([name, value]) => ({ name, value }));
+            const hasCategory = sale.sale_items?.some((item: any) => item.products?.category === selectedCategory);
+            return matchesMonth && matchesYear && hasCategory;
+        });
+    }, [salesData, selectedMonth, selectedYear, selectedCategory]);
 
-    const COLORS = ['#818cf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa'];
+    // KPI Calculations
+    const totalRevenue = filteredData.reduce((acc, sale) => acc + Number(sale.total_amount || 0), 0);
+    const totalUnits = filteredData.reduce((acc, sale) => {
+        const itemsQty = sale.sale_items?.reduce((iq: number, item: any) => iq + Number(item.quantity || 0), 0);
+        return acc + (itemsQty || 0);
+    }, 0);
+    const totalSalesCount = filteredData.length;
+    const averageTicket = totalSalesCount > 0 ? totalRevenue / totalSalesCount : 0;
+
+    // Top Product by Revenue
+    const productSales = useMemo(() => {
+        const map: any = {};
+        filteredData.forEach(sale => {
+            sale.sale_items?.forEach((item: any) => {
+                const prod = item.products;
+                if (!prod) return;
+                if (!map[prod.code]) {
+                    map[prod.code] = { name: prod.name, total: 0, count: 0 };
+                }
+                map[prod.code].total += Number(item.total_price || 0);
+                map[prod.code].count += Number(item.quantity || 0);
+            });
+        });
+        return Object.values(map).sort((a: any, b: any) => b.total - a.total);
+    }, [filteredData]);
+
+    const bestProduct = productSales[0] || { name: '-', total: 0 };
+
+    // Charts Data
+    const dailyData = useMemo(() => {
+        const map: any = {};
+        filteredData.forEach(sale => {
+            const dateStr = sale.date; // YYYY-MM-DD
+            if (!map[dateStr]) map[dateStr] = { date: dateStr, revenue: 0, units: 0 };
+            map[dateStr].revenue += Number(sale.total_amount || 0);
+            const itemsQty = sale.sale_items?.reduce((iq: number, item: any) => iq + Number(item.quantity || 0), 0);
+            map[dateStr].units += (itemsQty || 0);
+        });
+        return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
+    }, [filteredData]);
+
+    // Balance Point (Target) - Mocking R$ 12,942.71 from image
+    const targetRevenue = 12942.71;
+    const balancePercentage = Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100);
+    const radialData = [{ name: 'Faturamento', value: balancePercentage, fill: '#fbbf24' }];
+
+    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
     return (
-        <div className="p-6 space-y-6">
-            <h1 className="text-2xl font-bold text-white uppercase tracking-tight">Análise de Vendas</h1>
-
-            {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KPICard title="Faturamento Total" value={totalRevenue} icon="payments" color="text-indigo-400" />
-                <KPICard title="Volume de Vendas" value={totalSales} icon="shopping_bag" color="text-emerald-400" isCurrency={false} />
-                <KPICard title="Ticket Médio" value={averageTicket} icon="confirmation_number" color="text-amber-400" />
-                <KPICard title="Lucro Bruto" value={totalProfit} icon="trending_up" color="text-rose-400" />
+        <div className="p-6 space-y-6 bg-[#0f172a] min-h-screen text-white">
+            <div className="flex justify-between items-center mb-2">
+                <h1 className="text-2xl font-black uppercase tracking-tighter text-white">Dashboard de Vendas</h1>
+                <div className="flex gap-2">
+                    {periods.slice(-4).reverse().map(period => {
+                        const [m, y] = period.split('-').map(Number);
+                        const active = selectedMonth === m && selectedYear === y;
+                        return (
+                            <button
+                                key={period}
+                                onClick={() => { setSelectedMonth(m); setSelectedYear(y); }}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border ${active ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-[#1e293b] border-[#334155] text-slate-400 hover:text-white'}`}
+                            >
+                                {monthNames[m]}/{y}
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Revenue Chart */}
-                <div className="bg-[#1c2a38] p-6 rounded-2xl border border-[#233648] shadow-xl shadow-black/20">
-                    <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-indigo-400">show_chart</span>
-                        Desempenho de Vendas (Últimos 7 dias)
-                    </h3>
-                    <div className="h-[300px] w-full">
-                        {chartData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={chartData}>
-                                    <defs>
-                                        <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <XAxis dataKey="name" stroke="#526a81" fontSize={12} tickLine={false} axisLine={false} />
-                                    <YAxis stroke="#526a81" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
-                                    <Tooltip
-                                        contentStyle={{ backgroundColor: '#111a22', border: '1px solid #233648', borderRadius: '8px' }}
-                                        itemStyle={{ color: '#fff' }}
-                                    />
-                                    <Area type="monotone" dataKey="revenue" stroke="#818cf8" fillOpacity={1} fill="url(#colorRev)" strokeWidth={3} />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-[#526a81]">Sem dados de vendas no período</div>
-                        )}
-                    </div>
-                </div>
+            {/* Main Grid */}
+            <div className="grid grid-cols-12 gap-6">
 
-                {/* Top Products */}
-                <div className="bg-[#1c2a38] p-6 rounded-2xl border border-[#233648] shadow-xl shadow-black/20">
-                    <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-emerald-400">inventory_2</span>
-                        Produtos Mais Vendidos
-                    </h3>
-                    <div className="space-y-4">
-                        {topProducts.length > 0 ? topProducts.map((prod: any, i) => (
-                            <div key={prod.code} className="flex items-center justify-between p-3 rounded-xl bg-[#111a22]/50 border border-[#233648]/50">
-                                <div className="flex items-center gap-3">
-                                    <div className="size-10 rounded-lg bg-[#233648] flex items-center justify-center font-bold text-indigo-400">#{i + 1}</div>
-                                    <div>
-                                        <p className="text-white font-medium text-sm">{prod.name}</p>
-                                        <p className="text-[#526a81] text-xs">Código: {prod.code}</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-white font-bold text-sm">R$ {Number(prod.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                    <p className="text-emerald-400 text-[10px] font-black uppercase">{prod.count} Vendas</p>
-                                </div>
-                            </div>
-                        )) : (
-                            <div className="py-20 text-center text-[#526a81]">Nenhum produto vendido</div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Payment Methods */}
-                <div className="bg-[#1c2a38] p-6 rounded-2xl border border-[#233648] shadow-xl shadow-black/20">
-                    <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-amber-400">payments</span>
-                        Formas de Pagamento
-                    </h3>
-                    <div className="h-[300px] flex items-center">
-                        <div className="w-1/2 h-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart layout="vertical" data={paymentChartData}>
-                                    <XAxis type="number" hide />
-                                    <YAxis type="category" dataKey="name" stroke="#526a81" fontSize={12} tickLine={false} axisLine={false} width={100} />
-                                    <Tooltip
-                                        cursor={{ fill: 'transparent' }}
-                                        contentStyle={{ backgroundColor: '#111a22', border: '1px solid #233648', borderRadius: '8px' }}
-                                    />
-                                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                                        {paymentChartData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
+                {/* Left Sidebar KPIs */}
+                <div className="col-span-12 lg:col-span-3 space-y-4">
+                    <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] flex flex-col items-center justify-center text-center shadow-2xl">
+                        <div className="size-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4">
+                            <span className="material-symbols-outlined text-indigo-400 text-3xl">api</span>
                         </div>
-                        <div className="w-1/2 space-y-3 pl-6">
-                            {paymentChartData.map((entry, index) => (
-                                <div key={entry.name} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className="size-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                                        <span className="text-xs text-[#92adc9]">{entry.name}</span>
-                                    </div>
-                                    <span className="text-xs font-bold text-white">{entry.value}</span>
-                                </div>
+                        <p className="text-3xl font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Total Faturado</p>
+                    </div>
+
+                    <div className="bg-[#1e293b] px-6 py-4 rounded-xl border border-[#334155] flex justify-between items-center">
+                        <div className="text-left">
+                            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Total Unidades</p>
+                            <p className="text-xl font-black">{totalUnits}</p>
+                        </div>
+                        <span className="material-symbols-outlined text-emerald-400">shopping_cart</span>
+                    </div>
+
+                    <div className="bg-[#1e293b] px-6 py-4 rounded-xl border border-[#334155] flex justify-between items-center">
+                        <div className="text-left">
+                            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Ticket Médio</p>
+                            <p className="text-xl font-black">R$ {averageTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        </div>
+                        <span className="material-symbols-outlined text-amber-400">confirmation_number</span>
+                    </div>
+
+                    <div className="bg-[#1e293b] p-6 rounded-xl border border-[#334155] space-y-2">
+                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Maior Faturamento</p>
+                        <p className="text-sm font-bold text-white truncate">{bestProduct.name}</p>
+                        <p className="text-xl font-black text-indigo-400">R$ {bestProduct.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    </div>
+
+                    {/* Category Filter */}
+                    <div className="bg-[#1e293b] p-6 rounded-xl border border-[#334155]">
+                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-xs">filter_alt</span> Categoria
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                            {categories.slice(0, 8).map(cat => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setSelectedCategory(cat)}
+                                    className={`px-2 py-2 rounded-lg text-[10px] font-black uppercase text-center transition-all border ${selectedCategory === cat ? 'bg-amber-500 border-amber-400 text-slate-900 shadow-lg shadow-amber-500/20' : 'bg-[#0f172a] border-[#334155] text-slate-400'}`}
+                                >
+                                    {cat}
+                                </button>
                             ))}
                         </div>
                     </div>
                 </div>
 
-                {/* Placeholder for Store Performance or Device breakdown */}
-                <div className="bg-[#1c2a38] p-6 rounded-2xl border border-[#233648] shadow-xl shadow-black/20 flex flex-col justify-center items-center text-[#526a81]">
-                    <span className="material-symbols-outlined text-4xl mb-2">insights</span>
-                    <p className="text-center">Mais análises estarão disponíveis conforme novos dados forem importados.</p>
+                {/* Right Content Area */}
+                <div className="col-span-12 lg:col-span-9 space-y-6">
+
+                    {/* Top Row: Balance and Daily Revenue */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Balance Point */}
+                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl flex flex-col items-center">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Ponto de Equilíbrio</h3>
+                            <div className="relative size-40">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={[{ value: totalRevenue }, { value: Math.max(0, targetRevenue - totalRevenue) }]}
+                                            cx="50%" cy="50%" innerRadius={50} outerRadius={70} fill="#8884d8" paddingAngle={5} dataKey="value" stroke="none"
+                                            startAngle={90} endAngle={450}
+                                        >
+                                            <Cell fill="#fbbf24" />
+                                            <Cell fill="#0f172a" />
+                                        </Pie>
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span className="text-3xl font-black text-amber-500">{balancePercentage}%</span>
+                                </div>
+                            </div>
+                            <p className="mt-4 text-amber-500 font-black text-lg">R$ {targetRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        </div>
+
+                        {/* Daily Revenue Bar Chart */}
+                        <div className="md:col-span-2 bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Total Vendido por Dia (R$)</h3>
+                            <div className="h-44 w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={dailyData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                                        <XAxis dataKey="date" hide />
+                                        <YAxis hide />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                            cursor={{ fill: '#334155', opacity: 0.4 }}
+                                        />
+                                        <Bar dataKey="revenue" fill="#fbbf24" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Bottom Row: Top Products and Units Area */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                        {/* Top 10 Products Horizontal Bar */}
+                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Top 10 Produtos Mais Vendidos</h3>
+                            <div className="h-[300px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart layout="vertical" data={productSales.slice(0, 10)}>
+                                        <XAxis type="number" hide />
+                                        <YAxis
+                                            type="category" dataKey="name" stroke="#94a3b8" fontSize={10}
+                                            width={100} tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false}
+                                        />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                        />
+                                        <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        {/* Quantity per day Area Chart */}
+                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Quantidade Vendida por Dia</h3>
+                            <div className="h-[300px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={dailyData}>
+                                        <defs>
+                                            <linearGradient id="colorUnits" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                                        <XAxis dataKey="date" hide />
+                                        <YAxis hide />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                        />
+                                        <Area type="monotone" dataKey="units" stroke="#94a3b8" fillOpacity={1} fill="url(#colorUnits)" strokeWidth={2} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
     );
 };
-
-interface KPICardProps {
-    title: string;
-    value: number;
-    icon: string;
-    color: string;
-    isCurrency?: boolean;
-}
-
-const KPICard: React.FC<KPICardProps> = ({ title, value, icon, color, isCurrency = true }) => (
-    <div className="bg-[#1c2a38] p-6 rounded-2xl border border-[#233648] shadow-lg shadow-black/10 hover:border-indigo-500/30 transition-all group">
-        <div className="flex justify-between items-start mb-4">
-            <div className={`size-12 rounded-xl bg-[#111a22] border border-[#233648] flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
-                <span className={`material-symbols-outlined ${color}`}>{icon}</span>
-            </div>
-            <span className="text-[10px] font-black text-[#526a81] uppercase tracking-widest bg-[#111a22] px-2 py-1 rounded-md border border-[#233648]">Mensal</span>
-        </div>
-        <h4 className="text-[#92adc9] text-xs font-semibold uppercase tracking-wider mb-1">{title}</h4>
-        <p className="text-2xl font-black text-white">
-            {isCurrency ? `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : value}
-        </p>
-    </div>
-);
 
 export default SalesDashboard;

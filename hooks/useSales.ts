@@ -69,7 +69,8 @@ export const useSales = () => {
                     productsToUpsert.push({
                         user_id: user.id,
                         code: productCode,
-                        name: productName || 'Produto sem nome'
+                        name: productName || 'Produto sem nome',
+                        category: row['Categoria'] || row['Grupo'] || row['Família'] || 'Geral'
                     });
                     uniqueProductCodes.add(productCode);
                 }
@@ -120,9 +121,14 @@ export const useSales = () => {
                     });
                 }
 
-                const qty = Number(row['Quantidade'] || 1);
-                const unitPrice = Number(row['Vlr Unitário'] || row['Preço'] || 0);
-                const totalPrice = Number(row['Vlr. Total'] || row['Total'] || (qty * unitPrice));
+                const qty = Number(row['Quantidade'] || row['Qtde'] || row['Qtd'] || 1);
+                const unitPrice = Number(row['Valor Unitário'] || row['Vlr Unitário'] || row['Vlr. Unitário'] || row['Preço'] || 0);
+                const totalPrice = Number(row['Valor Total'] || row['Vlr. Total'] || row['Vlr Total'] || row['Total'] || (qty * unitPrice));
+
+                // Log values for debugging if they are 0
+                if (totalPrice === 0 && (row['Valor Total'] || row['Total'])) {
+                    console.log('Zero price detected for row:', row);
+                }
 
                 const sale = salesGroups.get(code);
                 sale.items.push({
