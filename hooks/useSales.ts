@@ -179,33 +179,43 @@ export const useSales = () => {
 };
 
 // Helper to convert DD/MM/YYYY to YYYY-MM-DD
-function formatDate(dateStr: any) {
-    if (!dateStr) return null;
+function formatDate(dateValue: any) {
+    if (!dateValue) return null;
 
-    // Handle Excel serial date numbers (if XLSX didn't convert them)
-    if (typeof dateStr === 'number') {
-        const date = new Date((dateStr - 25569) * 86400 * 1000);
+    // If it's already a JS Date (from XLSX)
+    if (dateValue instanceof Date) {
+        return dateValue.toISOString().split('T')[0];
+    }
+
+    // Handle Excel serial date numbers
+    if (typeof dateValue === 'number') {
+        const date = new Date((dateValue - 25569) * 86400 * 1000);
         return date.toISOString().split('T')[0];
     }
 
-    const str = String(dateStr).trim();
+    const str = String(dateValue).trim();
+    if (!str || str === '-') return null;
 
     // Handle DD/MM/YYYY
     if (str.includes('/')) {
-        const [day, month, year] = str.split('/');
-        // If year is 2 digits, assume 20xx
-        const fullYear = year.length === 2 ? `20${year}` : year;
-        return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        const parts = str.split('/');
+        if (parts.length === 3) {
+            const [day, month, year] = parts;
+            const fullYear = year.length === 2 ? `20${year}` : year;
+            return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
     }
 
     // Handle YYYY-MM-DD
     if (str.includes('-')) {
         const parts = str.split('-');
-        if (parts[0].length === 4) return str; // Already YYYY-MM-DD
-        // Handle DD-MM-YYYY or other hyphen variations
-        const [day, month, year] = parts;
-        const fullYear = year.length === 2 ? `20${year}` : year;
-        return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        if (parts.length === 3) {
+            if (parts[0].length === 4) return str; // Already YYYY-MM-DD
+            // Handle DD-MM-YYYY
+            const [day, month, year] = parts;
+            const fullYear = year.length === 2 ? `20${year}` : year;
+            return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
     }
 
     return str;
