@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
+import { useView } from '../contexts/ViewContext';
 
 export const useInvestments = () => {
+    const { isBusiness } = useView();
     const [investments, setInvestments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -12,6 +14,7 @@ export const useInvestments = () => {
                 await supabase
                     .from('investments')
                     .select('*')
+                    .eq('is_business', isBusiness)
                     .order('name', { ascending: true })
             );
             if (error) {
@@ -24,7 +27,7 @@ export const useInvestments = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [isBusiness]);
 
     useEffect(() => {
         fetchInvestments();
@@ -40,7 +43,7 @@ export const useInvestments = () => {
             const { data, error } = await withRetry(async () =>
                 await supabase
                     .from('investments')
-                    .insert([{ ...investment, user_id: user.id }])
+                    .insert([{ ...investment, user_id: user.id, is_business: isBusiness }])
                     .select()
             );
 
@@ -51,7 +54,7 @@ export const useInvestments = () => {
         } catch (err: any) {
             return { error: { message: formatError(err, 'Erro ao adicionar investimento') } };
         }
-    }, [fetchInvestments]);
+    }, [fetchInvestments, isBusiness]);
 
     const updateInvestment = useCallback(async (id: string, updates: any) => {
         try {

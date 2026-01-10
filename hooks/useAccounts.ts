@@ -1,14 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
+import { useView } from '../contexts/ViewContext';
 
 export const useAccounts = () => {
+    const { isBusiness } = useView();
     const [accounts, setAccounts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const fetchAccounts = async () => {
+    const fetchAccounts = useCallback(async () => {
         setLoading(true);
         try {
-            const { data, error } = await withRetry(async () => await supabase.from('accounts').select('*').order('name'));
+            const { data, error } = await withRetry(async () =>
+                await supabase.from('accounts')
+                    .select('*')
+                    .eq('is_business', isBusiness)
+                    .order('name')
+            );
             if (error) {
                 console.error('Error fetching accounts:', error);
             } else {
@@ -19,11 +26,11 @@ export const useAccounts = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [isBusiness]);
 
     useEffect(() => {
         fetchAccounts();
-    }, []);
+    }, [fetchAccounts]);
 
     const addAccount = async (account: any) => {
         try {
@@ -38,7 +45,7 @@ export const useAccounts = () => {
             const { data, error } = await withRetry(async () =>
                 await supabase
                     .from('accounts')
-                    .insert([{ ...account, user_id: user.id }])
+                    .insert([{ ...account, user_id: user.id, is_business: isBusiness }])
                     .select()
             );
 
@@ -60,6 +67,7 @@ export const useAccounts = () => {
                 .from('transactions')
                 .select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)')
                 .eq('account_id', accountId)
+                .eq('is_business', isBusiness)
                 .order('due_date', { ascending: false })
         );
     };
@@ -71,6 +79,7 @@ export const useAccounts = () => {
                 .select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)')
                 .eq('account_id', accountId)
                 .eq('status', 'completed')
+                .eq('is_business', isBusiness)
                 .order('due_date', { ascending: true })
                 .order('created_at', { ascending: true })
         );
@@ -83,6 +92,7 @@ export const useAccounts = () => {
                 .select('*')
                 .eq('account_id', accountId)
                 .eq('status', 'completed')
+                .eq('is_business', isBusiness)
                 .gt('due_date', date)
         );
     };
@@ -95,6 +105,7 @@ export const useAccounts = () => {
                 .select('*')
                 .eq('account_id', accountId)
                 .eq('status', 'completed')
+                .eq('is_business', isBusiness)
                 .lte('due_date', date)
         );
     };

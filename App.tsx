@@ -12,12 +12,15 @@ import Categories from './pages/Categories';
 import CashFlow from './pages/CashFlow';
 import AuthPage from './pages/AuthPage';
 import Investments from './pages/Investments';
+import Sales from './pages/Sales';
+import SalesDashboard from './pages/SalesDashboard';
 import Profile from './pages/Profile';
 import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
 import { ProfileProvider } from './contexts/ProfileContext';
+import { ViewProvider } from './contexts/ViewContext';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,39 +49,51 @@ const App: React.FC = () => {
   }
 
   return (
-    <HashRouter>
-      <ProfileProvider>
-        {!session ? (
-          <Routes>
-            <Route path="/auth" element={<AuthPage />} />
-            <Route path="*" element={<Navigate to="/auth" replace />} />
-          </Routes>
-        ) : (
-          <div className="flex h-screen w-full overflow-hidden bg-background-dark">
-            <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <>
+      {!session ? (
+        <Routes>
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="*" element={<Navigate to="/auth" replace />} />
+        </Routes>
+      ) : (
+        <div className="flex h-screen w-full overflow-hidden bg-background-dark">
+          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-            <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-              <Header onMenuClick={() => setSidebarOpen(true)} />
+          <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+            <Header onMenuClick={() => setSidebarOpen(true)} />
 
-              <main className="flex-1 overflow-y-auto relative">
-                <Routes>
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/transactions" element={<Transactions />} />
-                  <Route path="/cards" element={<Cards />} />
-                  <Route path="/budget" element={<Budget />} />
-                  <Route path="/accounts" element={<Accounts />} />
-                  <Route path="/categories" element={<Categories />} />
-                  <Route path="/cashflow" element={<CashFlow />} />
-                  <Route path="/investments" element={<Investments />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-              </main>
-            </div>
+            <main className="flex-1 overflow-y-auto relative">
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/transactions" element={<Transactions />} />
+                <Route path="/cards" element={<Cards />} />
+                <Route path="/budget" element={<Budget />} />
+                <Route path="/accounts" element={<Accounts />} />
+                <Route path="/categories" element={<Categories />} />
+                <Route path="/cashflow" element={<CashFlow />} />
+                <Route path="/investments" element={<Investments />} />
+                <Route path="/sales" element={<Sales />} />
+                <Route path="/sales-dashboard" element={<SalesDashboard />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </main>
           </div>
-        )}
-      </ProfileProvider>
+        </div>
+      )}
+    </>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <HashRouter>
+      <ViewProvider>
+        <ProfileProvider>
+          <AppContent />
+        </ProfileProvider>
+      </ViewProvider>
     </HashRouter>
   );
 };

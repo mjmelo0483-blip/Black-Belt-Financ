@@ -10,6 +10,7 @@ export interface Transaction {
   amount: number;
   payment_method?: string;
   investment_id?: string;
+  is_business?: boolean;
 }
 
 export interface Account {
@@ -21,6 +22,7 @@ export interface Account {
   institution?: string;
   color?: string;
   lastDigits?: string;
+  is_business?: boolean;
 }
 
 export interface Budget {
@@ -28,6 +30,7 @@ export interface Budget {
   planned: number;
   actual: number;
   icon: string;
+  is_business?: boolean;
 }
 
 export interface CreditCard {
@@ -40,6 +43,7 @@ export interface CreditCard {
   lastDigits: string;
   color: string;
   brand: 'Visa' | 'Mastercard' | 'Elo';
+  is_business?: boolean;
 }
 
 export interface Category {
@@ -51,4 +55,49 @@ export interface Category {
   color?: string;
   parent_id?: string | null;
   created_at?: string;
+  is_business?: boolean;
+}
+
+export interface Product {
+  id: string;
+  user_id: string;
+  code: string;
+  name: string;
+  category?: string;
+  price: number;
+  cost: number;
+  is_active: boolean;
+}
+
+export interface Customer {
+  id: string;
+  user_id: string;
+  name: string;
+  cpf?: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface Sale {
+  id: string;
+  user_id: string;
+  external_code: string;
+  customer_id?: string;
+  date: string;
+  time?: string;
+  payment_method?: string;
+  store_name?: string;
+  device?: string;
+  total_amount: number;
+  items?: SaleItem[];
+}
+
+export interface SaleItem {
+  id: string;
+  sale_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  product?: Product;
 }

@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry } from '../supabase';
+import { useView } from '../contexts/ViewContext';
 
 export const useCashFlow = () => {
+    const { isBusiness } = useView();
     const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'custom'>('daily');
     const getTodayStr = () => {
         const d = new Date();
@@ -53,12 +55,16 @@ export const useCashFlow = () => {
 
     const fetchMetadata = useCallback(async () => {
         try {
-            const { data } = await withRetry(async () => await supabase.from('accounts').select('*'));
+            const { data } = await withRetry(async () =>
+                await supabase.from('accounts')
+                    .select('*')
+                    .eq('is_business', isBusiness)
+            );
             setAccounts(data || []);
         } catch (err) {
             console.error('Error fetching metadata in useCashFlow:', err);
         }
-    }, []);
+    }, [isBusiness]);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -89,6 +95,7 @@ export const useCashFlow = () => {
                         categories (name, icon, color),
                         accounts:accounts!transactions_account_id_fkey(name)
                     `)
+                    .eq('is_business', isBusiness)
                     .gte('due_date', startDate)
                     .lt('due_date', nextDay);
 
@@ -96,7 +103,7 @@ export const useCashFlow = () => {
                     transQuery = transQuery.eq('account_id', accountId);
                 }
 
-                let accountsQuery = supabase.from('accounts').select('balance');
+                let accountsQuery = supabase.from('accounts').select('balance').eq('is_business', isBusiness);
                 if (accountId) {
                     accountsQuery = accountsQuery.eq('id', accountId);
                 }
@@ -118,6 +125,7 @@ export const useCashFlow = () => {
                     let gapQuery = supabase
                         .from('transactions')
                         .select('amount, type')
+                        .eq('is_business', isBusiness)
                         .eq('status', 'open')
                         .gte('due_date', todayStr)
                         .lt('due_date', startDate);
@@ -137,6 +145,7 @@ export const useCashFlow = () => {
                     let gapQuery = supabase
                         .from('transactions')
                         .select('amount, type')
+                        .eq('is_business', isBusiness)
                         .eq('status', 'completed')
                         .gte('due_date', startDate)
                         .lt('due_date', nextToday);
@@ -176,7 +185,7 @@ export const useCashFlow = () => {
         } finally {
             setLoading(false);
         }
-    }, [startDate, endDate, accountId]);
+    }, [startDate, endDate, accountId, isBusiness]);
 
     useEffect(() => {
         fetchMetadata();

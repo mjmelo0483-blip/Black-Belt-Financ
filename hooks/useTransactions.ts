@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
+import { useView } from '../contexts/ViewContext';
 
 export const useTransactions = () => {
+    const { isBusiness } = useView();
     const [accounts, setAccounts] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
     const [cards, setCards] = useState<any[]>([]);
@@ -12,9 +14,9 @@ export const useTransactions = () => {
     const fetchMetadata = useCallback(async () => {
         try {
             const results = await withRetry(async () => await Promise.all([
-                supabase.from('accounts').select('*'),
-                supabase.from('categories').select('*').order('name'),
-                supabase.from('cards').select('*'),
+                supabase.from('accounts').select('*').eq('is_business', isBusiness),
+                supabase.from('categories').select('*').eq('is_business', isBusiness).order('name'),
+                supabase.from('cards').select('*').eq('is_business', isBusiness),
             ]));
 
             const [accRes, catRes, cardRes] = results as any[];
@@ -24,7 +26,7 @@ export const useTransactions = () => {
         } catch (err) {
             console.error('Error fetching metadata:', err);
         }
-    }, []);
+    }, [isBusiness]);
 
     const fetchTransactions = useCallback(async (filters?: {
         incStartDate?: string;
@@ -56,6 +58,7 @@ export const useTransactions = () => {
                     accounts:accounts!transactions_account_id_fkey(name),
                     categories (name, icon, color)
                 `)
+                .eq('is_business', isBusiness)
                 .order('date', { ascending: false });
 
             if (activeFilters?.description) {
@@ -119,7 +122,7 @@ export const useTransactions = () => {
         } finally {
             setLoading(false);
         }
-    }, [currentFilters]);
+    }, [currentFilters, isBusiness]);
 
     useEffect(() => {
         fetchTransactions();
@@ -136,7 +139,8 @@ export const useTransactions = () => {
 
             const transactionsList = (Array.isArray(transaction) ? transaction : [transaction]).map(t => ({
                 ...t,
-                user_id: user.id
+                user_id: user.id,
+                is_business: isBusiness
             }));
 
             const { data, error } = await withRetry(async () =>
@@ -339,7 +343,8 @@ export const useTransactions = () => {
                 type: isApplication ? 'expense' : 'income',
                 payment_method: 'investimento',
                 status: transaction.status,
-                investment_id: transaction.investmentId
+                investment_id: transaction.investmentId,
+                is_business: isBusiness
             };
 
             const { data: txData, error: txError } = await withRetry(async () =>
@@ -390,7 +395,8 @@ export const useTransactions = () => {
                     payment_method: 'transferencia',
                     user_id: user.id,
                     transfer_id: transferId,
-                    transfer_account_id: transfer.toAccountId
+                    transfer_account_id: transfer.toAccountId,
+                    is_business: isBusiness
                 },
                 {
                     description: `${transfer.description}`,
@@ -404,7 +410,8 @@ export const useTransactions = () => {
                     payment_method: 'transferencia',
                     user_id: user.id,
                     transfer_id: transferId,
-                    transfer_account_id: transfer.fromAccountId
+                    transfer_account_id: transfer.fromAccountId,
+                    is_business: isBusiness
                 }
             ];
 
@@ -424,7 +431,7 @@ export const useTransactions = () => {
         } finally {
             setLoading(false);
         }
-    }, [fetchTransactions]);
+    }, [fetchTransactions, isBusiness]);
 
     const updateInvestmentTransaction = useCallback(async (id: string, transaction: any) => {
         setLoading(true);

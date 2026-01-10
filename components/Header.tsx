@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase, withRetry, formatError } from '../supabase';
 import { useProfile } from '../hooks/useProfile';
 import { useNotifications } from '../hooks/useNotifications';
+import { useView } from '../contexts/ViewContext';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -13,8 +14,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const navigate = useNavigate();
   const { profile } = useProfile();
   const { notifications, markAsRead, clearAll } = useNotifications();
+  const { isBusiness, toggleView } = useView();
   const [search, setSearch] = useState('');
-  const [isBusiness, setIsBusiness] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -86,7 +87,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
         </div>
 
         <button
-          onClick={() => setIsBusiness(!isBusiness)}
+          onClick={toggleView}
           className={`hidden sm:flex items-center justify-center h-9 px-3 rounded-lg transition-all border font-bold text-xs ${isBusiness
             ? 'bg-primary/20 border-primary text-primary'
             : 'bg-[#233648] hover:bg-[#2d445a] text-white border-transparent hover:border-[#324d67]'

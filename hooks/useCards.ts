@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
+import { useView } from '../contexts/ViewContext';
 
 export const useCards = () => {
+    const { isBusiness } = useView();
     const [cards, setCards] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -12,6 +14,7 @@ export const useCards = () => {
                 await supabase
                     .from('cards')
                     .select('*')
+                    .eq('is_business', isBusiness)
                     .order('created_at', { ascending: false })
             );
             if (error) {
@@ -24,7 +27,7 @@ export const useCards = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [isBusiness]);
 
     useEffect(() => {
         fetchCards();
@@ -43,7 +46,7 @@ export const useCards = () => {
             const { data, error } = await withRetry(async () =>
                 await supabase
                     .from('cards')
-                    .insert([{ ...card, user_id: user.id }])
+                    .insert([{ ...card, user_id: user.id, is_business: isBusiness }])
                     .select()
             );
 
@@ -57,7 +60,7 @@ export const useCards = () => {
             console.error('Unexpected error in addCard:', err);
             return { error: { message: formatError(err, 'Erro ao adicionar cartão') } };
         }
-    }, [fetchCards]);
+    }, [fetchCards, isBusiness]);
 
     const updateCard = useCallback(async (id: string, updates: any) => {
         try {
@@ -89,6 +92,7 @@ export const useCards = () => {
                 categories (name, icon, color)
             `)
             .eq('card_id', cardId)
+            .eq('is_business', isBusiness)
             .eq('payment_method', 'credito');
 
         // Se mês e ano foram fornecidos, filtrar por due_date no período
@@ -105,7 +109,7 @@ export const useCards = () => {
         const { data, error } = await withRetry(async () => await query.order('due_date', { ascending: false }));
 
         return { data, error };
-    }, []);
+    }, [isBusiness]);
 
     const deleteCard = useCallback(async (id: string) => {
         const { error } = await withRetry(async () =>
@@ -125,12 +129,13 @@ export const useCards = () => {
                 .from('transactions')
                 .select('amount')
                 .eq('card_id', cardId)
+                .eq('is_business', isBusiness)
                 .eq('payment_method', 'credito')
                 .eq('status', 'open')
         );
 
         return { data, error };
-    }, []);
+    }, [isBusiness]);
 
     return { cards, loading, addCard, updateCard, deleteCard, refresh: fetchCards, getCardTransactions, getCardOpenTransactions };
 };

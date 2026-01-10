@@ -1,25 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
+import { useView } from '../contexts/ViewContext';
 
 export const useCategories = () => {
+    const { isBusiness } = useView();
     const [categories, setCategories] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const fetchCategories = async () => {
+    const fetchCategories = useCallback(async () => {
         setLoading(true);
         const { data } = await withRetry(async () =>
             await supabase
                 .from('categories')
                 .select('*')
+                .eq('is_business', isBusiness)
                 .order('name')
         );
         setCategories(data || []);
         setLoading(false);
-    };
+    }, [isBusiness]);
 
     useEffect(() => {
         fetchCategories();
-    }, []);
+    }, [fetchCategories]);
 
     const addCategory = async (category: any) => {
         try {
@@ -34,7 +37,7 @@ export const useCategories = () => {
             const { data, error } = await withRetry(async () =>
                 await supabase
                     .from('categories')
-                    .insert([{ ...category, user_id: user.id }])
+                    .insert([{ ...category, user_id: user.id, is_business: isBusiness }])
                     .select()
             );
 

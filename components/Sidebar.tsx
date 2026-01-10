@@ -3,6 +3,7 @@ import React from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { useProfile } from '../hooks/useProfile';
+import { useView } from '../contexts/ViewContext';
 import logo from '../assets/logo.png';
 
 interface SidebarProps {
@@ -14,10 +15,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile } = useProfile();
+  const { isBusiness } = useView();
   const [isSupportExpanded, setIsSupportExpanded] = React.useState(false);
 
   const navItems = [
     { label: 'Dashboard', icon: 'dashboard', path: '/dashboard' },
+    ...(isBusiness ? [
+      { label: 'Vendas', icon: 'shopping_cart', path: '/sales' },
+      { label: 'Análise de Vendas', icon: 'analytics', path: '/sales-dashboard' },
+    ] : []),
     { label: 'Fluxo de Caixa', icon: 'payments', path: '/cashflow' },
     { label: 'Lançamentos', icon: 'swap_horiz', path: '/transactions' },
     { label: 'Orçamento', icon: 'pie_chart', path: '/budget' },

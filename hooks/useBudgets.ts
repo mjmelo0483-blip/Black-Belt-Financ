@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
+import { useView } from '../contexts/ViewContext';
 
 export interface BudgetLimit {
     id: string;
@@ -11,6 +12,7 @@ export interface BudgetLimit {
         color: string;
         icon: string;
     };
+    is_business?: boolean;
 }
 
 export interface CategorySpending {
@@ -27,6 +29,7 @@ export interface ParentCategorySpending extends CategorySpending {
 }
 
 export const useBudgets = () => {
+    const { isBusiness } = useView();
     const [budgets, setBudgets] = useState<BudgetLimit[]>([]);
     const [spending, setSpending] = useState<ParentCategorySpending[]>([]);
     const [loading, setLoading] = useState(true);
@@ -54,6 +57,7 @@ export const useBudgets = () => {
                     .from('categories')
                     .select('*')
                     .eq('type', 'expense')
+                    .eq('is_business', isBusiness)
             );
 
             // 2. Fetch Budget Limits
@@ -62,7 +66,8 @@ export const useBudgets = () => {
                 .select(`
                     *,
                     categories (name, color, icon, parent_id)
-                `);
+                `)
+                .eq('is_business', isBusiness);
 
             if (isAllYear) {
                 budgetLimitsQuery = budgetLimitsQuery
@@ -82,6 +87,7 @@ export const useBudgets = () => {
                     .from('transactions')
                     .select('amount, category_id')
                     .eq('type', 'expense')
+                    .eq('is_business', isBusiness)
                     .is('transfer_id', null)
                     .is('investment_id', null)
                     .gte(activeDateColumn, startDate)
@@ -170,7 +176,7 @@ export const useBudgets = () => {
         } finally {
             setLoading(false);
         }
-    }, [viewMode, selectedMonth, selectedYear]);
+    }, [viewMode, selectedMonth, selectedYear, isBusiness]);
 
     const setBudgetLimit = useCallback(async (categoryId: string, amount: number, customMonth?: string) => {
         try {
@@ -194,9 +200,10 @@ export const useBudgets = () => {
                         user_id: user.id,
                         category_id: categoryId,
                         amount: amount,
-                        month: startOfMonth
+                        month: startOfMonth,
+                        is_business: isBusiness
                     }, {
-                        onConflict: 'user_id, category_id, month'
+                        onConflict: 'user_id, category_id, month, is_business'
                     })
                     .select()
             );
@@ -206,7 +213,7 @@ export const useBudgets = () => {
         } catch (err: any) {
             return { error: err };
         }
-    }, [fetchData, selectedMonth, selectedYear]);
+    }, [fetchData, selectedMonth, selectedYear, isBusiness]);
 
     useEffect(() => {
         fetchData();
