@@ -275,7 +275,7 @@ const SalesDashboard: React.FC = () => {
                                             tickFormatter={(val) => val.split('-')[2]}
                                             stroke="#64748b" fontSize={10} axisLine={false} tickLine={false}
                                         />
-                                        <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(val) => `R$ ${val}`} />
+                                        <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
                                             cursor={{ fill: '#334155', opacity: 0.4 }}
@@ -284,6 +284,7 @@ const SalesDashboard: React.FC = () => {
                                                 const [y, m, d] = val.split('-');
                                                 return `${d}/${m}/${y}`;
                                             }}
+                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Faturamento']}
                                         />
                                         <Bar dataKey="revenue" fill="#fbbf24" radius={[4, 4, 0, 0]} />
                                     </BarChart>
@@ -308,6 +309,7 @@ const SalesDashboard: React.FC = () => {
                                         />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Total Vendido']}
                                         />
                                         <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
                                     </BarChart>
