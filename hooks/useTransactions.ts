@@ -626,38 +626,86 @@ export const useTransactions = () => {
 
     function formatDate(dateValue: any) {
         if (!dateValue) return null;
+
+        // 1. Handle Date objects
         if (dateValue instanceof Date) {
-            const y = dateValue.getUTCFullYear();
-            const m = String(dateValue.getUTCMonth() + 1).padStart(2, '0');
-            const d = String(dateValue.getUTCDate()).padStart(2, '0');
+            // Check if the date is valid
+            if (isNaN(dateValue.getTime())) return null;
+            const y = dateValue.getFullYear();
+            const m = String(dateValue.getMonth() + 1).padStart(2, '0');
+            const d = String(dateValue.getDate()).padStart(2, '0');
             return `${y}-${m}-${d}`;
         }
+
+        // 2. Handle Excel serial numbers (numbers)
         if (typeof dateValue === 'number') {
             const date = new Date((dateValue - 25569) * 86400 * 1000);
+            if (isNaN(date.getTime())) return null;
             const y = date.getUTCFullYear();
             const m = String(date.getUTCMonth() + 1).padStart(2, '0');
             const d = String(date.getUTCDate()).padStart(2, '0');
             return `${y}-${m}-${d}`;
         }
+
         const str = String(dateValue).trim();
         if (!str || str === '-') return null;
-        if (str.includes('/')) {
-            const parts = str.split('/');
+
+        // 3. Handle strings with separators / or -
+        const separator = str.includes('/') ? '/' : (str.includes('-') ? '-' : null);
+        if (separator) {
+            const parts = str.split(separator).map(p => p.trim());
             if (parts.length === 3) {
-                const [day, month, year] = parts;
-                const fullYear = year.length === 2 ? `20${year}` : year;
-                return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                let p1 = parts[0];
+                let p2 = parts[1];
+                let p3 = parts[2];
+
+                // Case: YYYY-XX-XX
+                if (p1.length === 4) {
+                    const year = p1;
+                    let m = parseInt(p2);
+                    let d = parseInt(p3);
+                    // If month > 12, it's very likely DD and MM are swapped (YYYY-DD-MM)
+                    if (m > 12 && d <= 12) {
+                        [m, d] = [d, m];
+                    }
+                    return `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                }
+
+                // Case: XX-XX-YYYY (DD-MM-YYYY or MM-DD-YYYY)
+                if (p3.length === 4) {
+                    const year = p3;
+                    let v1 = parseInt(p1);
+                    let v2 = parseInt(p2);
+                    let day, month;
+
+                    if (v2 > 12 && v1 <= 12) { // Clearly MM-DD-YYYY
+                        month = v1;
+                        day = v2;
+                    } else { // Assume DD-MM-YYYY
+                        day = v1;
+                        month = v2;
+                    }
+                    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                }
+
+                // Case: XX-XX-YY
+                if (p3.length === 2 && p1.length <= 2) {
+                    const year = `20${p3}`;
+                    let v1 = parseInt(p1);
+                    let v2 = parseInt(p2);
+                    let day, month;
+                    if (v2 > 12 && v1 <= 12) { // MM-DD-YY
+                        month = v1;
+                        day = v2;
+                    } else { // DD-MM-YY
+                        day = v1;
+                        month = v2;
+                    }
+                    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                }
             }
         }
-        if (str.includes('-')) {
-            const parts = str.split('-');
-            if (parts.length === 3) {
-                if (parts[0].length === 4) return str;
-                const [day, month, year] = parts;
-                const fullYear = year.length === 2 ? `20${year}` : year;
-                return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-            }
-        }
+
         return str;
     }
 

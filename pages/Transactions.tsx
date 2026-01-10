@@ -224,8 +224,8 @@ const Transactions: React.FC = () => {
         // Re-parse from that row
         const data = XLSX.utils.sheet_to_json(ws, {
           range: headerRowIndex,
-          raw: false,
-          dateNF: 'yyyy-mm-dd'
+          raw: true,
+          defval: ''
         });
 
         const result = await importTransactionsFromExcel(data);
