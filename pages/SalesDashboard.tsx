@@ -10,7 +10,6 @@ const SalesDashboard: React.FC = () => {
     const { fetchSales, loading } = useSales();
     const [salesData, setSalesData] = useState<any[]>([]);
 
-    // Use manual parts for default today to avoid timezone issues
     const now = new Date();
     const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
     const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
@@ -23,9 +22,8 @@ const SalesDashboard: React.FC = () => {
             const { data } = await fetchSales();
             if (data && data.length > 0) {
                 setSalesData(data);
-                // Sort by date string (YYYY-MM-DD) descending
                 const sorted = [...data].sort((a, b) => b.date.localeCompare(a.date));
-                const latest = sorted[0].date; // YYYY-MM-DD
+                const latest = sorted[0].date;
                 if (latest) {
                     const parts = latest.split('-');
                     setSelectedMonth(parseInt(parts[1]) - 1);
@@ -38,7 +36,6 @@ const SalesDashboard: React.FC = () => {
         load();
     }, [fetchSales]);
 
-    // Available Months and Years from data - Parsing strings manually
     const periods = useMemo(() => {
         const p = new Set<string>();
         salesData.forEach(s => {
@@ -75,10 +72,12 @@ const SalesDashboard: React.FC = () => {
         return ['Todas', ...Array.from(s).sort()];
     }, [salesData]);
 
-    // Filtering Data - Absolute comparison by string parts
-    const filteredData = useMemo(() => {
-        return salesData.filter(sale => {
-            if (!sale.date) return false;
+    // Pre-filter items based on period, store and category
+    // This is the core fix: we extract ONLY the relevant items for metrics
+    const filteredItems = useMemo(() => {
+        const items: any[] = [];
+        salesData.forEach(sale => {
+            if (!sale.date) return;
             const parts = sale.date.split('-');
             const y = parseInt(parts[0]);
             const m = parseInt(parts[1]) - 1;
@@ -87,58 +86,75 @@ const SalesDashboard: React.FC = () => {
             const matchesYear = y === selectedYear;
             const matchesStore = selectedStore === 'Todas' || sale.store_name === selectedStore;
 
-            if (!matchesMonth || !matchesYear || !matchesStore) return false;
-
-            if (selectedCategory === 'Todas') return true;
-            return sale.sale_items?.some((item: any) => item.products?.category === selectedCategory);
+            if (matchesMonth && matchesYear && matchesStore) {
+                sale.sale_items?.forEach((item: any) => {
+                    const matchesCategory = selectedCategory === 'Todas' || item.products?.category === selectedCategory;
+                    if (matchesCategory) {
+                        items.push({
+                            ...item,
+                            date: sale.date,
+                            store_name: sale.store_name
+                        });
+                    }
+                });
+            }
         });
+        return items;
     }, [salesData, selectedMonth, selectedYear, selectedCategory, selectedStore]);
 
-    // KPI Calculations
-    const totalRevenue = filteredData.reduce((acc, sale) => acc + Number(sale.total_amount || 0), 0);
-    const totalUnits = filteredData.reduce((acc, sale) => {
-        const itemsQty = sale.sale_items?.reduce((iq: number, item: any) => iq + Number(item.quantity || 0), 0);
-        return acc + (itemsQty || 0);
-    }, 0);
-    const totalSalesCount = filteredData.length;
-    const averageTicket = totalSalesCount > 0 ? totalRevenue / totalSalesCount : 0;
+    // KPI Calculations based on strictly filtered items
+    const totalRevenue = filteredItems.reduce((acc, item) => acc + Number(item.total_price || 0), 0);
+    const totalUnits = filteredItems.reduce((acc, item) => acc + Number(item.quantity || 0), 0);
+
+    // For average ticket, we still need to know how many actual transactions (sales) had those items
+    const relevantSalesCount = useMemo(() => {
+        const saleIds = new Set();
+        salesData.forEach(sale => {
+            if (!sale.date) return;
+            const parts = sale.date.split('-');
+            const m = parseInt(parts[1]) - 1;
+            const y = parseInt(parts[0]);
+            if (m === selectedMonth && y === selectedYear && (selectedStore === 'Todas' || sale.store_name === selectedStore)) {
+                const hasMatchingItem = sale.sale_items?.some((item: any) => selectedCategory === 'Todas' || item.products?.category === selectedCategory);
+                if (hasMatchingItem) saleIds.add(sale.id);
+            }
+        });
+        return saleIds.size;
+    }, [salesData, selectedMonth, selectedYear, selectedStore, selectedCategory]);
+
+    const averageTicket = relevantSalesCount > 0 ? totalRevenue / relevantSalesCount : 0;
 
     // Top Product by Revenue
     const productSales = useMemo(() => {
         const map: any = {};
-        filteredData.forEach(sale => {
-            sale.sale_items?.forEach((item: any) => {
-                const prod = item.products;
-                if (!prod) return;
-                if (!map[prod.code]) {
-                    map[prod.code] = { name: prod.name, total: 0, count: 0 };
-                }
-                map[prod.code].total += Number(item.total_price || 0);
-                map[prod.code].count += Number(item.quantity || 0);
-            });
+        filteredItems.forEach(item => {
+            const prod = item.products;
+            if (!prod) return;
+            if (!map[prod.code]) {
+                map[prod.code] = { name: prod.name, total: 0, count: 0 };
+            }
+            map[prod.code].total += Number(item.total_price || 0);
+            map[prod.code].count += Number(item.quantity || 0);
         });
         return Object.values(map).sort((a: any, b: any) => b.total - a.total);
-    }, [filteredData]);
+    }, [filteredItems]);
 
     const bestProduct = productSales[0] || { name: '-', total: 0 };
 
     // Charts Data
     const dailyData = useMemo(() => {
         const map: any = {};
-        filteredData.forEach(sale => {
-            const dateStr = sale.date; // YYYY-MM-DD
+        filteredItems.forEach(item => {
+            const dateStr = item.date;
             if (!map[dateStr]) map[dateStr] = { date: dateStr, revenue: 0, units: 0 };
-            map[dateStr].revenue += Number(sale.total_amount || 0);
-            const itemsQty = sale.sale_items?.reduce((iq: number, item: any) => iq + Number(item.quantity || 0), 0);
-            map[dateStr].units += (itemsQty || 0);
+            map[dateStr].revenue += Number(item.total_price || 0);
+            map[dateStr].units += Number(item.quantity || 0);
         });
         return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
-    }, [filteredData]);
+    }, [filteredItems]);
 
-    // Balance Point (Target) - Mocking R$ 12,942.71 from image
     const targetRevenue = 12942.71;
     const balancePercentage = Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100);
-
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
     return (
@@ -147,7 +163,6 @@ const SalesDashboard: React.FC = () => {
                 <h1 className="text-2xl font-black uppercase tracking-tighter text-white">Dashboard de Vendas</h1>
 
                 <div className="flex flex-wrap gap-2">
-                    {/* Store Filter */}
                     <div className="flex items-center gap-2 bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-1.5">
                         <span className="material-symbols-outlined text-xs text-slate-400">store</span>
                         <select
@@ -159,7 +174,6 @@ const SalesDashboard: React.FC = () => {
                         </select>
                     </div>
 
-                    {/* Period Buttons */}
                     <div className="flex gap-1">
                         {periods.slice(-4).reverse().map(period => {
                             const [m, y] = period.split('-').map(Number);
@@ -178,10 +192,7 @@ const SalesDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* Main Grid */}
             <div className="grid grid-cols-12 gap-6">
-
-                {/* Left Sidebar KPIs */}
                 <div className="col-span-12 lg:col-span-3 space-y-4">
                     <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] flex flex-col items-center justify-center text-center shadow-2xl">
                         <div className="size-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4">
@@ -213,13 +224,12 @@ const SalesDashboard: React.FC = () => {
                         <p className="text-xl font-black text-indigo-400">R$ {bestProduct.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                     </div>
 
-                    {/* Category Filter */}
                     <div className="bg-[#1e293b] p-6 rounded-xl border border-[#334155]">
                         <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
                             <span className="material-symbols-outlined text-xs">filter_alt</span> Categoria
                         </p>
                         <div className="grid grid-cols-2 gap-2">
-                            {categories.slice(0, 10).map(cat => (
+                            {categories.map(cat => (
                                 <button
                                     key={cat}
                                     onClick={() => setSelectedCategory(cat)}
@@ -232,12 +242,8 @@ const SalesDashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Right Content Area */}
                 <div className="col-span-12 lg:col-span-9 space-y-6">
-
-                    {/* Top Row: Balance and Daily Revenue */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Balance Point */}
                         <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl flex flex-col items-center">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Ponto de Equilíbrio</h3>
                             <div className="relative size-40">
@@ -246,7 +252,7 @@ const SalesDashboard: React.FC = () => {
                                         <Pie
                                             data={[
                                                 { value: totalRevenue },
-                                                { value: Math.max(0, targetRevenue * 1.2 - totalRevenue) } // Extended range for visual feedback
+                                                { value: Math.max(0, targetRevenue * 1.2 - totalRevenue) }
                                             ]}
                                             cx="50%" cy="50%" innerRadius={50} outerRadius={70} fill="#8884d8" paddingAngle={5} dataKey="value" stroke="none"
                                             startAngle={90} endAngle={450}
@@ -263,7 +269,6 @@ const SalesDashboard: React.FC = () => {
                             <p className="mt-4 text-amber-500 font-black text-lg">R$ {targetRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
 
-                        {/* Daily Revenue Bar Chart */}
                         <div className="md:col-span-2 bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Total Vendido por Dia (R$)</h3>
                             <div className="h-44 w-full">
@@ -293,10 +298,7 @@ const SalesDashboard: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Bottom Row: Top Products and Units Area */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                        {/* Top 10 Products Horizontal Bar */}
                         <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Top 10 Produtos Mais Vendidos</h3>
                             <div className="h-[300px] w-full">
@@ -317,7 +319,6 @@ const SalesDashboard: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Quantity per day Area Chart */}
                         <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Quantidade Vendida por Dia</h3>
                             <div className="h-[300px] w-full">
@@ -350,7 +351,6 @@ const SalesDashboard: React.FC = () => {
                             </div>
                         </div>
                     </div>
-
                 </div>
             </div>
         </div>
