@@ -195,9 +195,38 @@ const Transactions: React.FC = () => {
       reader.onload = async (evt) => {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
-        const wsname = wb.SheetNames[0];
+
+        // Try to find the 'Movimento' sheet, otherwise use the first one
+        let wsname = wb.SheetNames.find(n => n.toLowerCase().includes('movimento'));
+        if (!wsname) wsname = wb.SheetNames[0];
+
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'yyyy-mm-dd' });
+
+        // Get data as array of arrays to find the header row
+        const jsonData: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        // Find the row that contains our headers
+        let headerRowIndex = -1;
+        for (let i = 0; i < Math.min(jsonData.length, 20); i++) {
+          const row = jsonData[i];
+          if (row.some(cell => String(cell).toLowerCase().includes('data de lançamento')) ||
+            row.some(cell => String(cell).toLowerCase().includes('nome'))) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+
+        if (headerRowIndex === -1) {
+          alert('Não foi possível encontrar o cabeçalho "Data de Lançamento" ou "Nome" na planilha.');
+          return;
+        }
+
+        // Re-parse from that row
+        const data = XLSX.utils.sheet_to_json(ws, {
+          range: headerRowIndex,
+          raw: false,
+          dateNF: 'yyyy-mm-dd'
+        });
 
         const result = await importTransactionsFromExcel(data);
         if (result.error) {

@@ -497,13 +497,25 @@ export const useTransactions = () => {
             const user = session?.user;
             if (!user) throw new Error('Usuário não autenticado');
 
+            const getVal = (row: any, possibleKeys: string[]) => {
+                const keys = Object.keys(row);
+                const foundKey = keys.find(k => {
+                    const normalizedK = k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+                    return possibleKeys.some(pk => {
+                        const normalizedPK = pk.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+                        return normalizedK === normalizedPK;
+                    });
+                });
+                return foundKey ? row[foundKey] : undefined;
+            };
+
             // 1. Collect all unique account and category names
             const uniqueAccountNames = new Set<string>();
             const uniqueCategoryNames = new Set<string>();
 
             rows.forEach(row => {
-                const accName = row['Banco'];
-                const catName = row['Categoria'];
+                const accName = getVal(row, ['Banco', 'Conta', 'Instituicao']);
+                const catName = getVal(row, ['Categoria', 'Grupo']);
                 if (accName) uniqueAccountNames.add(String(accName).trim());
                 if (catName) uniqueCategoryNames.add(String(catName).trim());
             });
@@ -519,62 +531,80 @@ export const useTransactions = () => {
                 .select('id, name')
                 .eq('user_id', user.id);
 
-            const accountsMap = new Map(existingAccounts?.map(a => [a.name.toLowerCase(), a.id]));
-            const categoriesMap = new Map(existingCategories?.map(c => [c.name.toLowerCase(), c.id]));
+            const accountsMap = new Map(existingAccounts?.map(a => [a.name.toLowerCase().trim(), a.id]));
+            const categoriesMap = new Map(existingCategories?.map(c => [c.name.toLowerCase().trim(), c.id]));
 
             // 3. Create missing accounts/categories if needed
             for (const accName of uniqueAccountNames) {
-                if (!accountsMap.has(accName.toLowerCase())) {
+                if (!accountsMap.has(accName.toLowerCase().trim())) {
                     const { data: newAcc } = await supabase
                         .from('accounts')
                         .insert({ user_id: user.id, name: accName, type: 'checking', balance: 0, is_business: isBusiness })
                         .select()
                         .single();
-                    if (newAcc) accountsMap.set(accName.toLowerCase(), newAcc.id);
+                    if (newAcc) accountsMap.set(accName.toLowerCase().trim(), newAcc.id);
                 }
             }
 
             for (const catName of uniqueCategoryNames) {
-                if (!categoriesMap.has(catName.toLowerCase())) {
+                if (!categoriesMap.has(catName.toLowerCase().trim())) {
                     const { data: newCat } = await supabase
                         .from('categories')
                         .insert({ user_id: user.id, name: catName, type: 'expense', is_business: isBusiness })
                         .select()
                         .single();
-                    if (newCat) categoriesMap.set(catName.toLowerCase(), newCat.id);
+                    if (newCat) categoriesMap.set(catName.toLowerCase().trim(), newCat.id);
                 }
             }
 
             // 4. Prepare transactions
             const transactionsToInsert = rows.map(row => {
-                const typeRaw = String(row['Tipo'] || '').toLowerCase();
+                const accNameRaw = getVal(row, ['Banco', 'Conta', 'Instituicao']);
+                const accName = accNameRaw ? String(accNameRaw).trim() : '';
+
+                const catNameRaw = getVal(row, ['Categoria', 'Grupo']);
+                const catName = catNameRaw ? String(catNameRaw).trim() : '';
+
+                const dateLaunch = getVal(row, ['DatadeLancamento', 'Data', 'Vencimento', 'DataLancamento']);
+                const datePayment = getVal(row, ['DataPagamento', 'Pagamento', 'DatadePagamento']);
+                const valRaw = getVal(row, ['Valor', 'Montante', 'Preco', 'Amount']);
+                const typeRaw = String(getVal(row, ['Tipo', 'Type']) || '').toLowerCase();
+                const statusRaw = String(getVal(row, ['Situacao', 'Status', 'Situação']) || '').toLowerCase();
+                const nameRaw = getVal(row, ['Nome', 'Descricao', 'Produto', 'Name', 'Description']) || 'Sem descrição';
+                const obsRaw = getVal(row, ['Observacao', 'Notas', 'Notes', 'Obs', 'Observação']) || '';
+                const paymentMethod = getVal(row, ['FormaPagamento/Recebimento', 'FormadePagamento', 'Metodo', 'PaymentMethod', 'FormaPagamento']) || 'Dinheiro';
+
                 // "Entradas" -> income, "Saídas" -> expense
-                const type = typeRaw.includes('entrada') ? 'income' : 'expense';
+                const type = (typeRaw.includes('entrada') || typeRaw.includes('receita') || typeRaw.includes('income')) ? 'income' : 'expense';
 
-                // Parse value (handle R$, negative signs, thousands separators)
-                let amountRaw = String(row['Valor'] || '0').replace('R$', '').replace(/\s/g, '');
-                // Handle pt-BR format: -1.234,56 -> -1234.56 or 1.234,56 -> 1234.56
-                amountRaw = amountRaw.replace(/\./g, '').replace(',', '.').trim();
-                const amount = Math.abs(parseFloat(amountRaw) || 0);
+                // Robust amount parsing
+                let amount = 0;
+                if (typeof valRaw === 'number') {
+                    amount = Math.abs(valRaw);
+                } else if (valRaw) {
+                    let amountStr = String(valRaw).replace('R$', '').replace(/\s/g, '');
+                    // Handle pt-BR format: -1.234,56 -> -1234.56
+                    amountStr = amountStr.replace(/\./g, '').replace(',', '.').trim();
+                    amount = Math.abs(parseFloat(amountStr) || 0);
+                }
 
-                const statusRaw = String(row['Situação'] || '').toLowerCase();
-                const status = statusRaw.includes('realizado') ? 'completed' : 'open';
+                const status = (statusRaw.includes('realizado') || statusRaw.includes('pago') || statusRaw.includes('completed')) ? 'completed' : 'open';
+                const finalDescription = obsRaw ? `${nameRaw} (${obsRaw})` : String(nameRaw);
 
-                const description = row['Nome'] || 'Sem descrição';
-                const obs = row['Observação'] || '';
-                const finalDescription = obs ? `${description} (${obs})` : description;
+                const launchDate = formatDate(dateLaunch);
+                const paymentDate = formatDate(datePayment);
 
                 return {
                     user_id: user.id,
                     description: finalDescription,
                     amount,
                     type,
-                    date: formatDate(row['Data de Lançamento']) || new Date().toISOString().split('T')[0],
-                    due_date: formatDate(row['Data Pagamento']) || formatDate(row['Data de Lançamento']),
+                    date: launchDate || new Date().toISOString().split('T')[0],
+                    due_date: paymentDate || launchDate,
                     status,
-                    account_id: accountsMap.get(String(row['Banco'] || '').trim().toLowerCase()),
-                    category_id: categoriesMap.get(String(row['Categoria'] || '').trim().toLowerCase()),
-                    payment_method: row['Forma Pagamento/Recebimento'],
+                    account_id: accountsMap.get(accName.toLowerCase().trim()),
+                    category_id: categoriesMap.get(catName.toLowerCase().trim()),
+                    payment_method: paymentMethod,
                     is_business: isBusiness
                 };
             }).filter(t => t.amount > 0);
