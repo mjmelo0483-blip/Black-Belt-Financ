@@ -179,11 +179,34 @@ export const useSales = () => {
 };
 
 // Helper to convert DD/MM/YYYY to YYYY-MM-DD
-function formatDate(dateStr: string) {
+function formatDate(dateStr: any) {
     if (!dateStr) return null;
-    if (dateStr.includes('/')) {
-        const [day, month, year] = dateStr.split('/');
-        return `${year}-${month}-${day}`;
+
+    // Handle Excel serial date numbers (if XLSX didn't convert them)
+    if (typeof dateStr === 'number') {
+        const date = new Date((dateStr - 25569) * 86400 * 1000);
+        return date.toISOString().split('T')[0];
     }
-    return dateStr;
+
+    const str = String(dateStr).trim();
+
+    // Handle DD/MM/YYYY
+    if (str.includes('/')) {
+        const [day, month, year] = str.split('/');
+        // If year is 2 digits, assume 20xx
+        const fullYear = year.length === 2 ? `20${year}` : year;
+        return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+
+    // Handle YYYY-MM-DD
+    if (str.includes('-')) {
+        const parts = str.split('-');
+        if (parts[0].length === 4) return str; // Already YYYY-MM-DD
+        // Handle DD-MM-YYYY or other hyphen variations
+        const [day, month, year] = parts;
+        const fullYear = year.length === 2 ? `20${year}` : year;
+        return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+
+    return str;
 }

@@ -12,13 +12,16 @@ const SalesDashboard: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
     const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
     const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
+    const [selectedStore, setSelectedStore] = useState<string>('Todas');
 
     useEffect(() => {
         const load = async () => {
             const { data } = await fetchSales();
             if (data && data.length > 0) {
                 setSalesData(data);
-                const latest = new Date(data[0].date);
+                // Sort by date to get the latest month correctly
+                const sorted = [...data].sort((a, b) => b.date.localeCompare(a.date));
+                const latest = new Date(sorted[0].date);
                 setSelectedMonth(latest.getMonth());
                 setSelectedYear(latest.getFullYear());
             } else if (data) {
@@ -33,9 +36,15 @@ const SalesDashboard: React.FC = () => {
         const p = new Set<string>();
         salesData.forEach(s => {
             const d = new Date(s.date);
-            p.add(`${d.getMonth()}-${d.getFullYear()}`);
+            if (!isNaN(d.getTime())) {
+                p.add(`${d.getMonth()}-${d.getFullYear()}`);
+            }
         });
-        return Array.from(p).sort();
+        return Array.from(p).sort((a, b) => {
+            const [am, ay] = a.split('-').map(Number);
+            const [bm, by] = b.split('-').map(Number);
+            return ay !== by ? ay - by : am - bm;
+        });
     }, [salesData]);
 
     const categories = useMemo(() => {
@@ -45,7 +54,15 @@ const SalesDashboard: React.FC = () => {
                 if (item.products?.category) c.add(item.products.category);
             });
         });
-        return ['Todas', ...Array.from(c)];
+        return ['Todas', ...Array.from(c).sort()];
+    }, [salesData]);
+
+    const stores = useMemo(() => {
+        const s = new Set<string>();
+        salesData.forEach(sale => {
+            if (sale.store_name) s.add(sale.store_name);
+        });
+        return ['Todas', ...Array.from(s).sort()];
     }, [salesData]);
 
     // Filtering Data
@@ -54,13 +71,14 @@ const SalesDashboard: React.FC = () => {
             const d = new Date(sale.date);
             const matchesMonth = d.getMonth() === selectedMonth;
             const matchesYear = d.getFullYear() === selectedYear;
+            const matchesStore = selectedStore === 'Todas' || sale.store_name === selectedStore;
 
-            if (selectedCategory === 'Todas') return matchesMonth && matchesYear;
+            if (!matchesMonth || !matchesYear || !matchesStore) return false;
+            if (selectedCategory === 'Todas') return true;
 
-            const hasCategory = sale.sale_items?.some((item: any) => item.products?.category === selectedCategory);
-            return matchesMonth && matchesYear && hasCategory;
+            return sale.sale_items?.some((item: any) => item.products?.category === selectedCategory);
         });
-    }, [salesData, selectedMonth, selectedYear, selectedCategory]);
+    }, [salesData, selectedMonth, selectedYear, selectedCategory, selectedStore]);
 
     // KPI Calculations
     const totalRevenue = filteredData.reduce((acc, sale) => acc + Number(sale.total_amount || 0), 0);
@@ -106,28 +124,43 @@ const SalesDashboard: React.FC = () => {
     // Balance Point (Target) - Mocking R$ 12,942.71 from image
     const targetRevenue = 12942.71;
     const balancePercentage = Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100);
-    const radialData = [{ name: 'Faturamento', value: balancePercentage, fill: '#fbbf24' }];
 
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
     return (
         <div className="p-6 space-y-6 bg-[#0f172a] min-h-screen text-white">
-            <div className="flex justify-between items-center mb-2">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
                 <h1 className="text-2xl font-black uppercase tracking-tighter text-white">Dashboard de Vendas</h1>
-                <div className="flex gap-2">
-                    {periods.slice(-4).reverse().map(period => {
-                        const [m, y] = period.split('-').map(Number);
-                        const active = selectedMonth === m && selectedYear === y;
-                        return (
-                            <button
-                                key={period}
-                                onClick={() => { setSelectedMonth(m); setSelectedYear(y); }}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border ${active ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-[#1e293b] border-[#334155] text-slate-400 hover:text-white'}`}
-                            >
-                                {monthNames[m]}/{y}
-                            </button>
-                        );
-                    })}
+
+                <div className="flex flex-wrap gap-2">
+                    {/* Store Filter */}
+                    <div className="flex items-center gap-2 bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-1.5">
+                        <span className="material-symbols-outlined text-xs text-slate-400">store</span>
+                        <select
+                            value={selectedStore}
+                            onChange={(e) => setSelectedStore(e.target.value)}
+                            className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
+                        >
+                            {stores.map(store => <option key={store} value={store} className="bg-[#1e293b]">{store}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Period Buttons */}
+                    <div className="flex gap-1">
+                        {periods.slice(-4).reverse().map(period => {
+                            const [m, y] = period.split('-').map(Number);
+                            const active = selectedMonth === m && selectedYear === y;
+                            return (
+                                <button
+                                    key={period}
+                                    onClick={() => { setSelectedMonth(m); setSelectedYear(y); }}
+                                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border ${active ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-[#1e293b] border-[#334155] text-slate-400 hover:text-white'}`}
+                                >
+                                    {monthNames[m]}/{y}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
 
@@ -172,7 +205,7 @@ const SalesDashboard: React.FC = () => {
                             <span className="material-symbols-outlined text-xs">filter_alt</span> Categoria
                         </p>
                         <div className="grid grid-cols-2 gap-2">
-                            {categories.slice(0, 8).map(cat => (
+                            {categories.slice(0, 10).map(cat => (
                                 <button
                                     key={cat}
                                     onClick={() => setSelectedCategory(cat)}
@@ -197,7 +230,10 @@ const SalesDashboard: React.FC = () => {
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
-                                            data={[{ value: totalRevenue }, { value: Math.max(0, targetRevenue - totalRevenue) }]}
+                                            data={[
+                                                { value: totalRevenue },
+                                                { value: Math.max(0, targetRevenue * 1.2 - totalRevenue) } // Extended range for visual feedback
+                                            ]}
                                             cx="50%" cy="50%" innerRadius={50} outerRadius={70} fill="#8884d8" paddingAngle={5} dataKey="value" stroke="none"
                                             startAngle={90} endAngle={450}
                                         >
@@ -220,11 +256,16 @@ const SalesDashboard: React.FC = () => {
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={dailyData}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                                        <XAxis dataKey="date" hide />
-                                        <YAxis hide />
+                                        <XAxis
+                                            dataKey="date"
+                                            tickFormatter={(val) => val.split('-')[2]}
+                                            stroke="#64748b" fontSize={10} axisLine={false} tickLine={false}
+                                        />
+                                        <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(val) => `R$ ${val}`} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
                                             cursor={{ fill: '#334155', opacity: 0.4 }}
+                                            labelFormatter={(val) => new Date(val).toLocaleDateString('pt-BR')}
                                         />
                                         <Bar dataKey="revenue" fill="#fbbf24" radius={[4, 4, 0, 0]} />
                                     </BarChart>
@@ -245,7 +286,7 @@ const SalesDashboard: React.FC = () => {
                                         <XAxis type="number" hide />
                                         <YAxis
                                             type="category" dataKey="name" stroke="#94a3b8" fontSize={10}
-                                            width={100} tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false}
+                                            width={140} tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false}
                                         />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
@@ -269,10 +310,15 @@ const SalesDashboard: React.FC = () => {
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                                        <XAxis dataKey="date" hide />
-                                        <YAxis hide />
+                                        <XAxis
+                                            dataKey="date"
+                                            tickFormatter={(val) => val.split('-')[2]}
+                                            stroke="#64748b" fontSize={10} axisLine={false} tickLine={false}
+                                        />
+                                        <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                            labelFormatter={(val) => new Date(val).toLocaleDateString('pt-BR')}
                                         />
                                         <Area type="monotone" dataKey="units" stroke="#94a3b8" fillOpacity={1} fill="url(#colorUnits)" strokeWidth={2} />
                                     </AreaChart>
