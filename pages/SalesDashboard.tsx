@@ -9,8 +9,12 @@ import {
 const SalesDashboard: React.FC = () => {
     const { fetchSales, loading } = useSales();
     const [salesData, setSalesData] = useState<any[]>([]);
-    const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
-    const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+    // Use manual parts for default today to avoid timezone issues
+    const now = new Date();
+    const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
+    const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+
     const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
     const [selectedStore, setSelectedStore] = useState<string>('Todas');
 
@@ -19,11 +23,14 @@ const SalesDashboard: React.FC = () => {
             const { data } = await fetchSales();
             if (data && data.length > 0) {
                 setSalesData(data);
-                // Sort by date to get the latest month correctly
+                // Sort by date string (YYYY-MM-DD) descending
                 const sorted = [...data].sort((a, b) => b.date.localeCompare(a.date));
-                const latest = new Date(sorted[0].date);
-                setSelectedMonth(latest.getMonth());
-                setSelectedYear(latest.getFullYear());
+                const latest = sorted[0].date; // YYYY-MM-DD
+                if (latest) {
+                    const parts = latest.split('-');
+                    setSelectedMonth(parseInt(parts[1]) - 1);
+                    setSelectedYear(parseInt(parts[0]));
+                }
             } else if (data) {
                 setSalesData(data);
             }
@@ -31,13 +38,16 @@ const SalesDashboard: React.FC = () => {
         load();
     }, [fetchSales]);
 
-    // Available Months and Years from data
+    // Available Months and Years from data - Parsing strings manually
     const periods = useMemo(() => {
         const p = new Set<string>();
         salesData.forEach(s => {
-            const d = new Date(s.date);
-            if (!isNaN(d.getTime())) {
-                p.add(`${d.getMonth()}-${d.getFullYear()}`);
+            if (!s.date) return;
+            const parts = s.date.split('-');
+            if (parts.length === 3) {
+                const year = parts[0];
+                const month = parseInt(parts[1]) - 1;
+                p.add(`${month}-${year}`);
             }
         });
         return Array.from(p).sort((a, b) => {
@@ -65,17 +75,21 @@ const SalesDashboard: React.FC = () => {
         return ['Todas', ...Array.from(s).sort()];
     }, [salesData]);
 
-    // Filtering Data
+    // Filtering Data - Absolute comparison by string parts
     const filteredData = useMemo(() => {
         return salesData.filter(sale => {
-            const d = new Date(sale.date);
-            const matchesMonth = d.getMonth() === selectedMonth;
-            const matchesYear = d.getFullYear() === selectedYear;
+            if (!sale.date) return false;
+            const parts = sale.date.split('-');
+            const y = parseInt(parts[0]);
+            const m = parseInt(parts[1]) - 1;
+
+            const matchesMonth = m === selectedMonth;
+            const matchesYear = y === selectedYear;
             const matchesStore = selectedStore === 'Todas' || sale.store_name === selectedStore;
 
             if (!matchesMonth || !matchesYear || !matchesStore) return false;
-            if (selectedCategory === 'Todas') return true;
 
+            if (selectedCategory === 'Todas') return true;
             return sale.sale_items?.some((item: any) => item.products?.category === selectedCategory);
         });
     }, [salesData, selectedMonth, selectedYear, selectedCategory, selectedStore]);
@@ -188,7 +202,7 @@ const SalesDashboard: React.FC = () => {
                     <div className="bg-[#1e293b] px-6 py-4 rounded-xl border border-[#334155] flex justify-between items-center">
                         <div className="text-left">
                             <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Ticket Médio</p>
-                            <p className="text-xl font-black">R$ {averageTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            <p className="text-xl font-black">R$ {averageTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </div>
                         <span className="material-symbols-outlined text-amber-400">confirmation_number</span>
                     </div>
@@ -265,7 +279,11 @@ const SalesDashboard: React.FC = () => {
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
                                             cursor={{ fill: '#334155', opacity: 0.4 }}
-                                            labelFormatter={(val) => new Date(val).toLocaleDateString('pt-BR')}
+                                            labelFormatter={(val) => {
+                                                if (!val) return '';
+                                                const [y, m, d] = val.split('-');
+                                                return `${d}/${m}/${y}`;
+                                            }}
                                         />
                                         <Bar dataKey="revenue" fill="#fbbf24" radius={[4, 4, 0, 0]} />
                                     </BarChart>
@@ -318,7 +336,11 @@ const SalesDashboard: React.FC = () => {
                                         <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
-                                            labelFormatter={(val) => new Date(val).toLocaleDateString('pt-BR')}
+                                            labelFormatter={(val) => {
+                                                if (!val) return '';
+                                                const [y, m, d] = val.split('-');
+                                                return `${d}/${m}/${y}`;
+                                            }}
                                         />
                                         <Area type="monotone" dataKey="units" stroke="#94a3b8" fillOpacity={1} fill="url(#colorUnits)" strokeWidth={2} />
                                     </AreaChart>

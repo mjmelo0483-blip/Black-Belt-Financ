@@ -200,10 +200,11 @@ function formatDate(dateValue: any) {
 
     // If it's already a JS Date (from XLSX)
     if (dateValue instanceof Date) {
-        // Use local date parts to avoid timezone shift
-        const y = dateValue.getFullYear();
-        const m = String(dateValue.getMonth() + 1).padStart(2, '0');
-        const d = String(dateValue.getDate()).padStart(2, '0');
+        // XLSX dates are usually midnight UTC. 
+        // Using getUTC... ensures we get the intended date regardless of local timezone.
+        const y = dateValue.getUTCFullYear();
+        const m = String(dateValue.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(dateValue.getUTCDate()).padStart(2, '0');
         return `${y}-${m}-${d}`;
     }
 
