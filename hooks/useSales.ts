@@ -19,7 +19,7 @@ export const useSales = () => {
                     customers (name, cpf),
                     sale_items (
                         *,
-                        products (name, code, cost)
+                        products (name, code, cost, category)
                     )
                 `)
                 .order('date', { ascending: false });
@@ -54,7 +54,8 @@ export const useSales = () => {
                 const customerName = row['Cliente'];
                 const customerCpf = row['CPF do Cliente'];
                 const productCode = String(row['Código do Produto']);
-                const productName = row['Nome do Produto'];
+                const productName = row['Nome do Produto'] || row['Produto'] || row['Descrição'] || row['Descricao'];
+                const category = row['Categoria'] || row['Grupo'] || row['Família'] || row['Familia'] || row['Categoria do Produto'] || 'Geral';
 
                 if (customerName && customerName !== '-' && !uniqueCustomerKeys.has(customerCpf || customerName)) {
                     customersToUpsert.push({
@@ -70,7 +71,7 @@ export const useSales = () => {
                         user_id: user.id,
                         code: productCode,
                         name: productName || 'Produto sem nome',
-                        category: row['Categoria'] || row['Grupo'] || row['Família'] || 'Geral'
+                        category: category
                     });
                     uniqueProductCodes.add(productCode);
                 }
