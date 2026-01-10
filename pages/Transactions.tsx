@@ -207,10 +207,16 @@ const Transactions: React.FC = () => {
 
         // Find the row that contains our headers
         let headerRowIndex = -1;
+        const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+
         for (let i = 0; i < Math.min(jsonData.length, 20); i++) {
           const row = jsonData[i];
-          if (row.some(cell => String(cell).toLowerCase().includes('data de lançamento')) ||
-            row.some(cell => String(cell).toLowerCase().includes('nome'))) {
+          if (row.some(cell => {
+            const normalizedCell = normalize(String(cell));
+            return normalizedCell.includes('datalancamento') ||
+              normalizedCell.includes('nome') ||
+              normalizedCell.includes('descricao');
+          })) {
             headerRowIndex = i;
             break;
           }

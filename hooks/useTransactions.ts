@@ -514,35 +514,42 @@ export const useTransactions = () => {
             const uniqueCategoryNames = new Set<string>();
 
             rows.forEach(row => {
-                const accName = getVal(row, ['Banco', 'Conta', 'Instituicao']);
-                const catName = getVal(row, ['Categoria', 'Grupo']);
-                if (accName) uniqueAccountNames.add(String(accName).trim());
-                if (catName) uniqueCategoryNames.add(String(catName).trim());
+                const accNameRaw = getVal(row, ['Banco', 'Conta', 'Instituicao']);
+                const accName = accNameRaw ? String(accNameRaw).trim() : 'Geral';
+
+                const catNameRaw = getVal(row, ['Categoria', 'Grupo']);
+                const catName = catNameRaw ? String(catNameRaw).trim() : 'Outros';
+
+                uniqueAccountNames.add(accName);
+                uniqueCategoryNames.add(catName);
             });
 
             // 2. Lookup existing accounts and categories
             const { data: existingAccounts } = await supabase
                 .from('accounts')
                 .select('id, name')
-                .eq('user_id', user.id);
+                .eq('user_id', user.id)
+                .eq('is_business', isBusiness);
 
             const { data: existingCategories } = await supabase
                 .from('categories')
                 .select('id, name')
-                .eq('user_id', user.id);
+                .eq('user_id', user.id)
+                .eq('is_business', isBusiness);
 
-            const accountsMap = new Map(existingAccounts?.map(a => [a.name.toLowerCase().trim(), a.id]));
-            const categoriesMap = new Map(existingCategories?.map(c => [c.name.toLowerCase().trim(), c.id]));
+            const accountsMap = new Map((existingAccounts || []).map(a => [a.name.toLowerCase().trim(), a.id]));
+            const categoriesMap = new Map((existingCategories || []).map(c => [c.name.toLowerCase().trim(), c.id]));
 
             // 3. Create missing accounts/categories if needed
             for (const accName of uniqueAccountNames) {
-                if (!accountsMap.has(accName.toLowerCase().trim())) {
+                const normalizedAccName = accName.toLowerCase().trim();
+                if (!accountsMap.has(normalizedAccName)) {
                     const { data: newAcc } = await supabase
                         .from('accounts')
                         .insert({ user_id: user.id, name: accName, type: 'checking', balance: 0, is_business: isBusiness })
                         .select()
                         .single();
-                    if (newAcc) accountsMap.set(accName.toLowerCase().trim(), newAcc.id);
+                    if (newAcc) accountsMap.set(normalizedAccName, newAcc.id);
                 }
             }
 
@@ -560,10 +567,10 @@ export const useTransactions = () => {
             // 4. Prepare transactions
             const transactionsToInsert = rows.map(row => {
                 const accNameRaw = getVal(row, ['Banco', 'Conta', 'Instituicao']);
-                const accName = accNameRaw ? String(accNameRaw).trim() : '';
+                const accName = accNameRaw ? String(accNameRaw).trim() : 'Geral';
 
                 const catNameRaw = getVal(row, ['Categoria', 'Grupo']);
-                const catName = catNameRaw ? String(catNameRaw).trim() : '';
+                const catName = catNameRaw ? String(catNameRaw).trim() : 'Outros';
 
                 const dateLaunch = getVal(row, ['DatadeLancamento', 'Data', 'Vencimento', 'DataLancamento']);
                 const datePayment = getVal(row, ['DataPagamento', 'Pagamento', 'DatadePagamento']);
@@ -574,18 +581,33 @@ export const useTransactions = () => {
                 const obsRaw = getVal(row, ['Observacao', 'Notas', 'Notes', 'Obs', 'Observação']) || '';
                 const paymentMethod = getVal(row, ['FormaPagamento/Recebimento', 'FormadePagamento', 'Metodo', 'PaymentMethod', 'FormaPagamento']) || 'Dinheiro';
 
-                // "Entradas" -> income, "Saídas" -> expense
-                const type = (typeRaw.includes('entrada') || typeRaw.includes('receita') || typeRaw.includes('income')) ? 'income' : 'expense';
-
                 // Robust amount parsing
                 let amount = 0;
+                let isNegative = false;
                 if (typeof valRaw === 'number') {
+                    isNegative = valRaw < 0;
                     amount = Math.abs(valRaw);
                 } else if (valRaw) {
                     let amountStr = String(valRaw).replace('R$', '').replace(/\s/g, '');
+                    isNegative = amountStr.includes('-');
+
                     // Handle pt-BR format: -1.234,56 -> -1234.56
+                    // First remove dots (separators), then replace comma with dot (decimal)
                     amountStr = amountStr.replace(/\./g, '').replace(',', '.').trim();
                     amount = Math.abs(parseFloat(amountStr) || 0);
+                }
+
+                // Determining Type
+                let type: 'income' | 'expense' = 'expense';
+                const normalizedType = typeRaw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+                if (normalizedType.includes('entrada') || normalizedType.includes('receita') || normalizedType.includes('income')) {
+                    type = 'income';
+                } else if (normalizedType.includes('saida') || normalizedType.includes('despesa') || normalizedType.includes('expense')) {
+                    type = 'expense';
+                } else if (valRaw !== undefined) {
+                    // Fallback to sign detection if type column is non-standard or missing
+                    type = isNegative ? 'expense' : 'income';
                 }
 
                 const status = (statusRaw.includes('realizado') || statusRaw.includes('pago') || statusRaw.includes('completed')) ? 'completed' : 'open';
@@ -607,7 +629,7 @@ export const useTransactions = () => {
                     payment_method: paymentMethod,
                     is_business: isBusiness
                 };
-            }).filter(t => t.amount > 0);
+            }).filter(t => t.amount > 0 && t.account_id);
 
             if (transactionsToInsert.length === 0) return { success: true, count: 0 };
 

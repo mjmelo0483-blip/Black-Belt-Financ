@@ -51,27 +51,37 @@ export const useSales = () => {
             const uniqueProductCodes = new Set();
 
             rows.forEach(row => {
-                const customerName = row['Cliente'];
-                const customerCpf = row['CPF do Cliente'];
-                const productCode = String(row['Código do Produto']);
-                const productName = row['Nome do Produto'] || row['Produto'] || row['Descrição'] || row['Descricao'];
-                const category = row['Categoria'] || row['Grupo'] || row['Família'] || row['Familia'] || row['Categoria do Produto'] || 'Geral';
+                const getVal = (r: any, possibleKeys: string[]) => {
+                    const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+                    const keys = Object.keys(r);
+                    const foundKey = keys.find(k => {
+                        const normalizedK = normalize(k);
+                        return possibleKeys.some(pk => normalize(pk) === normalizedK);
+                    });
+                    return foundKey ? r[foundKey] : undefined;
+                };
+
+                const customerName = getVal(row, ['Cliente', 'Nome do Cliente']);
+                const customerCpf = getVal(row, ['CPF do Cliente', 'CPF']);
+                const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref']));
+                const productName = getVal(row, ['Nome do Produto', 'Produto', 'Descricao', 'Description']);
+                const category = getVal(row, ['Categoria', 'Grupo', 'Familia', 'Categoria do Produto']) || 'Geral';
 
                 if (customerName && customerName !== '-' && !uniqueCustomerKeys.has(customerCpf || customerName)) {
                     customersToUpsert.push({
                         user_id: user.id,
-                        name: customerName,
-                        cpf: customerCpf || null
+                        name: String(customerName).trim(),
+                        cpf: customerCpf ? String(customerCpf).trim() : null
                     });
                     uniqueCustomerKeys.add(customerCpf || customerName);
                 }
 
-                if (productCode && productCode !== 'undefined' && !uniqueProductCodes.has(productCode)) {
+                if (productCode && productCode !== 'undefined' && productCode !== '' && !uniqueProductCodes.has(productCode)) {
                     productsToUpsert.push({
                         user_id: user.id,
                         code: productCode,
-                        name: productName || 'Produto sem nome',
-                        category: category
+                        name: productName ? String(productName).trim() : 'Produto sem nome',
+                        category: category ? String(category).trim() : 'Geral'
                     });
                     uniqueProductCodes.add(productCode);
                 }
@@ -103,37 +113,55 @@ export const useSales = () => {
 
             // 2. Process Sales
             const salesGroups = new Map();
+            const getVal = (row: any, possibleKeys: string[]) => {
+                const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+                const keys = Object.keys(row);
+                const foundKey = keys.find(k => {
+                    const normalizedK = normalize(k);
+                    return possibleKeys.some(pk => normalize(pk) === normalizedK);
+                });
+                return foundKey ? row[foundKey] : undefined;
+            };
+
+            const parseNumber = (val: any) => {
+                if (typeof val === 'number') return Math.abs(val);
+                if (!val) return 0;
+                let str = String(val).replace('R$', '').replace(/\s/g, '');
+                str = str.replace(/\./g, '').replace(',', '.').trim();
+                return Math.abs(parseFloat(str) || 0);
+            };
+
             rows.forEach(row => {
-                const code = String(row['Código']);
-                if (!code || code === 'undefined') return;
+                const code = String(getVal(row, ['Codigo', 'Nº Pedido', 'Venda', 'ID']) || '');
+                if (!code || code === 'undefined' || code === '') return;
 
                 if (!salesGroups.has(code)) {
                     salesGroups.set(code, {
                         user_id: user.id,
                         external_code: code,
-                        customer_id: customersMap.get(row['CPF do Cliente'] || row['Cliente']) || null,
-                        date: formatDate(row['Data da Compra']),
-                        time: row['Hora da Compra'],
-                        payment_method: row['Forma de Pagamento'],
-                        store_name: row['Loja'],
-                        device: row['Dispositivo'],
+                        customer_id: customersMap.get(getVal(row, ['CPF do Cliente', 'CPF'])) || customersMap.get(getVal(row, ['Cliente', 'Nome do Cliente'])) || null,
+                        date: formatDate(getVal(row, ['Data da Compra', 'Data', 'Data Venda'])),
+                        time: getVal(row, ['Hora da Compra', 'Hora']),
+                        payment_method: getVal(row, ['Forma de Pagamento', 'Pagamento', 'Metodo']),
+                        store_name: getVal(row, ['Loja', 'Unidade']),
+                        device: getVal(row, ['Dispositivo', 'Origem']),
                         total_amount: 0,
                         items: []
                     });
                 }
 
-                const qty = Number(row['Quantidade'] || row['Qtde'] || row['Qtd'] || 1);
-                const unitPrice = Number(row['Valor Unitário'] || row['Vlr Unitário'] || row['Vlr. Unitário'] || row['Preço'] || 0);
-                const totalPrice = Number(row['Valor Total'] || row['Vlr. Total'] || row['Vlr Total'] || row['Total'] || (qty * unitPrice));
+                const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd']) || 1);
+                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco']));
+                const totalPrice = parseNumber(getVal(row, ['Valor Total', 'Vlr Total', 'Total']) || (qty * unitPrice));
 
                 // Log values for debugging if they are 0
-                if (totalPrice === 0 && (row['Valor Total'] || row['Total'])) {
+                if (totalPrice === 0) {
                     console.log('Zero price detected for row:', row);
                 }
 
                 const sale = salesGroups.get(code);
                 sale.items.push({
-                    product_id: productsMap.get(String(row['Código do Produto'])),
+                    product_id: productsMap.get(String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref']))),
                     quantity: qty,
                     unit_price: unitPrice,
                     total_price: totalPrice
