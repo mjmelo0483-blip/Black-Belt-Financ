@@ -175,7 +175,23 @@ export const useSales = () => {
         }
     }, [isBusiness]);
 
-    return { loading, fetchSales, importSalesFromExcel };
+    const clearSales = useCallback(async () => {
+        setLoading(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const user = session?.user;
+            if (!user) throw new Error('Usuário não autenticado');
+
+            await supabase.from('sales').delete().eq('user_id', user.id);
+            return { success: true };
+        } catch (err: any) {
+            return { error: formatError(err) };
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    return { loading, fetchSales, importSalesFromExcel, clearSales };
 };
 
 // Helper to convert DD/MM/YYYY to YYYY-MM-DD
@@ -184,13 +200,21 @@ function formatDate(dateValue: any) {
 
     // If it's already a JS Date (from XLSX)
     if (dateValue instanceof Date) {
-        return dateValue.toISOString().split('T')[0];
+        // Use local date parts to avoid timezone shift
+        const y = dateValue.getFullYear();
+        const m = String(dateValue.getMonth() + 1).padStart(2, '0');
+        const d = String(dateValue.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
     }
 
     // Handle Excel serial date numbers
     if (typeof dateValue === 'number') {
         const date = new Date((dateValue - 25569) * 86400 * 1000);
-        return date.toISOString().split('T')[0];
+        // Excel numbers are usually UTC-based representations of local dates
+        const y = date.getUTCFullYear();
+        const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(date.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
     }
 
     const str = String(dateValue).trim();

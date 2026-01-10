@@ -4,7 +4,7 @@ import { useSales } from '../hooks/useSales';
 import * as XLSX from 'xlsx';
 
 const Sales: React.FC = () => {
-    const { importSalesFromExcel, loading } = useSales();
+    const { importSalesFromExcel, clearSales, loading } = useSales();
     const [importStatus, setImportStatus] = useState<string>('');
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,6 +36,18 @@ const Sales: React.FC = () => {
         reader.readAsBinaryString(file);
     };
 
+    const handleReset = async () => {
+        if (window.confirm('Tem certeza que deseja apagar TODAS as vendas importadas? Esta ação não pode ser desfeita.')) {
+            setImportStatus('Limpando dados...');
+            const result = await clearSales();
+            if (result.success) {
+                setImportStatus('Todos os dados de vendas foram apagados.');
+            } else {
+                setImportStatus('Erro ao limpar dados: ' + (result.error?.message || 'Erro desconhecido'));
+            }
+        }
+    };
+
     return (
         <div className="p-6">
             <h1 className="text-2xl font-bold mb-6 text-white">Importação de Vendas</h1>
@@ -56,10 +68,21 @@ const Sales: React.FC = () => {
                 </div>
 
                 {importStatus && (
-                    <div className={`p-4 rounded-lg text-sm font-medium ${importStatus.includes('Erro') ? 'bg-red-500/10 text-red-400' : 'bg-primary/10 text-primary'}`}>
+                    <div className={`p-4 rounded-lg text-sm font-medium mb-4 ${importStatus.includes('Erro') ? 'bg-red-500/10 text-red-400' : 'bg-primary/10 text-primary'}`}>
                         {importStatus}
                     </div>
                 )}
+
+                <div className="flex justify-end pt-4 border-t border-[#233648]">
+                    <button
+                        onClick={handleReset}
+                        disabled={loading}
+                        className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors flex items-center gap-1"
+                    >
+                        <span className="material-symbols-outlined text-sm">delete</span>
+                        Limpar histórico de vendas
+                    </button>
+                </div>
             </div>
         </div>
     );
