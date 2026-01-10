@@ -17,6 +17,14 @@ const SalesDashboard: React.FC = () => {
 
     // KPI Calculations
     const totalRevenue = salesData.reduce((acc, sale) => acc + Number(sale.total_amount || 0), 0);
+    const totalProfit = salesData.reduce((acc, sale) => {
+        const saleProfit = sale.sale_items?.reduce((itemAcc: number, item: any) => {
+            const cost = Number(item.products?.cost || 0);
+            const price = Number(item.unit_price || 0);
+            return itemAcc + ((price - cost) * item.quantity);
+        }, 0);
+        return acc + (saleProfit || 0);
+    }, 0);
     const totalSales = salesData.length;
     const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
 
@@ -54,6 +62,17 @@ const SalesDashboard: React.FC = () => {
         return new Date(d).toLocaleDateString('pt-BR', { weekday: 'short' });
     }
 
+    // Aggregate Payment Methods
+    const paymentMethods = salesData.reduce((acc: any, sale: any) => {
+        const method = sale.payment_method || 'Outros';
+        acc[method] = (acc[method] || 0) + 1;
+        return acc;
+    }, {});
+
+    const paymentChartData = Object.entries(paymentMethods).map(([name, value]) => ({ name, value }));
+
+    const COLORS = ['#818cf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa'];
+
     return (
         <div className="p-6 space-y-6">
             <h1 className="text-2xl font-bold text-white uppercase tracking-tight">Análise de Vendas</h1>
@@ -63,7 +82,7 @@ const SalesDashboard: React.FC = () => {
                 <KPICard title="Faturamento Total" value={totalRevenue} icon="payments" color="text-indigo-400" />
                 <KPICard title="Volume de Vendas" value={totalSales} icon="shopping_bag" color="text-emerald-400" isCurrency={false} />
                 <KPICard title="Ticket Médio" value={averageTicket} icon="confirmation_number" color="text-amber-400" />
-                <KPICard title="Lucro Bruto" value={totalRevenue * 0.45} icon="trending_up" color="text-rose-400" />
+                <KPICard title="Lucro Bruto" value={totalProfit} icon="trending_up" color="text-rose-400" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -123,6 +142,50 @@ const SalesDashboard: React.FC = () => {
                             <div className="py-20 text-center text-[#526a81]">Nenhum produto vendido</div>
                         )}
                     </div>
+                </div>
+
+                {/* Payment Methods */}
+                <div className="bg-[#1c2a38] p-6 rounded-2xl border border-[#233648] shadow-xl shadow-black/20">
+                    <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-amber-400">payments</span>
+                        Formas de Pagamento
+                    </h3>
+                    <div className="h-[300px] flex items-center">
+                        <div className="w-1/2 h-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart layout="vertical" data={paymentChartData}>
+                                    <XAxis type="number" hide />
+                                    <YAxis type="category" dataKey="name" stroke="#526a81" fontSize={12} tickLine={false} axisLine={false} width={100} />
+                                    <Tooltip
+                                        cursor={{ fill: 'transparent' }}
+                                        contentStyle={{ backgroundColor: '#111a22', border: '1px solid #233648', borderRadius: '8px' }}
+                                    />
+                                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                        {paymentChartData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div className="w-1/2 space-y-3 pl-6">
+                            {paymentChartData.map((entry, index) => (
+                                <div key={entry.name} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="size-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                                        <span className="text-xs text-[#92adc9]">{entry.name}</span>
+                                    </div>
+                                    <span className="text-xs font-bold text-white">{entry.value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Placeholder for Store Performance or Device breakdown */}
+                <div className="bg-[#1c2a38] p-6 rounded-2xl border border-[#233648] shadow-xl shadow-black/20 flex flex-col justify-center items-center text-[#526a81]">
+                    <span className="material-symbols-outlined text-4xl mb-2">insights</span>
+                    <p className="text-center">Mais análises estarão disponíveis conforme novos dados forem importados.</p>
                 </div>
             </div>
         </div>

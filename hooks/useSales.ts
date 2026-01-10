@@ -19,7 +19,7 @@ export const useSales = () => {
                     customers (name, cpf),
                     sale_items (
                         *,
-                        products (name, code)
+                        products (name, code, cost)
                     )
                 `)
                 .order('date', { ascending: false });
@@ -37,6 +37,7 @@ export const useSales = () => {
     }, [isBusiness]);
 
     const importSalesFromExcel = useCallback(async (rows: any[]) => {
+        if (!isBusiness) return { error: { message: 'Importação permitida apenas no modo Business' } };
         setLoading(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -44,102 +45,117 @@ export const useSales = () => {
             if (!user) throw new Error('Usuário não autenticado');
 
             // 1. Process Customers and Products in bulk to avoid duplicates
-            const customersMap = new Map();
-            const productsMap = new Map();
+            const customersToUpsert: any[] = [];
+            const productsToUpsert: any[] = [];
+            const uniqueCustomerKeys = new Set();
+            const uniqueProductCodes = new Set();
 
-            // Extract unique customers and products from rows
             rows.forEach(row => {
-                if (row['Cliente'] && row['Cliente'] !== '-') {
-                    customersMap.set(row['CPF do Cliente'] || row['Cliente'], {
-                        name: row['Cliente'],
-                        cpf: row['CPF do Cliente']
+                const customerName = row['Cliente'];
+                const customerCpf = row['CPF do Cliente'];
+                const productCode = String(row['Código do Produto']);
+                const productName = row['Nome do Produto'];
+
+                if (customerName && customerName !== '-' && !uniqueCustomerKeys.has(customerCpf || customerName)) {
+                    customersToUpsert.push({
+                        user_id: user.id,
+                        name: customerName,
+                        cpf: customerCpf || null
                     });
+                    uniqueCustomerKeys.add(customerCpf || customerName);
                 }
-                if (row['Código do Produto']) {
-                    productsMap.set(row['Código do Produto'], {
-                        code: row['Código do Produto'],
-                        name: row['Nome do Produto']
+
+                if (productCode && productCode !== 'undefined' && !uniqueProductCodes.has(productCode)) {
+                    productsToUpsert.push({
+                        user_id: user.id,
+                        code: productCode,
+                        name: productName || 'Produto sem nome'
                     });
+                    uniqueProductCodes.add(productCode);
                 }
             });
 
-            // Upsert Customers
-            for (const [key, cust] of customersMap.entries()) {
-                const { data } = await supabase
+            // Bulk Upsert Customers
+            const customersMap = new Map();
+            if (customersToUpsert.length > 0) {
+                const { data: custData, error: custError } = await supabase
                     .from('customers')
-                    .upsert({
-                        user_id: user.id,
-                        name: cust.name,
-                        cpf: cust.cpf
-                    }, { onConflict: 'user_id, cpf' })
-                    .select()
-                    .single();
-                if (data) customersMap.set(key, data.id);
+                    .upsert(customersToUpsert, { onConflict: 'user_id, cpf' })
+                    .select();
+
+                if (custError) throw custError;
+                custData?.forEach(c => customersMap.set(c.cpf || c.name, c.id));
             }
 
-            // Upsert Products
-            for (const [code, prod] of productsMap.entries()) {
-                const { data } = await supabase
+            // Bulk Upsert Products
+            const productsMap = new Map();
+            if (productsToUpsert.length > 0) {
+                const { data: prodData, error: prodError } = await supabase
                     .from('products')
-                    .upsert({
-                        user_id: user.id,
-                        code: prod.code,
-                        name: prod.name
-                    }, { onConflict: 'user_id, code' })
-                    .select()
-                    .single();
-                if (data) productsMap.set(code, data.id);
+                    .upsert(productsToUpsert, { onConflict: 'user_id, code' })
+                    .select();
+
+                if (prodError) throw prodError;
+                prodData?.forEach(p => productsMap.set(p.code, p.id));
             }
 
             // 2. Process Sales
-            // Group rows by Sale Code
             const salesGroups = new Map();
             rows.forEach(row => {
-                const code = row['Código'];
+                const code = String(row['Código']);
+                if (!code || code === 'undefined') return;
+
                 if (!salesGroups.has(code)) {
                     salesGroups.set(code, {
-                        external_code: String(code),
+                        user_id: user.id,
+                        external_code: code,
                         customer_id: customersMap.get(row['CPF do Cliente'] || row['Cliente']) || null,
                         date: formatDate(row['Data da Compra']),
                         time: row['Hora da Compra'],
                         payment_method: row['Forma de Pagamento'],
                         store_name: row['Loja'],
                         device: row['Dispositivo'],
+                        total_amount: 0,
                         items: []
                     });
                 }
-                salesGroups.get(code).items.push({
-                    product_id: productsMap.get(row['Código do Produto']),
-                    quantity: 1, // Assume 1 if not provided
-                    unit_price: 0, // Need to find where price is
-                    total_price: 0
+
+                const qty = Number(row['Quantidade'] || 1);
+                const unitPrice = Number(row['Vlr Unitário'] || row['Preço'] || 0);
+                const totalPrice = Number(row['Vlr. Total'] || row['Total'] || (qty * unitPrice));
+
+                const sale = salesGroups.get(code);
+                sale.items.push({
+                    product_id: productsMap.get(String(row['Código do Produto'])),
+                    quantity: qty,
+                    unit_price: unitPrice,
+                    total_price: totalPrice
                 });
+                sale.total_amount += totalPrice;
             });
 
             // Insert Sales and Items
             for (const sale of salesGroups.values()) {
-                const { data: saleData, error: saleError } = await supabase
+                const { items, ...saleData } = sale;
+                const { data: insertedSale, error: saleError } = await supabase
                     .from('sales')
-                    .upsert({
-                        user_id: user.id,
-                        external_code: sale.external_code,
-                        customer_id: sale.customer_id,
-                        date: sale.date,
-                        time: sale.time,
-                        payment_method: sale.payment_method,
-                        store_name: sale.store_name,
-                        device: sale.device,
-                        total_amount: 0 // Will update after items
-                    }, { onConflict: 'user_id, external_code' })
+                    .upsert(saleData, { onConflict: 'user_id, external_code' })
                     .select()
                     .single();
 
-                if (saleData) {
-                    // Update items with sale_id
-                    const itemsToInsert = sale.items.map((item: any) => ({
+                if (saleError) {
+                    console.error('Error inserting sale:', saleError);
+                    continue;
+                }
+
+                if (insertedSale) {
+                    const itemsToInsert = items.map((item: any) => ({
                         ...item,
-                        sale_id: saleData.id
+                        sale_id: insertedSale.id
                     }));
+
+                    // Delete existing items for this sale before re-inserting (to avoid duplicates on re-import)
+                    await supabase.from('sale_items').delete().eq('sale_id', insertedSale.id);
                     await supabase.from('sale_items').insert(itemsToInsert);
                 }
             }
