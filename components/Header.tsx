@@ -25,8 +25,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
       try {
         const { error } = await withRetry(
           async () => await supabase.from('accounts').select('id', { count: 'exact', head: true }).limit(1),
-          2, // Fewer retries for a quick check
-          500 // Shorter delay
+          2,
+          500
         );
         setIsOnline(!error);
       } catch (err) {
@@ -35,7 +35,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
     };
 
     checkConnection();
-    const interval = setInterval(checkConnection, 30000); // Check every 30s
+    const interval = setInterval(checkConnection, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -52,6 +52,19 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/auth');
+  };
+
+  const handleViewToggle = () => {
+    const nextMode = !isBusiness;
+    toggleView();
+
+    // If moving to personal mode and on a business page, redirect to dashboard
+    if (!nextMode) {
+      const currentPath = window.location.hash || window.location.pathname;
+      if (currentPath.includes('/sales') || currentPath.includes('/sales-dashboard')) {
+        navigate('/dashboard');
+      }
+    }
   };
 
   return (
@@ -87,7 +100,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
         </div>
 
         <button
-          onClick={toggleView}
+          onClick={handleViewToggle}
           className={`hidden sm:flex items-center justify-center h-9 px-3 rounded-lg transition-all border font-bold text-xs ${isBusiness
             ? 'bg-primary/20 border-primary text-primary'
             : 'bg-[#233648] hover:bg-[#2d445a] text-white border-transparent hover:border-[#324d67]'
