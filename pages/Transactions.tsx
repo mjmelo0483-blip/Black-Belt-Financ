@@ -4,6 +4,7 @@ import { useTransactions } from '../hooks/useTransactions';
 import { useInvestments } from '../hooks/useInvestments';
 import TransactionModal from '../components/TransactionModal';
 import BulkEditModal from '../components/BulkEditModal';
+import * as XLSX from 'xlsx';
 
 const Transactions: React.FC = () => {
   const {
@@ -20,6 +21,7 @@ const Transactions: React.FC = () => {
     updateInvestmentTransaction,
     deleteTransaction,
     deleteTransactions,
+    importTransactionsFromExcel,
   } = useTransactions();
 
   const { investments, refresh: refreshInvestments } = useInvestments();
@@ -180,6 +182,39 @@ const Transactions: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const handleImportClick = () => {
+    document.getElementById('import-excel-input')?.click();
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'yyyy-mm-dd' });
+
+        const result = await importTransactionsFromExcel(data);
+        if (result.error) {
+          alert('Erro ao importar: ' + result.error);
+        } else {
+          alert(`Sucesso! ${result.count} lançamentos importados.`);
+          fetchTransactions({});
+        }
+      };
+      reader.readAsBinaryString(file);
+    } catch (err) {
+      alert('Erro ao ler o arquivo: ' + err);
+    } finally {
+      e.target.value = ''; // Reset input
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-6 lg:p-10 flex flex-col gap-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -195,6 +230,20 @@ const Transactions: React.FC = () => {
             <span className="material-symbols-outlined text-[20px]">file_download</span>
             Exportar Excel
           </button>
+          <button
+            onClick={handleImportClick}
+            className="px-6 h-12 rounded-xl border border-[#324d67] text-[#92adc9] font-bold text-sm hover:text-white hover:border-white transition-all flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[20px]">file_upload</span>
+            Importar Planilha
+          </button>
+          <input
+            id="import-excel-input"
+            type="file"
+            accept=".xlsx, .xls"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
           <button
             onClick={handleOpenModal}
             className="px-6 h-12 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/20 hover:bg-blue-600 transition-all flex items-center justify-center gap-2"

@@ -490,6 +490,148 @@ export const useTransactions = () => {
         }
     }, [fetchTransactions]);
 
+    const importTransactionsFromExcel = useCallback(async (rows: any[]) => {
+        setLoading(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const user = session?.user;
+            if (!user) throw new Error('Usuário não autenticado');
+
+            // 1. Collect all unique account and category names
+            const uniqueAccountNames = new Set<string>();
+            const uniqueCategoryNames = new Set<string>();
+
+            rows.forEach(row => {
+                const accName = row['Banco'];
+                const catName = row['Categoria'];
+                if (accName) uniqueAccountNames.add(String(accName).trim());
+                if (catName) uniqueCategoryNames.add(String(catName).trim());
+            });
+
+            // 2. Lookup existing accounts and categories
+            const { data: existingAccounts } = await supabase
+                .from('accounts')
+                .select('id, name')
+                .eq('user_id', user.id);
+
+            const { data: existingCategories } = await supabase
+                .from('categories')
+                .select('id, name')
+                .eq('user_id', user.id);
+
+            const accountsMap = new Map(existingAccounts?.map(a => [a.name.toLowerCase(), a.id]));
+            const categoriesMap = new Map(existingCategories?.map(c => [c.name.toLowerCase(), c.id]));
+
+            // 3. Create missing accounts/categories if needed
+            for (const accName of uniqueAccountNames) {
+                if (!accountsMap.has(accName.toLowerCase())) {
+                    const { data: newAcc } = await supabase
+                        .from('accounts')
+                        .insert({ user_id: user.id, name: accName, type: 'checking', balance: 0, is_business: isBusiness })
+                        .select()
+                        .single();
+                    if (newAcc) accountsMap.set(accName.toLowerCase(), newAcc.id);
+                }
+            }
+
+            for (const catName of uniqueCategoryNames) {
+                if (!categoriesMap.has(catName.toLowerCase())) {
+                    const { data: newCat } = await supabase
+                        .from('categories')
+                        .insert({ user_id: user.id, name: catName, type: 'expense', is_business: isBusiness })
+                        .select()
+                        .single();
+                    if (newCat) categoriesMap.set(catName.toLowerCase(), newCat.id);
+                }
+            }
+
+            // 4. Prepare transactions
+            const transactionsToInsert = rows.map(row => {
+                const typeRaw = String(row['Tipo'] || '').toLowerCase();
+                // "Entradas" -> income, "Saídas" -> expense
+                const type = typeRaw.includes('entrada') ? 'income' : 'expense';
+
+                // Parse value (handle R$, negative signs, thousands separators)
+                let amountRaw = String(row['Valor'] || '0').replace('R$', '').replace(/\s/g, '');
+                // Handle pt-BR format: -1.234,56 -> -1234.56 or 1.234,56 -> 1234.56
+                amountRaw = amountRaw.replace(/\./g, '').replace(',', '.').trim();
+                const amount = Math.abs(parseFloat(amountRaw) || 0);
+
+                const statusRaw = String(row['Situação'] || '').toLowerCase();
+                const status = statusRaw.includes('realizado') ? 'completed' : 'open';
+
+                const description = row['Nome'] || 'Sem descrição';
+                const obs = row['Observação'] || '';
+                const finalDescription = obs ? `${description} (${obs})` : description;
+
+                return {
+                    user_id: user.id,
+                    description: finalDescription,
+                    amount,
+                    type,
+                    date: formatDate(row['Data de Lançamento']) || new Date().toISOString().split('T')[0],
+                    due_date: formatDate(row['Data Pagamento']) || formatDate(row['Data de Lançamento']),
+                    status,
+                    account_id: accountsMap.get(String(row['Banco'] || '').trim().toLowerCase()),
+                    category_id: categoriesMap.get(String(row['Categoria'] || '').trim().toLowerCase()),
+                    payment_method: row['Forma Pagamento/Recebimento'],
+                    is_business: isBusiness
+                };
+            }).filter(t => t.amount > 0);
+
+            if (transactionsToInsert.length === 0) return { success: true, count: 0 };
+
+            const { error } = await supabase.from('transactions').insert(transactionsToInsert);
+            if (error) throw error;
+
+            fetchTransactions();
+            return { success: true, count: transactionsToInsert.length };
+
+        } catch (err: any) {
+            return { error: formatError(err) };
+        } finally {
+            setLoading(false);
+        }
+    }, [isBusiness, fetchTransactions]);
+
+    function formatDate(dateValue: any) {
+        if (!dateValue) return null;
+        if (dateValue instanceof Date) {
+            const y = dateValue.getUTCFullYear();
+            const m = String(dateValue.getUTCMonth() + 1).padStart(2, '0');
+            const d = String(dateValue.getUTCDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+        if (typeof dateValue === 'number') {
+            const date = new Date((dateValue - 25569) * 86400 * 1000);
+            const y = date.getUTCFullYear();
+            const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const d = String(date.getUTCDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+        const str = String(dateValue).trim();
+        if (!str || str === '-') return null;
+        if (str.includes('/')) {
+            const parts = str.split('/');
+            if (parts.length === 3) {
+                const [day, month, year] = parts;
+                const fullYear = year.length === 2 ? `20${year}` : year;
+                return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            }
+        }
+        if (str.includes('-')) {
+            const parts = str.split('-');
+            if (parts.length === 3) {
+                if (parts[0].length === 4) return str;
+                const [day, month, year] = parts;
+                const fullYear = year.length === 2 ? `20${year}` : year;
+                return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            }
+        }
+        return str;
+    }
+
+
     return {
         accounts,
         categories,
@@ -504,6 +646,7 @@ export const useTransactions = () => {
         updateInvestmentTransaction,
         deleteTransaction,
         deleteTransactions: deleteTransaction,
+        importTransactionsFromExcel,
         loading,
         refresh: fetchTransactions
     };
