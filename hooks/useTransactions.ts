@@ -207,6 +207,27 @@ export const useTransactions = () => {
         }
     }, [fetchTransactions]);
 
+    const updateTransactions = useCallback(async (ids: string[], updates: any) => {
+        setLoading(true);
+        try {
+            const { error } = await withRetry(async () =>
+                await supabase
+                    .from('transactions')
+                    .update(updates)
+                    .in('id', ids)
+            );
+
+            if (!error) {
+                fetchTransactions();
+            }
+            return { error: error ? { message: formatError(error) } : null };
+        } catch (err: any) {
+            return { error: { message: formatError(err, 'Erro ao atualizar transações') } };
+        } finally {
+            setLoading(false);
+        }
+    }, [fetchTransactions]);
+
     const deleteTransaction = useCallback(async (id: string | string[]) => {
         const ids = Array.isArray(id) ? id : [id];
         if (ids.length === 0) return { error: null };
@@ -472,6 +493,7 @@ export const useTransactions = () => {
         saveTransfer,
         saveInvestmentTransaction,
         updateTransaction,
+        updateTransactions,
         updateInvestmentTransaction,
         deleteTransaction,
         deleteTransactions: deleteTransaction,

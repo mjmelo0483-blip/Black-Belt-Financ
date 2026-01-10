@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useTransactions } from '../hooks/useTransactions';
 import { useInvestments } from '../hooks/useInvestments';
 import TransactionModal from '../components/TransactionModal';
+import BulkEditModal from '../components/BulkEditModal';
 
 const Transactions: React.FC = () => {
   const {
@@ -15,6 +16,7 @@ const Transactions: React.FC = () => {
     saveTransfer,
     saveInvestmentTransaction,
     updateTransaction,
+    updateTransactions,
     updateInvestmentTransaction,
     deleteTransaction,
     deleteTransactions,
@@ -24,6 +26,7 @@ const Transactions: React.FC = () => {
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentTransactionId, setCurrentTransactionId] = useState<string | null>(null);
 
@@ -126,6 +129,16 @@ const Transactions: React.FC = () => {
   const handleBulkDelete = async () => {
     if (window.confirm(`Deseja excluir ${selectedIds.length} lançamentos?`)) {
       await deleteTransactions(selectedIds);
+      setSelectedIds([]);
+      refreshInvestments();
+    }
+  };
+
+  const handleBulkUpdate = async (updates: any) => {
+    const result = await updateTransactions(selectedIds, updates);
+    if (result.error) {
+      alert('Erro ao atualizar lançamentos: ' + result.error.message);
+    } else {
       setSelectedIds([]);
       refreshInvestments();
     }
@@ -439,9 +452,18 @@ const Transactions: React.FC = () => {
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-center justify-between">
-          <span className="text-red-400 font-bold text-sm">{selectedIds.length} item(s) selecionado(s)</span>
-          <button onClick={handleBulkDelete} className="bg-red-500 text-white px-6 h-10 rounded-xl text-xs font-black uppercase tracking-widest">Excluir Selecionados</button>
+        <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex items-center justify-between">
+          <span className="text-primary font-bold text-sm">{selectedIds.length} item(s) selecionado(s)</span>
+          <div className="flex gap-3">
+            <button onClick={() => setIsBulkEditOpen(true)} className="bg-primary text-white px-6 h-10 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">edit_note</span>
+              Alterar Selecionados
+            </button>
+            <button onClick={handleBulkDelete} className="bg-red-500 text-white px-6 h-10 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+              Excluir
+            </button>
+          </div>
         </div>
       )}
 
@@ -537,6 +559,14 @@ const Transactions: React.FC = () => {
         updateInvestmentTransaction={updateInvestmentTransaction}
         isEditing={isEditing}
         initialData={currentTransactionId ? transactions.find(t => t.id === currentTransactionId) : null}
+      />
+      <BulkEditModal
+        isOpen={isBulkEditOpen}
+        onClose={() => setIsBulkEditOpen(false)}
+        onSave={handleBulkUpdate}
+        accounts={accounts}
+        categories={categories}
+        selectedCount={selectedIds.length}
       />
     </div>
   );

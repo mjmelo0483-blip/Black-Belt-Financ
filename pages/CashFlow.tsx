@@ -3,6 +3,7 @@ import { useCashFlow } from '../hooks/useCashFlow';
 import { useTransactions } from '../hooks/useTransactions';
 import { useInvestments } from '../hooks/useInvestments';
 import TransactionModal from '../components/TransactionModal';
+import BulkEditModal from '../components/BulkEditModal';
 
 const CashFlow: React.FC = () => {
   const {
@@ -22,9 +23,10 @@ const CashFlow: React.FC = () => {
     viewMode
   } = useCashFlow();
 
-  const { categories, cards, saveTransaction, saveTransfer, saveInvestmentTransaction, updateTransaction, updateInvestmentTransaction, deleteTransaction, deleteTransactions } = useTransactions();
+  const { categories, cards, saveTransaction, saveTransfer, saveInvestmentTransaction, updateTransaction, updateTransactions, updateInvestmentTransaction, deleteTransaction, deleteTransactions } = useTransactions();
   const { investments, refresh: refreshInvestments } = useInvestments();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentTransactionId, setCurrentTransactionId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -78,6 +80,17 @@ const CashFlow: React.FC = () => {
   const handleBulkDelete = async () => {
     if (window.confirm(`Deseja excluir ${selectedIds.length} lançamentos?`)) {
       await deleteTransactions(selectedIds);
+      setSelectedIds([]);
+      refresh();
+      refreshInvestments();
+    }
+  };
+
+  const handleBulkUpdate = async (updates: any) => {
+    const result = await updateTransactions(selectedIds, updates);
+    if (result.error) {
+      alert('Erro ao atualizar lançamentos: ' + result.error.message);
+    } else {
       setSelectedIds([]);
       refresh();
       refreshInvestments();
@@ -199,15 +212,24 @@ const CashFlow: React.FC = () => {
 
       {
         selectedIds.length > 0 && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center justify-between">
-            <span className="text-red-400 font-bold text-sm pl-2">{selectedIds.length} item(s) selecionado(s)</span>
-            <button
-              onClick={handleBulkDelete}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 transition-colors"
-            >
-              <span className="material-symbols-outlined text-sm">delete</span>
-              Excluir Selecionados
-            </button>
+          <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 flex items-center justify-between">
+            <span className="text-primary font-bold text-sm pl-2">{selectedIds.length} item(s) selecionado(s)</span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsBulkEditOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">edit_note</span>
+                Alterar Selecionados
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">delete</span>
+                Excluir
+              </button>
+            </div>
           </div>
         )
       }
@@ -330,6 +352,14 @@ const CashFlow: React.FC = () => {
         updateInvestmentTransaction={updateInvestmentTransaction}
         isEditing={isEditing}
         initialData={currentTransactionId ? transactions.find(t => t.id === currentTransactionId) : null}
+      />
+      <BulkEditModal
+        isOpen={isBulkEditOpen}
+        onClose={() => setIsBulkEditOpen(false)}
+        onSave={handleBulkUpdate}
+        accounts={accounts}
+        categories={categories}
+        selectedCount={selectedIds.length}
       />
     </div >
   );
