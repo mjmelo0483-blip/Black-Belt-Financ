@@ -68,7 +68,9 @@ export const useAccounts = () => {
                 .select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)')
                 .eq('account_id', accountId)
                 .eq('is_business', isBusiness)
-                .order('due_date', { ascending: false })
+                .order('date', { ascending: false })
+                .order('created_at', { ascending: false })
+                .limit(2000)
         );
     };
 
@@ -80,8 +82,9 @@ export const useAccounts = () => {
                 .eq('account_id', accountId)
                 .eq('status', 'completed')
                 .eq('is_business', isBusiness)
-                .order('due_date', { ascending: true })
-                .order('created_at', { ascending: true })
+                .order('date', { ascending: false })
+                .order('created_at', { ascending: false })
+                .limit(2000)
         );
     };
 

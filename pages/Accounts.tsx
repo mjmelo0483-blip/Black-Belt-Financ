@@ -141,27 +141,17 @@ const Accounts: React.FC = () => {
       // OU calculado progressivamente: saldo inicial + transações
 
       // Ordenar por due_date (data de vencimento) para melhor visualização
-      const sortedStatement = [...statement].sort((a, b) => {
-        const dateA = a.due_date || a.date;
-        const dateB = b.due_date || b.date;
-        return dateA.localeCompare(dateB);
-      });
+      // As transações agora vêm ordenadas por data DECRESCENTE (mais recente primeiro)
+      // O saldo do lançamento mais recente é o saldo atual da conta
+      let currentBalanceAtPoint = account.balance;
 
-      // Calcular saldo progressivamente
-      // Saldo inicial + transações em ordem cronológica
-      let runningBalance = account.balance;
+      const statementWithBalance = statement.map((t: any) => {
+        const balanceAfter = currentBalanceAtPoint;
+        // Para o próximo item (anterior no tempo), revertemos a movimentação
+        if (t.type === 'income') currentBalanceAtPoint -= t.amount;
+        else currentBalanceAtPoint += t.amount;
 
-      // Primeiro, subtrair todas as transações para voltar ao "saldo inicial"
-      sortedStatement.forEach((t: any) => {
-        if (t.type === 'income') runningBalance -= t.amount;
-        else runningBalance += t.amount;
-      });
-
-      // Agora recalcular progressivamente
-      const statementWithBalance = sortedStatement.map((t: any) => {
-        if (t.type === 'income') runningBalance += t.amount;
-        else runningBalance -= t.amount;
-        return { ...t, balanceAfter: runningBalance };
+        return { ...t, balanceAfter };
       });
 
       setStatementData(statementWithBalance);
