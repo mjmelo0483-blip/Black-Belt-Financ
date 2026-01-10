@@ -301,13 +301,20 @@ const SalesDashboard: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Top 10 Produtos Mais Vendidos</h3>
-                            <div className="h-[300px] w-full">
+                            <div className="h-[450px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart layout="vertical" data={productSales.slice(0, 10)}>
                                         <XAxis type="number" hide />
                                         <YAxis
-                                            type="category" dataKey="name" stroke="#94a3b8" fontSize={10}
-                                            width={140} tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false}
+                                            type="category"
+                                            dataKey="name"
+                                            stroke="#94a3b8"
+                                            fontSize={10}
+                                            width={180}
+                                            tick={{ fill: '#94a3b8' }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tickFormatter={(value) => value.length > 25 ? `${value.substring(0, 25)}...` : value}
                                         />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
