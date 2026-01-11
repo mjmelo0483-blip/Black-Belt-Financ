@@ -33,14 +33,35 @@ const SalesDashboard: React.FC = () => {
     const [allPeriods, setAllPeriods] = useState<string[]>([]);
     useEffect(() => {
         const loadPeriods = async () => {
-            const { data: qData } = await supabase
-                .from('sales')
-                .select('date')
-                .eq('user_id', (await supabase.auth.getSession()).data.session?.user.id);
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) return;
 
-            if (qData) {
+            let allDates: any[] = [];
+            let page = 0;
+            let hasMore = true;
+
+            while (hasMore) {
+                const { data, error } = await supabase
+                    .from('sales')
+                    .select('date')
+                    .eq('user_id', session.user.id)
+                    .order('date', { ascending: false })
+                    .range(page * 1000, (page + 1) * 1000 - 1);
+
+                if (error) break;
+                if (!data || data.length === 0) {
+                    hasMore = false;
+                } else {
+                    allDates = [...allDates, ...data];
+                    if (data.length < 1000) hasMore = false;
+                    else page++;
+                }
+                if (page > 30) break; // Safety up to 30k records
+            }
+
+            if (allDates.length > 0) {
                 const p = new Set<string>();
-                qData.forEach((s: any) => {
+                allDates.forEach((s: any) => {
                     const parts = s.date?.split('-');
                     if (parts?.length === 3) p.add(`${parseInt(parts[1]) - 1}-${parts[0]}`);
                 });
