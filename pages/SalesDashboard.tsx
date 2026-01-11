@@ -5,6 +5,7 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     BarChart, Bar, Cell, PieChart, Pie, RadialBarChart, RadialBar, Legend
 } from 'recharts';
+import { supabase } from '../supabase';
 
 const SalesDashboard: React.FC = () => {
     const { fetchSales, loading } = useSales();
@@ -19,40 +20,42 @@ const SalesDashboard: React.FC = () => {
 
     useEffect(() => {
         const load = async () => {
-            const { data } = await fetchSales();
-            if (data && data.length > 0) {
-                setSalesData(data);
-                const sorted = [...data].sort((a, b) => b.date.localeCompare(a.date));
-                const latest = sorted[0].date;
-                if (latest) {
-                    const parts = latest.split('-');
-                    setSelectedMonth(parseInt(parts[1]) - 1);
-                    setSelectedYear(parseInt(parts[0]));
-                }
-            } else if (data) {
+            // First load or when period changes, fetch only that period
+            const { data } = await fetchSales({ month: selectedMonth, year: selectedYear });
+            if (data) {
                 setSalesData(data);
             }
         };
         load();
-    }, [fetchSales]);
+    }, [fetchSales, selectedMonth, selectedYear]);
 
-    const periods = useMemo(() => {
-        const p = new Set<string>();
-        salesData.forEach(s => {
-            if (!s.date) return;
-            const parts = s.date.split('-');
-            if (parts.length === 3) {
-                const year = parts[0];
-                const month = parseInt(parts[1]) - 1;
-                p.add(`${month}-${year}`);
+    // Separate effect to load all periods for the navigator buttons
+    const [allPeriods, setAllPeriods] = useState<string[]>([]);
+    useEffect(() => {
+        const loadPeriods = async () => {
+            const { data: qData } = await supabase
+                .from('sales')
+                .select('date')
+                .eq('user_id', (await supabase.auth.getSession()).data.session?.user.id)
+                .eq('is_business', true); // Safe enough as we just want periods
+
+            if (qData) {
+                const p = new Set<string>();
+                qData.forEach((s: any) => {
+                    const parts = s.date?.split('-');
+                    if (parts?.length === 3) p.add(`${parseInt(parts[1]) - 1}-${parts[0]}`);
+                });
+                setAllPeriods(Array.from(p).sort((a, b) => {
+                    const [am, ay] = a.split('-').map(Number);
+                    const [bm, by] = b.split('-').map(Number);
+                    return ay !== by ? ay - by : am - bm;
+                }));
             }
-        });
-        return Array.from(p).sort((a, b) => {
-            const [am, ay] = a.split('-').map(Number);
-            const [bm, by] = b.split('-').map(Number);
-            return ay !== by ? ay - by : am - bm;
-        });
-    }, [salesData]);
+        };
+        loadPeriods();
+    }, []);
+
+    const periods = allPeriods;
 
     const categories = useMemo(() => {
         const c = new Set<string>();

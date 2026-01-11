@@ -27,6 +27,12 @@ export const useSales = () => {
 
             if (filters?.startDate) query = query.gte('date', filters.startDate);
             if (filters?.endDate) query = query.lte('date', filters.endDate);
+            if (filters?.month !== undefined && filters?.year !== undefined) {
+                const startDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-01`;
+                const lastDay = new Date(filters.year, filters.month + 1, 0).getDate();
+                const endDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+                query = query.gte('date', startDate).lte('date', endDate);
+            }
 
             const { data, error } = await withRetry(async () => await query);
             return { data, error };
@@ -160,25 +166,28 @@ export const useSales = () => {
                 return Math.abs(parseFloat(str) || 0);
             };
 
-            rows.forEach(row => {
+            rows.forEach((row, index) => {
                 // Try to find a unique Sale ID (Order Number, Ticket, etc)
-                const rawCode = String(getVal(row, ['Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda']) ||
+                const rawCode = String(getVal(row, ['Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação']) ||
                     getVal(row, ['Codigo', 'ID']) || '');
 
-                if (!rawCode || rawCode === 'undefined' || rawCode === '') return;
+                const date = formatDate(getVal(row, ['Data da Compra', 'Data', 'Data Venda', 'Data Emissão', 'Data Movimento']));
+                if (!date) return; // Skip rows without date
 
-                const date = formatDate(getVal(row, ['Data da Compra', 'Data', 'Data Venda', 'Data Emissão']));
-                const store = getVal(row, ['Loja', 'Unidade', 'Filial', 'Ponto de Venda']) || 'Unica';
+                const store = getVal(row, ['Loja', 'Unidade', 'Filial', 'Ponto de Venda', 'Estabelecimento']) || 'Unica';
 
-                // Create a unique key for grouping and for the DB external_code
-                // This prevents "Order 100" from Store A from overwriting "Order 100" from Store B
-                // or the same order number on different dates.
-                const groupKey = `${rawCode}_${store}_${date}`;
+                // If no code, we'll treat the row as a unique sale if it has values, 
+                // or generate a key based on row info to at least import something.
+                const finalCode = rawCode && rawCode !== 'undefined' && rawCode !== ''
+                    ? rawCode
+                    : `ROW_${index}_${date}`;
+
+                const groupKey = `${finalCode}_${store}_${date}`;
 
                 if (!salesGroups.has(groupKey)) {
                     salesGroups.set(groupKey, {
                         user_id: user.id,
-                        external_code: groupKey, // Use the concatenated key as the unique identifier
+                        external_code: groupKey,
                         customer_id: customersMap.get(getVal(row, ['CPF do Cliente', 'CPF', 'CNPJ/CPF', 'CPF/CNPJ'])) ||
                             customersMap.get(getVal(row, ['Cliente', 'Nome do Cliente', 'Nome Cliente'])) || null,
                         date: date,
@@ -188,16 +197,17 @@ export const useSales = () => {
                         device: getVal(row, ['Dispositivo', 'Origem', 'Canal']),
                         import_filename: fileName,
                         total_amount: 0,
-                        raw_order_total: parseNumber(getVal(row, ['Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda'])),
+                        // Store the spreadsheet's stated total for this order to use as fallback
+                        spreadsheet_order_total: parseNumber(getVal(row, ['Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda', 'Total', 'Valor Total'])),
                         items: []
                     });
                 }
 
                 const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd', 'Quant.']) || 1);
-                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda']));
+                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda']));
 
-                // Determine line total
-                const lineTotalRaw = getVal(row, ['Valor Total', 'Vlr Total', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr. Total Item', 'Vlr Total Item']);
+                // Prioritize explicit row/item totals
+                const lineTotalRaw = getVal(row, ['Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item']);
                 const parsedLineTotal = parseNumber(lineTotalRaw);
 
                 let lineTotalPrice = 0;
@@ -217,46 +227,60 @@ export const useSales = () => {
                     total_price: lineTotalPrice
                 });
 
-                // Add to total amount using the detected line price
+                // Increment calculated total
                 sale.total_amount += lineTotalPrice;
             });
 
-            // Final adjustment: if total_amount is 0 but we have a raw_order_total, use that
-            for (const sale of salesGroups.values()) {
-                if (sale.total_amount === 0 && sale.raw_order_total > 0) {
-                    sale.total_amount = sale.raw_order_total;
-                    // If we have items but no prices, distribute the total or set 0 to first
-                    if (sale.items.length === 1 && sale.items[0].total_price === 0) {
-                        sale.items[0].total_price = sale.raw_order_total;
-                        sale.items[0].unit_price = sale.raw_order_total / (sale.items[0].quantity || 1);
-                    }
-                }
-                delete sale.raw_order_total; // Clean up before sending to DB
-            }
+            const allSalesData = Array.from(salesGroups.values()).map(s => {
+                const { items, spreadsheet_order_total, ...saleData } = s;
 
-            // Insert Sales and Items
-            for (const sale of salesGroups.values()) {
-                const { items, ...saleData } = sale;
-                const { data: insertedSale, error: saleError } = await supabase
+                // CRITICAL FIX: If our calculated total_amount is 0 (or much smaller than the spreadsheet's order total),
+                // and we only have ONE row for this order, the spreadsheet's "Total" column was likely the item total.
+                let finalTotal = s.total_amount;
+                if (finalTotal === 0 && spreadsheet_order_total > 0) {
+                    finalTotal = spreadsheet_order_total;
+                }
+
+                return { ...saleData, total_amount: finalTotal, items };
+            });
+
+            // Bulk Upsert Sales in chunks of 100 to avoid request size limits
+            const chunkSize = 100;
+            for (let i = 0; i < allSalesData.length; i += chunkSize) {
+                const chunk = allSalesData.slice(i, i + chunkSize);
+                const salesToUpsert = chunk.map(({ items, ...sale }) => sale);
+
+                const { data: upsertedSales, error: upsertError } = await supabase
                     .from('sales')
-                    .upsert(saleData, { onConflict: 'user_id, external_code' })
-                    .select()
-                    .single();
+                    .upsert(salesToUpsert, { onConflict: 'user_id, external_code' })
+                    .select('id, external_code');
 
-                if (saleError) {
-                    console.error('Error inserting sale:', saleError);
-                    continue;
+                if (upsertError) throw upsertError;
+
+                // Prepare items for this chunk
+                const itemsToInsert: any[] = [];
+                const saleIdsToDelete: string[] = [];
+
+                upsertedSales?.forEach(insertedSale => {
+                    const originalSale = chunk.find(s => s.external_code === insertedSale.external_code);
+                    if (originalSale && originalSale.items.length > 0) {
+                        saleIdsToDelete.push(insertedSale.id);
+                        originalSale.items.forEach((item: any) => {
+                            itemsToInsert.push({
+                                ...item,
+                                sale_id: insertedSale.id
+                            });
+                        });
+                    }
+                });
+
+                // Clear and Re-insert items in bulk for this chunk
+                if (saleIdsToDelete.length > 0) {
+                    await supabase.from('sale_items').delete().in('sale_id', saleIdsToDelete);
                 }
-
-                if (insertedSale) {
-                    const itemsToInsert = items.map((item: any) => ({
-                        ...item,
-                        sale_id: insertedSale.id
-                    }));
-
-                    // Delete existing items for this sale before re-inserting (to avoid duplicates on re-import)
-                    await supabase.from('sale_items').delete().eq('sale_id', insertedSale.id);
-                    await supabase.from('sale_items').insert(itemsToInsert);
+                if (itemsToInsert.length > 0) {
+                    const { error: itemError } = await supabase.from('sale_items').insert(itemsToInsert);
+                    if (itemError) console.error('Error inserting items:', itemError);
                 }
             }
 
