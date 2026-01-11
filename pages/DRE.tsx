@@ -20,6 +20,7 @@ const DRE: React.FC = () => {
     const [detailingItems, setDetailingItems] = useState<any[]>([]);
     const [detailingTitle, setDetailingTitle] = useState('');
     const [showDetailModal, setShowDetailModal] = useState(false);
+    const [allKnownStores, setAllKnownStores] = useState<string[]>([]);
     const [params, setParams] = useState({
         tax_rate: 3.24,
         royalty_rate: 6.00,
@@ -32,10 +33,11 @@ const DRE: React.FC = () => {
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
     useEffect(() => {
-        const loadPeriods = async () => {
+        const loadInitialData = async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return;
 
+            // Fetch periods
             let allDates: any[] = [];
             let page = 0;
             const pageSize = 1000;
@@ -57,7 +59,7 @@ const DRE: React.FC = () => {
                     if (data.length < pageSize) hasMore = false;
                     else page++;
                 }
-                if (page > 50) break;
+                if (page > 5) break;
             }
 
             if (allDates.length > 0) {
@@ -75,8 +77,19 @@ const DRE: React.FC = () => {
                 });
                 setAllPeriods(sortedPeriods);
             }
+
+            // Fetch all known stores to ensure config is always populated
+            const { data: storeData } = await supabase
+                .from('sales')
+                .select('store_name')
+                .not('store_name', 'is', null);
+
+            if (storeData) {
+                const uniqueStores = Array.from(new Set(storeData.map(s => s.store_name))).sort() as string[];
+                setAllKnownStores(uniqueStores);
+            }
         };
-        loadPeriods();
+        loadInitialData();
     }, []);
 
     useEffect(() => {
@@ -104,7 +117,6 @@ const DRE: React.FC = () => {
                         cashback_rates: pData.cashback_rates || {}
                     });
                 } else {
-                    // Default values if none found for this month
                     setParams({
                         tax_rate: 3.24,
                         royalty_rate: 6.00,
@@ -138,11 +150,11 @@ const DRE: React.FC = () => {
     }, [fetchSales, selectedMonth, selectedYear]);
 
     const stores = useMemo(() => {
-        const s = new Set<string>();
+        const s = new Set<string>(allKnownStores);
         salesData.forEach(sale => { if (sale.store_name) s.add(sale.store_name); });
         expensesData.forEach(exp => { if (exp.store_name) s.add(exp.store_name); });
-        return Array.from(s).sort();
-    }, [salesData, expensesData]);
+        return Array.from(s).filter(Boolean).sort();
+    }, [salesData, expensesData, allKnownStores]);
 
     const saveParams = async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -159,10 +171,9 @@ const DRE: React.FC = () => {
             }, { onConflict: 'user_id, month, year, is_business' });
 
         if (error) {
-            alert('Erro ao salvar configurações. Certifique-se de que a tabela dre_parameters existe.');
+            alert('Erro ao salvar configurações.');
         } else {
             setShowConfig(false);
-            // Re-calc metrics by just keeping state
         }
     };
 
@@ -183,7 +194,6 @@ const DRE: React.FC = () => {
     }
 
     const metrics = useMemo<DREMetrics>(() => {
-        // Revenue by Payment Method
         const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Outros': 0 };
         let totalRev = 0;
         let cmvCents = 0;
@@ -192,7 +202,7 @@ const DRE: React.FC = () => {
 
         filteredSales.forEach(sale => {
             let method = sale.payment_method || 'Outros';
-            const normMethod = method.toLowerCase().normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\");
+            const normMethod = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
             if (normMethod.includes('credito')) method = 'Crédito';
             else if (normMethod.includes('debito')) method = 'Débito';
@@ -203,7 +213,6 @@ const DRE: React.FC = () => {
             if (sale.sale_items && sale.sale_items.length > 0) {
                 sale.sale_items.forEach((item: any) => {
                     saleTotal += Number(item.total_price || 0);
-                    // Use integer math (cents) to avoid floating point precision accumulation
                     const itemQty = Number(item.quantity || 0);
                     const itemCost = Number(item.products?.cost || 0);
                     cmvCents += Math.round(itemCost * itemQty * 100);
@@ -216,27 +225,22 @@ const DRE: React.FC = () => {
             totalRev += saleTotal;
         });
 
-        // Identify Active Stores for Linear Proration
         const activeStores = Array.from(new Set(salesData.map(s => s.store_name).filter(Boolean))) as string[];
         const activeStoresCount = activeStores.length || 1;
         const prorationFactor = selectedStore !== 'Todas' ? (1 / activeStoresCount) : 1;
         const cmv = cmvCents / 100;
 
-        // Detailed Categorization for Expenses
         let impostos = 0;
         let perdaEstoque = 0;
 
-        // For Cashback calculation: track revenue and manual entries per store
         const storeRevMap: Record<string, number> = {};
         const storeManualCashback: Record<string, { amount: number; items: any[] }> = {};
 
-        // Pre-initialize storeRevMap for all active stores
         activeStores.forEach(s => {
             storeRevMap[s] = 0;
             storeManualCashback[s] = { amount: 0, items: [] };
         });
 
-        // Re-calculate store distribution for revenue to know store-specific sales
         salesData.forEach(sale => {
             const sName = sale.store_name;
             if (!sName) return;
@@ -281,7 +285,6 @@ const DRE: React.FC = () => {
             const desc = (exp.description || '').toLowerCase();
             let amount = Number(exp.amount || 0);
 
-            // Proration Logic:
             if (selectedStore !== 'Todas') {
                 if (exp.store_name === selectedStore) {
                 } else if (!exp.store_name) {
@@ -309,7 +312,7 @@ const DRE: React.FC = () => {
                 if (exp.store_name && storeManualCashback[exp.store_name]) {
                     storeManualCashback[exp.store_name].amount += amount;
                     storeManualCashback[exp.store_name].items.push(exp);
-                } else if (!exp.store_name) {
+                } else {
                     varGroups.cashback.amount += amount;
                     varGroups.cashback.items.push(exp);
                 }
@@ -374,21 +377,20 @@ const DRE: React.FC = () => {
             }
         });
 
-        // Apply Calculation Formulas
         impostos = (totalRev * (params.tax_rate / 100));
         perdaEstoque = (totalRev * (params.loss_rate / 100));
         varGroups.royalties.amount = (totalRev * (params.royalty_rate / 100));
         varGroups.tarifaPix.amount = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
         varGroups.tarifaCartao.amount = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
 
-        // Final Cashback Logic
         if (selectedStore !== 'Todas') {
             const manual = storeManualCashback[selectedStore];
             if (manual && manual.amount > 0) {
                 varGroups.cashback.amount += manual.amount;
                 varGroups.cashback.items.push(...manual.items);
             } else {
-                const rate = params.cashback_rates[selectedStore] || 0;
+                const rates = params.cashback_rates as Record<string, number>;
+                const rate = rates[selectedStore] || 0;
                 varGroups.cashback.amount += (totalRev * (rate / 100));
             }
         } else {
@@ -398,7 +400,8 @@ const DRE: React.FC = () => {
                     varGroups.cashback.amount += manual.amount;
                     varGroups.cashback.items.push(...manual.items);
                 } else {
-                    const rate = params.cashback_rates[s] || 0;
+                    const rates = params.cashback_rates as Record<string, number>;
+                    const rate = rates[s] || 0;
                     const sRev = storeRevMap[s] || 0;
                     varGroups.cashback.amount += (sRev * (rate / 100));
                 }
@@ -437,375 +440,352 @@ const DRE: React.FC = () => {
         >
             <div className={`flex-1 text-[11px] ${isTotal || isFinal || isSubTotal ? 'font-black' : ''} ${isFinal ? 'text-sm' : ''} flex items-center gap-2`}>
                 {label}
-                {onClick && <span className=\"material-symbols-outlined text-[14px] opacity-40 hover:opacity-100 transition-opacity\">info</span>}
+                {onClick && <span className="material-symbols-outlined text-[14px] opacity-40 hover:opacity-100 transition-opacity">info</span>}
             </div>
             <div className={`w-32 text-right font-bold ${isFinal ? 'text-sm' : 'text-[11px]'} ${isNegative ? 'text-red-400' : (isFinal ? (value >= 0 ? 'text-emerald-400' : 'text-red-500') : '')}`}>
                 {isNegative && value > 0 ? '-' : ''} R$ {Math.abs(Number(value)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </div>
-            <div className=\"w-24 text-right text-[10px] font-medium text-slate-500\">
-    { percentage !== undefined ? `${percentage.toFixed(2)}%` : '--' }
-            </div >
-        </div >
+            <div className="w-24 text-right text-[10px] font-medium text-slate-500">
+                {percentage !== undefined ? `${percentage.toFixed(2)}%` : '--'}
+            </div>
+        </div>
     );
 
-return (
-    <div className=\"p-6 space-y-6 bg-[#0f172a] min-h-screen text-white\">
-        < div className =\"flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2\">
-            < div >
-            <h1 className=\"text-2xl font-black tracking-tight flex items-center gap-3\">
-                < span className =\"p-2 bg-indigo-600/20 text-indigo-400 rounded-lg material-symbols-outlined\">receipt_long</span>
-DRE - DEMONSTRATIVO DE RESULTADO
-                    </h1 >
-    <p className=\"text-slate-400 text-xs mt-1\">Visão detalhada de faturamento, custos e lucratividade</p>
-                </div >
+    return (
+        <div className="p-6 space-y-6 bg-[#0f172a] min-h-screen text-white">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+                <div>
+                    <h1 className="text-2xl font-black tracking-tight flex items-center gap-3">
+                        <span className="p-2 bg-indigo-600/20 text-indigo-400 rounded-lg material-symbols-outlined">receipt_long</span>
+                        DRE - DEMONSTRATIVO DE RESULTADO
+                    </h1>
+                    <p className="text-slate-400 text-xs mt-1">Visão detalhada de faturamento, custos e lucratividade</p>
+                </div>
 
-    <div className=\"flex flex-wrap gap-4 items-center\">
-        < div className =\"flex items-center gap-2 bg-[#1e293b] border border-[#334155] rounded-xl px-3 py-1.5 min-w-[200px]\">
-            < span className =\"material-symbols-outlined text-slate-500 text-sm\">storefront</span>
-                < select
-value = { selectedStore }
-onChange = {(e) => setSelectedStore(e.target.value)}
-className =\"bg-transparent border-none text-white text-xs font-bold focus:ring-0 w-full\"
-    >
-    <option value=\"Todas\" className=\"bg-[#1e293b]\">Todas as Lojas</option>
-{
-    stores.map(s => (
-        <option key={s} value={s} className=\"bg-[#1e293b]\">{s}</option>
-    ))
-}
-                        </select >
-                    </div >
+                <div className="flex flex-wrap gap-4 items-center">
+                    <div className="flex items-center gap-2 bg-[#1e293b] border border-[#334155] rounded-xl px-3 py-1.5 min-w-[200px]">
+                        <span className="material-symbols-outlined text-slate-500 text-sm">storefront</span>
+                        <select
+                            value={selectedStore}
+                            onChange={(e) => setSelectedStore(e.target.value)}
+                            className="bg-transparent border-none text-white text-xs font-bold focus:ring-0 w-full"
+                        >
+                            <option value="Todas" className="bg-[#1e293b]">Todas as Lojas</option>
+                            {stores.map(s => (
+                                <option key={s} value={s} className="bg-[#1e293b]">{s}</option>
+                            ))}
+                        </select>
+                    </div>
 
-    <button
-        onClick={() => setShowConfig(!showConfig)}
-        className={`p-2 rounded-xl transition-all flex items-center gap-2 text-xs font-bold border ${showConfig ? 'bg-amber-600 border-amber-500 text-white' : 'bg-[#1e293b] border-[#334155] text-amber-400 hover:bg-amber-600/10'}`}
-    >
-        <span className=\"material-symbols-outlined text-sm\">settings</span>
-Taxas / Config
-                    </button >
+                    <button
+                        onClick={() => setShowConfig(!showConfig)}
+                        className={`p-2 rounded-xl transition-all flex items-center gap-2 text-xs font-bold border ${showConfig ? 'bg-amber-600 border-amber-500 text-white' : 'bg-[#1e293b] border-[#334155] text-amber-400 hover:bg-amber-600/10'}`}
+                    >
+                        <span className="material-symbols-outlined text-sm">settings</span>
+                        Taxas/Config
+                    </button>
 
-    <div className=\"flex gap-1 flex-nowrap overflow-x-auto pb-1 max-w-[600px] custom-scrollbar\">
-{
-    allPeriods.length > 0 ? (
-        [...allPeriods].reverse().map(period => {
-            const [m, y] = period.split('-').map(Number);
-            const active = selectedMonth === m && selectedYear === y;
-            return (
-                <button
-                    key={period}
-                    onClick={() => { setSelectedMonth(m); setSelectedYear(y); }}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${active ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#1e293b] border-[#334155] text-slate-400 hover:text-white'}`}
-                >
-                    {monthNames[m].substring(0, 3)}/{y}
-                </button>
-            );
-        })
-    ) : null
-}
-                    </div >
-                </div >
-            </div >
+                    <div className="flex gap-1 flex-nowrap overflow-x-auto pb-1 max-w-[600px] custom-scrollbar">
+                        {allPeriods.length > 0 ? (
+                            [...allPeriods].reverse().map(period => {
+                                const [m, y] = period.split('-').map(Number);
+                                const active = selectedMonth === m && selectedYear === y;
+                                return (
+                                    <button
+                                        key={period}
+                                        onClick={() => { setSelectedMonth(m); setSelectedYear(y); }}
+                                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${active ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#1e293b] border-[#334155] text-slate-400 hover:text-white'}`}
+                                    >
+                                        {monthNames[m].substring(0, 3)}/{y}
+                                    </button>
+                                );
+                            })
+                        ) : null}
+                    </div>
+                </div>
+            </div>
 
-    { showConfig && (
-        <div className=\"bg-[#1e293b] border border-amber-500/30 p-4 rounded-xl shadow-xl animate-in zoom-in-95 duration-200\">
-            < h3 className =\"text-amber-400 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2\">
-                < span className =\"material-symbols-outlined text-sm\">tune</span>
-                        Parâmetros da DRE - { monthNames[selectedMonth]} / { selectedYear }
-                    </h3 >
-    <div className=\"grid grid-cols-1 md:grid-cols-3 gap-6\">
-        < div className =\"space-y-1\">
-            < label className =\"text-[10px] text-slate-400 font-black uppercase tracking-widest\">Impostos (Geral %)</label>
-                < div className =\"relative\">
-                    < input
-type =\"number\"
-step =\"0.01\"
-value = { params.tax_rate }
-onChange = {(e) => setParams({ ...params, tax_rate: Number(e.target.value) })}
-className =\"w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50\"
-    />
-    <span className=\"absolute right-3 top-2 text-slate-500 font-black\">%</span>
-                            </div >
-                        </div >
-    <div className=\"space-y-1\">
-        < label className =\"text-[10px] text-slate-400 font-black uppercase tracking-widest\">Royalties (% Faturamento)</label>
-            < div className =\"relative\">
-                < input
-type =\"number\"
-step =\"0.1\"
-value = { params.royalty_rate }
-onChange = {(e) => setParams({ ...params, royalty_rate: Number(e.target.value) })}
-className =\"w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50\"
-    />
-    <span className=\"absolute right-3 top-2 text-slate-500 font-black\">%</span>
-                            </div >
-                        </div >
-    <div className=\"space-y-1\">
-        < label className =\"text-[10px] text-slate-400 font-black uppercase tracking-widest\">Tarifa PIX (% sobre PIX)</label>
-            < div className =\"relative\">
-                < input
-type =\"number\"
-step =\"0.01\"
-value = { params.pix_fee_rate }
-onChange = {(e) => setParams({ ...params, pix_fee_rate: Number(e.target.value) })}
-className =\"w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50\"
-    />
-    <span className=\"absolute right-3 top-2 text-slate-500 font-black\">%</span>
-                            </div >
-                        </div >
-    <div className=\"space-y-1\">
-        < label className =\"text-[10px] text-slate-400 font-black uppercase tracking-widest\">Perdas (% Faturamento)</label>
-            < div className =\"relative\">
-                < input
-type =\"number\"
-step =\"0.1\"
-value = { params.loss_rate }
-onChange = {(e) => setParams({ ...params, loss_rate: Number(e.target.value) })}
-className =\"w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50\"
-    />
-    <span className=\"absolute right-3 top-2 text-slate-500 font-black\">%</span>
-                            </div >
-                        </div >
-    <div className=\"space-y-1\">
-        < label className =\"text-[10px] text-slate-400 font-black uppercase tracking-widest\">Tarifa Cartão (% Crédito+Débito)</label>
-            < div className =\"relative\">
-                < input
-type =\"number\"
-step =\"0.000001\"
-value = { params.card_fee_rate }
-onChange = {(e) => setParams({ ...params, card_fee_rate: Number(e.target.value) })}
-className =\"w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50\"
-    />
-    <span className=\"absolute right-3 top-2 text-slate-500 font-black\">%</span>
-                            </div >
-                        </div >
-                    </div >
+            {showConfig && (
+                <div className="bg-[#1e293b] border border-amber-500/30 p-4 rounded-xl shadow-xl animate-in zoom-in-95 duration-200">
+                    <h3 className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm">tune</span>
+                        Parâmetros da DRE - {monthNames[selectedMonth]}/{selectedYear}
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Impostos (Geral %)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={params.tax_rate}
+                                    onChange={(e) => setParams({ ...params, tax_rate: Number(e.target.value) })}
+                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                />
+                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Royalties (% Faturamento)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={params.royalty_rate}
+                                    onChange={(e) => setParams({ ...params, royalty_rate: Number(e.target.value) })}
+                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                />
+                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa PIX (% sobre PIX)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={params.pix_fee_rate}
+                                    onChange={(e) => setParams({ ...params, pix_fee_rate: Number(e.target.value) })}
+                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                />
+                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Perdas (% Faturamento)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={params.loss_rate}
+                                    onChange={(e) => setParams({ ...params, loss_rate: Number(e.target.value) })}
+                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                />
+                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa Cartão (% Crédito+Débito)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    step="0.000001"
+                                    value={params.card_fee_rate}
+                                    onChange={(e) => setParams({ ...params, card_fee_rate: Number(e.target.value) })}
+                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                />
+                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                            </div>
+                        </div>
+                    </div>
 
-    {
-        stores.length > 0 && (
-            <div className=\"mt-6 pt-6 border-t border-[#334155]\">
-            <h4 className =\"text-amber-400 font-bold text-[10px] uppercase tracking-widest mb-3 flex items-center gap-2\">
-            <span className =\"material-symbols-outlined text-sm\">storefront</span>
-                                Comissões(Cashback) por Condomínio(%)
-                            </h4 >
-    <div className=\"grid grid-cols-2 md:grid-cols-4 gap-4\">
-{
-    stores.map(storeName => (
-        <div key={storeName} className=\"space-y-1\">
-    < label className =\"text-[9px] text-slate-500 font-black uppercase truncate block\">{storeName}</label>
-    < div className =\"relative\">
-    < input
-                                                type =\"number\"
-                                                step =\"0.01\"
-                                                placeholder =\"0.00\"
-                                                value = { params.cashback_rates[storeName] || '' }
-                                                onChange = {(e) => setParams({
-        ...params,
-        cashback_rates: {
-            ...params.cashback_rates,
-            [storeName]: Number(e.target.value)
-        }
-    })}
-className =\"w-full bg-[#0f172a] border border-[#334155] rounded-lg px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-amber-500/50\"
-    />
-    <span className=\"absolute right-2 top-1.5 text-slate-600 text-[10px]\">%</span>
-                                        </div >
-                                    </div >
+                    {stores.length > 0 && (
+                        <div className="mt-6 pt-6 border-t border-[#334155]">
+                            <h4 className="text-amber-400 font-bold text-[10px] uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">storefront</span>
+                                Comissões (Cashback) por Condomínio (%)
+                            </h4>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {stores.map(storeName => (
+                                    <div key={storeName} className="space-y-1">
+                                        <label className="text-[9px] text-slate-500 font-black uppercase truncate block">{storeName}</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="0.00"
+                                                value={(params.cashback_rates as Record<string, number>)[storeName] || ''}
+                                                onChange={(e) => setParams({
+                                                    ...params,
+                                                    cashback_rates: {
+                                                        ...params.cashback_rates,
+                                                        [storeName]: Number(e.target.value)
+                                                    }
+                                                })}
+                                                className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                            />
+                                            <span className="absolute right-2 top-1.5 text-slate-600 text-[10px]">%</span>
+                                        </div>
+                                    </div>
                                 ))}
-                            </div >
-                        </div >
+                            </div>
+                        </div>
                     )}
 
-<div className=\"mt-6 flex justify-end gap-3 border-t border-[#334155] pt-4\">
-    < button onClick = {() => setShowConfig(false)} className =\"text-[10px] font-black uppercase text-slate-400 hover:text-white px-4 py-2\">Cancelar</button>
-        < button onClick = { saveParams } className =\"bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest px-6 py-2 rounded-lg shadow-lg shadow-amber-600/20 transition-all\">Salvar para este mês</button>
-                    </div >
-                </div >
+                    <div className="mt-6 flex justify-end gap-3 border-t border-[#334155] pt-4">
+                        <button onClick={() => setShowConfig(false)} className="text-[10px] font-black uppercase text-slate-400 hover:text-white px-4 py-2">Cancelar</button>
+                        <button onClick={saveParams} className="bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest px-6 py-2 rounded-lg shadow-lg shadow-amber-600/20 transition-all">Salvar para este mês</button>
+                    </div>
+                </div>
             )}
 
-<div className=\"bg-[#111a22] rounded-2xl border border-[#233648] overflow-hidden shadow-2xl\">
-    < div className =\"p-4 bg-[#1e293b] border-b border-[#233648] flex justify-between items-center font-black text-[10px] uppercase tracking-widest text-slate-400\">
-        < span > Descrição</span >
-            <div className=\"flex gap-16 mr-4\">
-                < span > Valor(R$)</span >
-                    <span>% s/ Receita</span>
-                    </div >
-                </div >
+            <div className="bg-[#111a22] rounded-2xl border border-[#233648] overflow-hidden shadow-2xl">
+                <div className="p-4 bg-[#1e293b] border-b border-[#233648] flex justify-between items-center font-black text-[10px] uppercase tracking-widest text-slate-400">
+                    <span>Descrição</span>
+                    <div className="flex gap-16 mr-4">
+                        <span>Valor (R$)</span>
+                        <span>% s/ Receita</span>
+                    </div>
+                </div>
 
-    {/* RECEITA */ }
-{
-    Object.entries(metrics.revByMethod).map(([method, val]) => (
-        <Row
-            key={method}
-            label={`Vendas realizadas no ${method}`}
-            value={val}
-            percentage={Number(metrics.totalRev) > 0 ? (Number(val) / Number(metrics.totalRev)) * 100 : 0}
-        />
-    ))
-}
-<Row
-    label=\"RECEITA BRUTA (RB)\"
-value = { metrics.totalRev }
-percentage = { 100}
-isTotal
-    />
+                {Object.entries(metrics.revByMethod).map(([method, val]) => (
+                    <Row
+                        key={method}
+                        label={`Vendas realizadas no ${method}`}
+                        value={val}
+                        percentage={Number(metrics.totalRev) > 0 ? (Number(val) / Number(metrics.totalRev)) * 100 : 0}
+                    />
+                ))}
+                <Row
+                    label="RECEITA BRUTA (RB)"
+                    value={metrics.totalRev}
+                    percentage={100}
+                    isTotal
+                />
 
-    <Row
-        label=\"Impostos sobre as vendas\"
-value = { metrics.impostos }
-percentage = { metrics.totalRev > 0 ? (metrics.impostos / metrics.totalRev) * 100 : 0 }
-isNegative
-    />
-    <Row
-        label=\"RECEITA SEM IMPOSTOS (RL)\"
-value = { metrics.rl }
-percentage = { metrics.totalRev > 0 ? (metrics.rl / metrics.totalRev) * 100 : 0 }
-isSubTotal
-    />
+                <Row
+                    label="Impostos sobre as vendas"
+                    value={metrics.impostos}
+                    percentage={metrics.totalRev > 0 ? (metrics.impostos / metrics.totalRev) * 100 : 0}
+                    isNegative
+                />
+                <Row
+                    label="RECEITA SEM IMPOSTOS (RL)"
+                    value={metrics.rl}
+                    percentage={metrics.totalRev > 0 ? (metrics.rl / metrics.totalRev) * 100 : 0}
+                    isSubTotal
+                />
 
-    <Row
-        label=\"Custos de mercadoria vendida (CMV)\"
-value = { metrics.cmv }
-percentage = { metrics.totalRev > 0 ? (metrics.cmv / metrics.totalRev) * 100 : 0 }
-isNegative
-    />
-    <Row
-        label=\"MARGEM BRUTA\"
-value = { metrics.grossMargin }
-percentage = { metrics.totalRev > 0 ? (metrics.grossMargin / metrics.totalRev) * 100 : 0 }
-isTotal
-    />
+                <Row
+                    label="Custos de mercadoria vendida (CMV)"
+                    value={metrics.cmv}
+                    percentage={metrics.totalRev > 0 ? (metrics.cmv / metrics.totalRev) * 100 : 0}
+                    isNegative
+                />
+                <Row
+                    label="MARGEM BRUTA"
+                    value={metrics.grossMargin}
+                    percentage={metrics.totalRev > 0 ? (metrics.grossMargin / metrics.totalRev) * 100 : 0}
+                    isTotal
+                />
 
-    <Row
-        label=\"Perda do estoque (Furto, vencido, danificado)\"
-value = { metrics.perdaEstoque }
-percentage = { metrics.totalRev > 0 ? (metrics.perdaEstoque / metrics.totalRev) * 100 : 0 }
-isNegative
-    />
-    <Row
-        label=\"MARGEM BRUTA SEM PERDA DE ESTOQUE\"
-value = { metrics.marginAfterLoss }
-percentage = { metrics.totalRev > 0 ? (metrics.marginAfterLoss / metrics.totalRev) * 100 : 0 }
-isSubTotal
-    />
+                <Row
+                    label="Perda do estoque (Furto, vencido, danificado)"
+                    value={metrics.perdaEstoque}
+                    percentage={metrics.totalRev > 0 ? (metrics.perdaEstoque / metrics.totalRev) * 100 : 0}
+                    isNegative
+                />
+                <Row
+                    label="MARGEM BRUTA SEM PERDA DE ESTOQUE"
+                    value={metrics.marginAfterLoss}
+                    percentage={metrics.totalRev > 0 ? (metrics.marginAfterLoss / metrics.totalRev) * 100 : 0}
+                    isSubTotal
+                />
 
-    <div className=\"h-4 bg-[#0f172a]/20\"></div>
+                <div className="h-4 bg-[#0f172a]/20"></div>
 
-{/* DESPESAS VARIÁVEIS */ }
-{
-    Object.values(metrics.varGroups).map((group: any, i) => (
-        <Row
-            key={i}
-            label={group.label}
-            value={group.amount}
-            percentage={metrics.totalRev > 0 ? (group.amount / metrics.totalRev) * 100 : 0}
-            isNegative
-            onClick={group.items.length > 0 ? () => { setDetailingItems(group.items); setDetailingTitle(group.label); setShowDetailModal(true); } : undefined}
-        />
-    ))
-}
+                {Object.values(metrics.varGroups).map((group: any, i) => (
+                    <Row
+                        key={i}
+                        label={group.label}
+                        value={group.amount}
+                        percentage={metrics.totalRev > 0 ? (group.amount / metrics.totalRev) * 100 : 0}
+                        isNegative
+                        onClick={group.items.length > 0 ? () => { setDetailingItems(group.items); setDetailingTitle(group.label); setShowDetailModal(true); } : undefined}
+                    />
+                ))}
 
-<Row label=\"TOTAL DESPESAS VARIÁVEIS\" value={metrics.totalVar} percentage={metrics.totalRev > 0 ? (metrics.totalVar / metrics.totalRev) * 100 : 0} isTotal isNegative />
+                <Row label="TOTAL DESPESAS VARIÁVEIS" value={metrics.totalVar} percentage={metrics.totalRev > 0 ? (metrics.totalVar / metrics.totalRev) * 100 : 0} isTotal isNegative />
 
-    < div className =\"h-0.5 bg-indigo-500/10 my-4\"></div>
+                <div className="h-0.5 bg-indigo-500/10 my-4"></div>
 
-        < Row
-label =\"MARGEM DE CONTRIBUIÇÃO\"
-value = { metrics.marginAfterLoss - metrics.totalVar }
-percentage = { metrics.totalRev > 0 ? ((metrics.marginAfterLoss - metrics.totalVar) / metrics.totalRev) * 100 : 0 }
-isSubTotal
-    />
+                <Row
+                    label="MARGEM DE CONTRIBUIÇÃO"
+                    value={metrics.marginAfterLoss - metrics.totalVar}
+                    percentage={metrics.totalRev > 0 ? ((metrics.marginAfterLoss - metrics.totalVar) / metrics.totalRev) * 100 : 0}
+                    isSubTotal
+                />
 
-    <div className=\"h-4 bg-[#0f172a]/20\"></div>
+                <div className="h-4 bg-[#0f172a]/20"></div>
 
-{/* DESPESAS FIXAS */ }
-{
-    Object.values(metrics.fixGroups).map((group: any, i) => (
-        <Row
-            key={i}
-            label={group.label}
-            value={group.amount}
-            percentage={metrics.totalRev > 0 ? (group.amount / metrics.totalRev) * 100 : 0}
-            isNegative
-            onClick={group.items.length > 0 ? () => { setDetailingItems(group.items); setDetailingTitle(group.label); setShowDetailModal(true); } : undefined}
-        />
-    ))
-}
+                {Object.values(metrics.fixGroups).map((group: any, i) => (
+                    <Row
+                        key={i}
+                        label={group.label}
+                        value={group.amount}
+                        percentage={metrics.totalRev > 0 ? (group.amount / metrics.totalRev) * 100 : 0}
+                        isNegative
+                        onClick={group.items.length > 0 ? () => { setDetailingItems(group.items); setDetailingTitle(group.label); setShowDetailModal(true); } : undefined}
+                    />
+                ))}
 
-<Row
-    label=\"DESPESAS FIXAS\"
-value = { metrics.totalFix }
-percentage = { metrics.totalRev > 0 ? (metrics.totalFix / metrics.totalRev) * 100 : 0 }
-isTotal
-isNegative
-    />
+                <Row
+                    label="DESPESAS FIXAS"
+                    value={metrics.totalFix}
+                    percentage={metrics.totalRev > 0 ? (metrics.totalFix / metrics.totalRev) * 100 : 0}
+                    isTotal
+                    isNegative
+                />
 
-    {/* RESULTADO FINAL */ }
-    < div className =\"mt-8\">
-        < Row
-label = { metrics.netProfit >= 0 ? 'LUCRO LÍQUIDO' : 'PREJUÍZO LÍQUIDO' }
-value = { metrics.netProfit }
-percentage = { metrics.totalRev > 0 ? (metrics.netProfit / metrics.totalRev) * 100 : 0 }
-isFinal
-    />
-                </div >
-            </div >
+                <div className="mt-8">
+                    <Row
+                        label={metrics.netProfit >= 0 ? 'LUCRO LÍQUIDO' : 'PREJUÍZO LÍQUIDO'}
+                        value={metrics.netProfit}
+                        percentage={metrics.totalRev > 0 ? (metrics.netProfit / metrics.totalRev) * 100 : 0}
+                        isFinal
+                    />
+                </div>
+            </div>
 
-    {/* Detailing Modal */ }
-{
-    showDetailModal && (
-        <div className=\"fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300\">
-            < div className =\"bg-[#111a22] border border-[#233648] rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl\">
-                < div className =\"p-4 border-b border-[#233648] flex justify-between items-center bg-[#1e293b]\">
-                    < h3 className =\"text-white font-black text-sm uppercase tracking-widest flex items-center gap-2\">
-                        < span className =\"material-symbols-outlined text-primary\">list_alt</span>
-    Detalhamento: { detailingTitle } ({ detailingItems.length })
-                            </h3 >
-        <button onClick={() => setShowDetailModal(false)} className=\"text-slate-400 hover:text-white transition-colors\">
-            < span className =\"material-symbols-outlined\">close</span>
-                            </button >
-                        </div >
-        <div className=\"overflow-y-auto p-4 custom-scrollbar\">
-            < table className =\"w-full text-left text-xs\">
-                < thead >
-                <tr className=\"text-slate-500 uppercase font-black tracking-widest border-b border-[#233648]\">
-                    < th className =\"pb-2 px-2\">Data</th>
-                        < th className =\"pb-2 px-2\">Loja</th>
-                            < th className =\"pb-2 px-2\">Descrição</th>
-                                < th className =\"pb-2 px-2\">Categoria</th>
-                                    < th className =\"pb-2 px-2 text-right\">Valor</th>
-                                    </tr >
-                                </thead >
-        <tbody className=\"divide-y divide-[#233648]\">
-    {
-        detailingItems.map((exp, i) => (
-            <tr key={i} className=\"hover:bg-white/5 transition-colors\">
-        < td className =\"py-2 px-2 text-slate-400\">{new Date(exp.date).toLocaleDateString()}</td>
-        < td className =\"py-2 px-2 text-indigo-400 font-bold\">{exp.store_name || 'Geral'}</td>
-        < td className =\"py-2 px-2 text-white font-medium\">{exp.description}</td>
-        < td className =\"py-2 px-2 text-slate-400\">{exp.categories?.name}</td>
-        < td className =\"py-2 px-2 text-right text-red-400 font-bold\">R$ {Number(exp.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                        </tr >
-                                    ))
-    }
-    {
-        detailingItems.length === 0 && (
-            <tr>
-                <td colSpan={5} className=\"py-8 text-center text-slate-500\">Nenhum lançamento encontrado.</td>
-                                        </tr >
-                                    )
-    }
-                                </tbody >
-                            </table >
-                        </div >
-        <div className=\"p-4 bg-[#0f172a] border-t border-[#233648] flex justify-between items-center text-xs font-black uppercase\">
-            < span className =\"text-slate-400\">Total</span>
-                < span className =\"text-white\">R$ {detailingItems.reduce((acc, e) => acc + Number(e.amount), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                        </div >
-                    </div >
-                </div >
-            )
-}
-        </div >
+            {showDetailModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-[#111a22] border border-[#233648] rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl">
+                        <div className="p-4 border-b border-[#233648] flex justify-between items-center bg-[#1e293b]">
+                            <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">list_alt</span>
+                                Detalhamento: {detailingTitle} ({detailingItems.length})
+                            </h3>
+                            <button onClick={() => setShowDetailModal(false)} className="text-slate-400 hover:text-white transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <div className="overflow-y-auto p-4 custom-scrollbar">
+                            <table className="w-full text-left text-xs">
+                                <thead>
+                                    <tr className="text-slate-500 uppercase font-black tracking-widest border-b border-[#233648]">
+                                        <th className="pb-2 px-2">Data</th>
+                                        <th className="pb-2 px-2">Loja</th>
+                                        <th className="pb-2 px-2">Descrição</th>
+                                        <th className="pb-2 px-2">Categoria</th>
+                                        <th className="pb-2 px-2 text-right">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#233648]">
+                                    {detailingItems.map((exp, i) => (
+                                        <tr key={i} className="hover:bg-white/5 transition-colors">
+                                            <td className="py-2 px-2 text-slate-400">{new Date(exp.date).toLocaleDateString()}</td>
+                                            <td className="py-2 px-2 text-indigo-400 font-bold">{exp.store_name || 'Geral'}</td>
+                                            <td className="py-2 px-2 text-white font-medium">{exp.description}</td>
+                                            <td className="py-2 px-2 text-slate-400">{exp.categories?.name}</td>
+                                            <td className="py-2 px-2 text-right text-red-400 font-bold">R$ {Number(exp.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                        </tr>
+                                    ))}
+                                    {detailingItems.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="py-8 text-center text-slate-500">Nenhum lançamento encontrado.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="p-4 bg-[#0f172a] border-t border-[#233648] flex justify-between items-center text-xs font-black uppercase">
+                            <span className="text-slate-400">Total</span>
+                            <span className="text-white">R$ {detailingItems.reduce((acc, e) => acc + Number(e.amount), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 };
 
