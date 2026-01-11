@@ -14,8 +14,11 @@ const DRE: React.FC = () => {
     const now = new Date();
     const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
     const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+    const [selectedStore, setSelectedStore] = useState<string>('Todas');
     const [allPeriods, setAllPeriods] = useState<string[]>([]);
     const [showConfig, setShowConfig] = useState(false);
+    const [outrosDetails, setOutrosDetails] = useState<any[]>([]);
+    const [showOutrosDetail, setShowOutrosDetail] = useState(false);
     const [params, setParams] = useState({
         tax_rate: 3.24,
         royalty_rate: 6.00,
@@ -118,7 +121,7 @@ const DRE: React.FC = () => {
 
             const { data: expData } = await supabase
                 .from('transactions')
-                .select('amount, type, description, date, category_id, categories(name, parent_id)')
+                .select('amount, type, description, date, category_id, store_name, categories(name, parent_id)')
                 .eq('is_business', true)
                 .eq('type', 'expense')
                 .gte('date', startDate)
@@ -129,6 +132,13 @@ const DRE: React.FC = () => {
         };
         load();
     }, [fetchSales, selectedMonth, selectedYear]);
+
+    const stores = useMemo(() => {
+        const s = new Set<string>();
+        salesData.forEach(sale => { if (sale.store_name) s.add(sale.store_name); });
+        expensesData.forEach(exp => { if (exp.store_name) s.add(exp.store_name); });
+        return Array.from(s).sort();
+    }, [salesData, expensesData]);
 
     const saveParams = async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -166,6 +176,7 @@ const DRE: React.FC = () => {
         fixGroups: Record<string, { label: string; amount: number }>;
         totalFix: number;
         netProfit: number;
+        outrosList: any[];
     }
 
     const metrics = useMemo<DREMetrics>(() => {
@@ -174,7 +185,10 @@ const DRE: React.FC = () => {
         let totalRev = 0;
         let cmvCents = 0;
 
-        salesData.forEach(sale => {
+        const filteredSales = selectedStore === 'Todas' ? salesData : salesData.filter(s => s.store_name === selectedStore);
+        const filteredExpenses = selectedStore === 'Todas' ? expensesData : expensesData.filter(e => e.store_name === selectedStore);
+
+        filteredSales.forEach(sale => {
             let method = sale.payment_method || 'Outros';
             const normMethod = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
@@ -205,6 +219,7 @@ const DRE: React.FC = () => {
         // Detailed Categorization for Expenses
         let impostos = 0;
         let perdaEstoque = 0;
+        const outrosList: any[] = [];
 
         const varGroups: Record<string, { label: string; amount: number }> = {
             cashback: { label: 'Comissão paga ao condominio (cashback)', amount: 0 },
@@ -230,7 +245,7 @@ const DRE: React.FC = () => {
             outros: { label: 'Outros', amount: 0 },
         };
 
-        expensesData.forEach(exp => {
+        filteredExpenses.forEach(exp => {
             const catName = (exp.categories?.name || 'Geral').toLowerCase();
             const desc = (exp.description || '').toLowerCase();
             const amount = Number(exp.amount || 0);
@@ -263,16 +278,19 @@ const DRE: React.FC = () => {
             // Fixed Groups
             else if (catName.includes('funcionario') || catName.includes('salario') || desc.includes('pgto') || desc.includes('salario')) fixGroups.funcionarios.amount += amount;
             else if (desc.includes('veiculo') || desc.includes('carro') || desc.includes('moto')) fixGroups.manutencaoVeiculo.amount += amount;
-            else if (catName.includes('sistema') || desc.includes('software') || desc.includes('mensalidade')) fixGroups.taxaSistema.amount += amount;
+            else if (catName.includes('taxa de uso do sistema') || (catName.includes('sistema') && desc.includes('taxa'))) fixGroups.taxaSistema.amount += amount;
             else if (catName.includes('container')) fixGroups.aluguelContainer.amount += amount;
             else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel')) fixGroups.combustivel.amount += amount;
             else if (catName.includes('escritorio')) fixGroups.aluguelEscritorio.amount += amount;
-            else if (desc.includes('elgin') || desc.includes('tef') || desc.includes('lgopass')) fixGroups.tef.amount += amount;
+            else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass') || catName.includes('lgopass')) fixGroups.tef.amount += amount;
             else if (catName.includes('aluguel do espaço') || desc.includes('aluguel da loja')) fixGroups.aluguelLoja.amount += amount;
             else if (catName.includes('contabil') || desc.includes('contador')) fixGroups.contabilidade.amount += amount;
             else if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) fixGroups.internet.amount += amount;
             else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial')) fixGroups.energia.amount += amount;
-            else if (catName.includes('outros pagamentos') || !isCalculated) fixGroups.outros.amount += amount;
+            else if (catName.includes('outros pagamentos') || !isCalculated) {
+                fixGroups.outros.amount += amount;
+                outrosList.push(exp);
+            }
         });
 
         // Apply Calculation Formulas
@@ -303,14 +321,19 @@ const DRE: React.FC = () => {
             totalVar,
             fixGroups,
             totalFix,
-            netProfit
+            netProfit,
+            outrosList
         };
-    }, [salesData, expensesData, params]);
+    }, [salesData, expensesData, params, selectedStore]);
 
-    const Row = ({ label, value, percentage, isTotal, isSubTotal, isNegative, isFinal }: any) => (
-        <div className={`flex items-center justify-between px-4 ${isTotal || isFinal ? 'bg-[#1e293b] text-white font-black uppercase text-xs border-y border-[#334155] py-2.5' : 'border-b border-[#1e293b] text-slate-300 py-1.5'} ${isSubTotal ? 'bg-slate-800/30 font-bold' : ''}`}>
-            <div className={`flex-1 text-[11px] ${isTotal || isFinal || isSubTotal ? 'font-black' : ''} ${isFinal ? 'text-sm' : ''}`}>
+    const Row = ({ label, value, percentage, isTotal, isSubTotal, isNegative, isFinal, onClick }: any) => (
+        <div
+            onClick={onClick}
+            className={`flex items-center justify-between px-4 ${onClick ? 'cursor-pointer hover:bg-indigo-500/10' : ''} ${isTotal || isFinal ? 'bg-[#1e293b] text-white font-black uppercase text-xs border-y border-[#334155] py-2.5' : 'border-b border-[#1e293b] text-slate-300 py-1.5'} ${isSubTotal ? 'bg-slate-800/30 font-bold' : ''}`}
+        >
+            <div className={`flex-1 text-[11px] ${isTotal || isFinal || isSubTotal ? 'font-black' : ''} ${isFinal ? 'text-sm' : ''} flex items-center gap-2`}>
                 {label}
+                {onClick && <span className="material-symbols-outlined text-[14px] opacity-40 hover:opacity-100 transition-opacity">info</span>}
             </div>
             <div className={`w-32 text-right font-bold ${isFinal ? 'text-sm' : 'text-[11px]'} ${isNegative ? 'text-red-400' : (isFinal ? (value >= 0 ? 'text-emerald-400' : 'text-red-500') : '')}`}>
                 {isNegative && value > 0 ? '-' : ''} R$ {Math.abs(Number(value)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -332,10 +355,24 @@ const DRE: React.FC = () => {
                     <p className="text-slate-400 text-xs mt-1">Visão detalhada de faturamento, custos e lucratividade</p>
                 </div>
 
-                <div className="flex gap-4 items-center">
+                <div className="flex flex-wrap gap-4 items-center">
+                    <div className="flex items-center gap-2 bg-[#1e293b] border border-[#334155] rounded-xl px-3 py-1.5 min-w-[200px]">
+                        <span className="material-symbols-outlined text-slate-500 text-sm">storefront</span>
+                        <select
+                            value={selectedStore}
+                            onChange={(e) => setSelectedStore(e.target.value)}
+                            className="bg-transparent border-none text-white text-xs font-bold focus:ring-0 w-full"
+                        >
+                            <option value="Todas" className="bg-[#1e293b]">Todas as Lojas</option>
+                            {stores.map(s => (
+                                <option key={s} value={s} className="bg-[#1e293b]">{s}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <button
                         onClick={() => setShowConfig(!showConfig)}
-                        className={`p-2 rounded-lg transition-all flex items-center gap-2 text-xs font-bold border ${showConfig ? 'bg-amber-600 border-amber-500 text-white' : 'bg-[#1e293b] border-[#334155] text-amber-400 hover:bg-amber-600/10'}`}
+                        className={`p-2 rounded-xl transition-all flex items-center gap-2 text-xs font-bold border ${showConfig ? 'bg-amber-600 border-amber-500 text-white' : 'bg-[#1e293b] border-[#334155] text-amber-400 hover:bg-amber-600/10'}`}
                     >
                         <span className="material-symbols-outlined text-sm">settings</span>
                         Taxas/Config
@@ -527,15 +564,33 @@ const DRE: React.FC = () => {
                 <div className="h-4 bg-[#0f172a]/20"></div>
 
                 {/* DESPESAS FIXAS */}
-                {Object.values(metrics.fixGroups).map((group: { label: string; amount: number }, i) => (
-                    <Row
-                        key={i}
-                        label={group.label}
-                        value={group.amount}
-                        percentage={Number(metrics.totalRev) > 0 ? (Number(group.amount) / Number(metrics.totalRev)) * 100 : 0}
-                        isNegative
-                    />
-                ))}
+                {Object.values(metrics.fixGroups).map((group: { label: string; amount: number }, i) => {
+                    // Skip 'Outros' and 'Energia' as they are handled separately below
+                    if (group.label === 'Outros' || group.label === 'Despesa com energia elétrica') return null;
+                    return (
+                        <Row
+                            key={i}
+                            label={group.label}
+                            value={group.amount}
+                            percentage={Number(metrics.totalRev) > 0 ? (Number(group.amount) / Number(metrics.totalRev)) * 100 : 0}
+                            isNegative
+                        />
+                    );
+                })}
+                <Row
+                    label={'Despesa com energia elétrica'}
+                    value={metrics.fixGroups.energia.amount}
+                    percentage={metrics.totalRev > 0 ? (metrics.fixGroups.energia.amount / metrics.totalRev) * 100 : 0}
+                    isNegative
+                />
+                <Row
+                    label={'Outros'}
+                    value={metrics.fixGroups.outros.amount}
+                    percentage={metrics.totalRev > 0 ? (metrics.fixGroups.outros.amount / metrics.totalRev) * 100 : 0}
+                    isNegative
+                    onClick={() => { setOutrosDetails(metrics.outrosList); setShowOutrosDetail(true); }}
+                />
+
                 <Row
                     label="DESPESAS FIXAS"
                     value={metrics.totalFix}
@@ -553,6 +608,56 @@ const DRE: React.FC = () => {
                     />
                 </div>
             </div>
+
+            {/* Outros Detail Modal */}
+            {showOutrosDetail && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-[#111a22] border border-[#233648] rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl">
+                        <div className="p-4 border-b border-[#233648] flex justify-between items-center bg-[#1e293b]">
+                            <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">list_alt</span>
+                                Detalhamento: Outros ({outrosDetails.length})
+                            </h3>
+                            <button onClick={() => setShowOutrosDetail(false)} className="text-slate-400 hover:text-white transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <div className="overflow-y-auto p-4 custom-scrollbar">
+                            <table className="w-full text-left text-xs">
+                                <thead>
+                                    <tr className="text-slate-500 uppercase font-black tracking-widest border-b border-[#233648]">
+                                        <th className="pb-2 px-2">Data</th>
+                                        <th className="pb-2 px-2">Loja</th>
+                                        <th className="pb-2 px-2">Descrição</th>
+                                        <th className="pb-2 px-2">Categoria</th>
+                                        <th className="pb-2 px-2 text-right">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#233648]">
+                                    {outrosDetails.map((exp, i) => (
+                                        <tr key={i} className="hover:bg-white/5 transition-colors">
+                                            <td className="py-2 px-2 text-slate-400">{new Date(exp.date).toLocaleDateString()}</td>
+                                            <td className="py-2 px-2 text-indigo-400 font-bold">{exp.store_name || 'Geral'}</td>
+                                            <td className="py-2 px-2 text-white font-medium">{exp.description}</td>
+                                            <td className="py-2 px-2 text-slate-400">{exp.categories?.name}</td>
+                                            <td className="py-2 px-2 text-right text-red-400 font-bold">R$ {Number(exp.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                        </tr>
+                                    ))}
+                                    {outrosDetails.length === 0 && (
+                                        <tr>
+                                            <td colSpan={4} className="py-8 text-center text-slate-500">Nenhum lançamento encontrado.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="p-4 bg-[#0f172a] border-t border-[#233648] flex justify-between items-center text-xs font-black uppercase">
+                            <span className="text-slate-400">Total</span>
+                            <span className="text-white">R$ {outrosDetails.reduce((acc, e) => acc + Number(e.amount), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

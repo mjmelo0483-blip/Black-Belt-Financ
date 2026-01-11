@@ -41,6 +41,7 @@ export const useTransactions = () => {
         subcategoryId?: string;
         paymentMethod?: string;
         status?: string;
+        storeName?: string;
         types?: string[];
     }) => {
         setLoading(true);
@@ -72,6 +73,9 @@ export const useTransactions = () => {
             }
             if (activeFilters?.paymentMethod) {
                 query = query.eq('payment_method', activeFilters.paymentMethod);
+            }
+            if (activeFilters?.storeName) {
+                query = query.eq('store_name', activeFilters.storeName);
             }
             if (activeFilters?.types && activeFilters.types.length > 0) {
                 query = query.in('type', activeFilters.types);

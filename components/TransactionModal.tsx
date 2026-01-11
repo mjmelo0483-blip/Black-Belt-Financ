@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
+import { useView } from '../contexts/ViewContext';
 
 interface TransactionModalProps {
     isOpen: boolean;
@@ -34,12 +35,15 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     isEditing = false,
     initialData = null
 }) => {
+    const { isBusiness } = useView();
     const [loading, setLoading] = useState(false);
     const [type, setType] = useState<'expense' | 'income' | 'transfer' | 'investment'>(initialData?.type || 'expense');
     const [investmentOperationType, setInvestmentOperationType] = useState<'application' | 'redemption'>('application');
     const [investmentId, setInvestmentId] = useState('');
     const [status, setStatus] = useState<'open' | 'completed'>(initialData?.status || 'open');
     const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
+    const [storeName, setStoreName] = useState(initialData?.store_name || '');
+    const [availableStores, setAvailableStores] = useState<string[]>([]);
 
     const getLocalDate = () => {
         const d = new Date();
@@ -72,7 +76,20 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             setDescription(initialData?.description || '');
             setCategoryId(initialData?.category_id || '');
             setAccountId(initialData?.account_id || '');
+            setStoreName(initialData?.store_name || '');
             setToAccountId('');
+
+            // Fetch stores if in business mode
+            if (isBusiness) {
+                const fetchStores = async () => {
+                    const { data } = await supabase.from('sales').select('store_name');
+                    if (data) {
+                        const stores = Array.from(new Set(data.map(s => s.store_name).filter(Boolean))) as string[];
+                        setAvailableStores(stores.sort());
+                    }
+                };
+                fetchStores();
+            }
 
             // Investment Specific State
             if (initialData?.investment_id) {
@@ -90,7 +107,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             setIsRecurring(false);
             setRecurrenceCount('1');
         }
-    }, [isOpen, initialData]);
+    }, [isOpen, initialData, isBusiness]);
 
     const addMonths = (dateStr: string, months: number) => {
         const [year, month, day] = dateStr.split('-').map(Number);
@@ -204,7 +221,8 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             payment_method: paymentMethod,
             card_id: paymentMethod === 'credito' ? cardId : null,
             installments: numInstallments,
-            status
+            status,
+            store_name: isBusiness ? storeName : null
         };
 
         let result;
@@ -240,6 +258,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                 setAmount('');
                 setDescription('');
                 setCategoryId('');
+                setStoreName('');
             }
             onSave();
         }
@@ -358,6 +377,27 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                     </div>
                                 )}
                             </div>
+                        )}
+
+                        {isBusiness && type !== 'transfer' && (
+                            <label className="flex flex-col gap-2">
+                                <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Loja / Unidade</span>
+                                <div className="relative">
+                                    <select
+                                        className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm appearance-none"
+                                        value={storeName}
+                                        onChange={(e) => setStoreName(e.target.value)}
+                                    >
+                                        <option value="">Geral / Administrativo</option>
+                                        {availableStores.map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                        <span className="material-symbols-outlined text-sm">expand_more</span>
+                                    </div>
+                                </div>
+                            </label>
                         )}
 
                         {type === 'investment' && (
