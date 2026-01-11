@@ -17,8 +17,9 @@ const DRE: React.FC = () => {
     const [selectedStore, setSelectedStore] = useState<string>('Todas');
     const [allPeriods, setAllPeriods] = useState<string[]>([]);
     const [showConfig, setShowConfig] = useState(false);
-    const [outrosDetails, setOutrosDetails] = useState<any[]>([]);
-    const [showOutrosDetail, setShowOutrosDetail] = useState(false);
+    const [detailingItems, setDetailingItems] = useState<any[]>([]);
+    const [detailingTitle, setDetailingTitle] = useState('');
+    const [showDetailModal, setShowDetailModal] = useState(false);
     const [params, setParams] = useState({
         tax_rate: 3.24,
         royalty_rate: 6.00,
@@ -173,10 +174,9 @@ const DRE: React.FC = () => {
         marginAfterLoss: number;
         varGroups: Record<string, { label: string; amount: number }>;
         totalVar: number;
-        fixGroups: Record<string, { label: string; amount: number }>;
+        fixGroups: Record<string, { label: string; amount: number; items: any[] }>;
         totalFix: number;
         netProfit: number;
-        outrosList: any[];
     }
 
     const metrics = useMemo<DREMetrics>(() => {
@@ -219,30 +219,29 @@ const DRE: React.FC = () => {
         // Detailed Categorization for Expenses
         let impostos = 0;
         let perdaEstoque = 0;
-        const outrosList: any[] = [];
 
-        const varGroups: Record<string, { label: string; amount: number }> = {
-            cashback: { label: 'Comissão paga ao condominio (cashback)', amount: 0 },
-            royalties: { label: 'Royalties', amount: 0 },
-            tarifaCartao: { label: 'Tarifa de cartão', amount: 0 },
-            tarifaPix: { label: 'Tarifa de Pix', amount: 0 },
-            marketing: { label: 'Investimento Marketing da loja', amount: 0 },
-            diversas: { label: 'Despesas diversas da loja', amount: 0 },
+        const varGroups: Record<string, { label: string; amount: number; items: any[] }> = {
+            cashback: { label: 'Comissão paga ao condominio (cashback)', amount: 0, items: [] },
+            royalties: { label: 'Royalties', amount: 0, items: [] },
+            tarifaCartao: { label: 'Tarifa de cartão', amount: 0, items: [] },
+            tarifaPix: { label: 'Tarifa de Pix', amount: 0, items: [] },
+            marketing: { label: 'Investimento Marketing da loja', amount: 0, items: [] },
+            diversas: { label: 'Despesas diversas da loja', amount: 0, items: [] },
         };
 
-        const fixGroups: Record<string, { label: string; amount: number }> = {
-            funcionarios: { label: 'Funcionários', amount: 0 },
-            manutencaoVeiculo: { label: 'Manutenção de veículo', amount: 0 },
-            taxaSistema: { label: 'Taxa de uso do sistema', amount: 0 },
-            aluguelContainer: { label: 'Aluguel de container', amount: 0 },
-            combustivel: { label: 'Despesa com combustível', amount: 0 },
-            aluguelEscritorio: { label: 'Aluguel de Escritório', amount: 0 },
-            tef: { label: 'Elgin+TEF+LgoPass', amount: 0 },
-            aluguelLoja: { label: 'Aluguel do espaço da loja', amount: 0 },
-            contabilidade: { label: 'Despesa com contabilidade', amount: 0 },
-            internet: { label: 'Despesa com internet', amount: 0 },
-            energia: { label: 'Despesa com energia elétrica', amount: 0 },
-            outros: { label: 'Outros', amount: 0 },
+        const fixGroups: Record<string, { label: string; amount: number; items: any[] }> = {
+            funcionarios: { label: 'Funcionários', amount: 0, items: [] },
+            manutencaoVeiculo: { label: 'Manutenção de veículo', amount: 0, items: [] },
+            taxaSistema: { label: 'Taxa de uso do sistema', amount: 0, items: [] },
+            aluguelContainer: { label: 'Aluguel de container', amount: 0, items: [] },
+            combustivel: { label: 'Despesa com combustível', amount: 0, items: [] },
+            aluguelEscritorio: { label: 'Aluguel de Escritório', amount: 0, items: [] },
+            tef: { label: 'Elgin+TEF+LgoPass', amount: 0, items: [] },
+            despesasFinanceiras: { label: 'Despesas financeiras', amount: 0, items: [] },
+            contabilidade: { label: 'Despesa com contabilidade', amount: 0, items: [] },
+            internet: { label: 'Despesa com internet', amount: 0, items: [] },
+            energia: { label: 'Despesa com energia elétrica', amount: 0, items: [] },
+            outros: { label: 'Outros', amount: 0, items: [] },
         };
 
         filteredExpenses.forEach(exp => {
@@ -268,28 +267,70 @@ const DRE: React.FC = () => {
                 perdaEstoque += amount;
             }
             // Variable Groups (Only diverse/marketing/manual ones)
-            else if (desc.includes('cashback') || desc.includes('condominio')) varGroups.cashback.amount += amount;
+            else if (desc.includes('cashback') || desc.includes('condominio')) {
+                varGroups.cashback.amount += amount;
+                varGroups.cashback.items.push(exp);
+            }
             // Royalties, Tarifa Cartão and Tarifa Pix are now strictly calculated from params
-            else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda')) varGroups.marketing.amount += amount;
+            else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda')) {
+                varGroups.marketing.amount += amount;
+                varGroups.marketing.items.push(exp);
+            }
             else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) {
                 // Only add if not already matched
-                if (!isCalculated) varGroups.diversas.amount += amount;
+                if (!isCalculated) {
+                    varGroups.diversas.amount += amount;
+                    varGroups.diversas.items.push(exp);
+                }
             }
             // Fixed Groups
-            else if (catName.includes('funcionario') || catName.includes('salario') || desc.includes('pgto') || desc.includes('salario')) fixGroups.funcionarios.amount += amount;
-            else if (desc.includes('veiculo') || desc.includes('carro') || desc.includes('moto')) fixGroups.manutencaoVeiculo.amount += amount;
-            else if (catName.includes('taxa de uso do sistema') || (catName.includes('sistema') && desc.includes('taxa'))) fixGroups.taxaSistema.amount += amount;
-            else if (catName.includes('container')) fixGroups.aluguelContainer.amount += amount;
-            else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel')) fixGroups.combustivel.amount += amount;
-            else if (catName.includes('escritorio')) fixGroups.aluguelEscritorio.amount += amount;
-            else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass') || catName.includes('lgopass')) fixGroups.tef.amount += amount;
-            else if (catName.includes('aluguel do espaço') || desc.includes('aluguel da loja')) fixGroups.aluguelLoja.amount += amount;
-            else if (catName.includes('contabil') || desc.includes('contador')) fixGroups.contabilidade.amount += amount;
-            else if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) fixGroups.internet.amount += amount;
-            else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial')) fixGroups.energia.amount += amount;
+            else if (catName.includes('funcionario') || catName.includes('salario') || desc.includes('pgto') || desc.includes('salario')) {
+                fixGroups.funcionarios.amount += amount;
+                fixGroups.funcionarios.items.push(exp);
+            }
+            else if (desc.includes('veiculo') || desc.includes('carro') || desc.includes('moto')) {
+                fixGroups.manutencaoVeiculo.amount += amount;
+                fixGroups.manutencaoVeiculo.items.push(exp);
+            }
+            else if (catName.includes('taxa de uso do sistema') || (catName.includes('sistema') && desc.includes('taxa'))) {
+                fixGroups.taxaSistema.amount += amount;
+                fixGroups.taxaSistema.items.push(exp);
+            }
+            else if (catName.includes('container')) {
+                fixGroups.aluguelContainer.amount += amount;
+                fixGroups.aluguelContainer.items.push(exp);
+            }
+            else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel')) {
+                fixGroups.combustivel.amount += amount;
+                fixGroups.combustivel.items.push(exp);
+            }
+            else if (catName.includes('escritorio')) {
+                fixGroups.aluguelEscritorio.amount += amount;
+                fixGroups.aluguelEscritorio.items.push(exp);
+            }
+            else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass') || catName.includes('lgopass')) {
+                fixGroups.tef.amount += amount;
+                fixGroups.tef.items.push(exp);
+            }
+            else if (catName.includes('despesas financeiras') || catName.includes('aluguel do espaco') || desc.includes('aluguel da loja')) {
+                fixGroups.despesasFinanceiras.amount += amount;
+                fixGroups.despesasFinanceiras.items.push(exp);
+            }
+            else if (catName.includes('contabil') || desc.includes('contador')) {
+                fixGroups.contabilidade.amount += amount;
+                fixGroups.contabilidade.items.push(exp);
+            }
+            else if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) {
+                fixGroups.internet.amount += amount;
+                fixGroups.internet.items.push(exp);
+            }
+            else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial')) {
+                fixGroups.energia.amount += amount;
+                fixGroups.energia.items.push(exp);
+            }
             else if (catName.includes('outros pagamentos') || !isCalculated) {
                 fixGroups.outros.amount += amount;
-                outrosList.push(exp);
+                fixGroups.outros.items.push(exp);
             }
         });
 
@@ -321,8 +362,7 @@ const DRE: React.FC = () => {
             totalVar,
             fixGroups,
             totalFix,
-            netProfit,
-            outrosList
+            netProfit
         };
     }, [salesData, expensesData, params, selectedStore]);
 
@@ -545,63 +585,54 @@ const DRE: React.FC = () => {
                 <div className="h-4 bg-[#0f172a]/20"></div>
 
                 {/* DESPESAS VARIÁVEIS */}
-                {Object.values(metrics.varGroups).map((group: { label: string; amount: number }, i) => (
+                {Object.values(metrics.varGroups).map((group: any, i) => (
                     <Row
                         key={i}
                         label={group.label}
                         value={group.amount}
-                        percentage={Number(metrics.totalRev) > 0 ? (Number(group.amount) / Number(metrics.totalRev)) * 100 : 0}
+                        percentage={metrics.totalRev > 0 ? (group.amount / metrics.totalRev) * 100 : 0}
                         isNegative
+                        onClick={group.items.length > 0 ? () => { setDetailingItems(group.items); setDetailingTitle(group.label); setShowDetailModal(true); } : undefined}
                     />
                 ))}
+
+                <Row label="TOTAL DESPESAS VARIÁVEIS" value={metrics.totalVar} percentage={metrics.totalRev > 0 ? (metrics.totalVar / metrics.totalRev) * 100 : 0} isTotal isNegative />
+
+                <div className="h-0.5 bg-indigo-500/10 my-4"></div>
+
                 <Row
-                    label="DESPESAS VARIÁVEIS"
-                    value={metrics.totalVar}
-                    percentage={metrics.totalRev > 0 ? (metrics.totalVar / metrics.totalRev) * 100 : 0}
-                    isTotal
+                    label="MARGEM DE CONTRIBUIÇÃO"
+                    value={metrics.marginAfterLoss - metrics.totalVar}
+                    percentage={metrics.totalRev > 0 ? ((metrics.marginAfterLoss - metrics.totalVar) / metrics.totalRev) * 100 : 0}
+                    isSubTotal
                 />
 
                 <div className="h-4 bg-[#0f172a]/20"></div>
 
                 {/* DESPESAS FIXAS */}
-                {Object.values(metrics.fixGroups).map((group: { label: string; amount: number }, i) => {
-                    // Skip 'Outros' and 'Energia' as they are handled separately below
-                    if (group.label === 'Outros' || group.label === 'Despesa com energia elétrica') return null;
-                    return (
-                        <Row
-                            key={i}
-                            label={group.label}
-                            value={group.amount}
-                            percentage={Number(metrics.totalRev) > 0 ? (Number(group.amount) / Number(metrics.totalRev)) * 100 : 0}
-                            isNegative
-                        />
-                    );
-                })}
-                <Row
-                    label={'Despesa com energia elétrica'}
-                    value={metrics.fixGroups.energia.amount}
-                    percentage={metrics.totalRev > 0 ? (metrics.fixGroups.energia.amount / metrics.totalRev) * 100 : 0}
-                    isNegative
-                />
-                <Row
-                    label={'Outros'}
-                    value={metrics.fixGroups.outros.amount}
-                    percentage={metrics.totalRev > 0 ? (metrics.fixGroups.outros.amount / metrics.totalRev) * 100 : 0}
-                    isNegative
-                    onClick={() => { setOutrosDetails(metrics.outrosList); setShowOutrosDetail(true); }}
-                />
+                {Object.values(metrics.fixGroups).map((group: any, i) => (
+                    <Row
+                        key={i}
+                        label={group.label}
+                        value={group.amount}
+                        percentage={metrics.totalRev > 0 ? (group.amount / metrics.totalRev) * 100 : 0}
+                        isNegative
+                        onClick={group.items.length > 0 ? () => { setDetailingItems(group.items); setDetailingTitle(group.label); setShowDetailModal(true); } : undefined}
+                    />
+                ))}
 
                 <Row
                     label="DESPESAS FIXAS"
                     value={metrics.totalFix}
                     percentage={metrics.totalRev > 0 ? (metrics.totalFix / metrics.totalRev) * 100 : 0}
                     isTotal
+                    isNegative
                 />
 
                 {/* RESULTADO FINAL */}
                 <div className="mt-8">
                     <Row
-                        label={metrics.netProfit >= 0 ? "LUCRO LÍQUIDO" : "PREJUÍZO LÍQUIDO"}
+                        label={metrics.netProfit >= 0 ? 'LUCRO LÍQUIDO' : 'PREJUÍZO LÍQUIDO'}
                         value={metrics.netProfit}
                         percentage={metrics.totalRev > 0 ? (metrics.netProfit / metrics.totalRev) * 100 : 0}
                         isFinal
@@ -609,16 +640,16 @@ const DRE: React.FC = () => {
                 </div>
             </div>
 
-            {/* Outros Detail Modal */}
-            {showOutrosDetail && (
+            {/* Detailing Modal */}
+            {showDetailModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
                     <div className="bg-[#111a22] border border-[#233648] rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl">
                         <div className="p-4 border-b border-[#233648] flex justify-between items-center bg-[#1e293b]">
                             <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2">
                                 <span className="material-symbols-outlined text-primary">list_alt</span>
-                                Detalhamento: Outros ({outrosDetails.length})
+                                Detalhamento: {detailingTitle} ({detailingItems.length})
                             </h3>
-                            <button onClick={() => setShowOutrosDetail(false)} className="text-slate-400 hover:text-white transition-colors">
+                            <button onClick={() => setShowDetailModal(false)} className="text-slate-400 hover:text-white transition-colors">
                                 <span className="material-symbols-outlined">close</span>
                             </button>
                         </div>
@@ -634,7 +665,7 @@ const DRE: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#233648]">
-                                    {outrosDetails.map((exp, i) => (
+                                    {detailingItems.map((exp, i) => (
                                         <tr key={i} className="hover:bg-white/5 transition-colors">
                                             <td className="py-2 px-2 text-slate-400">{new Date(exp.date).toLocaleDateString()}</td>
                                             <td className="py-2 px-2 text-indigo-400 font-bold">{exp.store_name || 'Geral'}</td>
@@ -643,9 +674,9 @@ const DRE: React.FC = () => {
                                             <td className="py-2 px-2 text-right text-red-400 font-bold">R$ {Number(exp.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                     ))}
-                                    {outrosDetails.length === 0 && (
+                                    {detailingItems.length === 0 && (
                                         <tr>
-                                            <td colSpan={4} className="py-8 text-center text-slate-500">Nenhum lançamento encontrado.</td>
+                                            <td colSpan={5} className="py-8 text-center text-slate-500">Nenhum lançamento encontrado.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -653,7 +684,7 @@ const DRE: React.FC = () => {
                         </div>
                         <div className="p-4 bg-[#0f172a] border-t border-[#233648] flex justify-between items-center text-xs font-black uppercase">
                             <span className="text-slate-400">Total</span>
-                            <span className="text-white">R$ {outrosDetails.reduce((acc, e) => acc + Number(e.amount), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="text-white">R$ {detailingItems.reduce((acc, e) => acc + Number(e.amount), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
                     </div>
                 </div>
