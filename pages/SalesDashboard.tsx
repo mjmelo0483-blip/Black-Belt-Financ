@@ -18,12 +18,21 @@ const SalesDashboard: React.FC = () => {
     const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
     const [selectedStore, setSelectedStore] = useState<string>('Todas');
 
+    // Simple local cache to avoid re-fetching same period
+    const [cache, setCache] = useState<Record<string, any[]>>({});
+
     useEffect(() => {
         const load = async () => {
-            // First load or when period changes, fetch only that period
+            const cacheKey = `${selectedMonth}-${selectedYear}`;
+            if (cache[cacheKey]) {
+                setSalesData(cache[cacheKey]);
+                return;
+            }
+
             const { data } = await fetchSales({ month: selectedMonth, year: selectedYear });
             if (data) {
                 setSalesData(data);
+                setCache(prev => ({ ...prev, [cacheKey]: data }));
             }
         };
         load();
@@ -39,15 +48,13 @@ const SalesDashboard: React.FC = () => {
             // Only scan for periods if we don't have them yet
             if (allPeriods.length > 0) return;
 
-            // Optimization: Instead of 30k records, we just need unique date parts
-            // In a real production app, we'd have a separate 'imports' table or a summary view.
-            // For now, let's just make it faster by not scanning EVERYTHING every time.
+            // Optimization: Fetch only distinct dates to find periods
             const { data: qData, error } = await supabase
                 .from('sales')
                 .select('date')
                 .eq('user_id', session.user.id)
                 .order('date', { ascending: false })
-                .limit(2000); // 2000 is enough to see the last several months
+                .limit(3000); // 3k should cover several active months of unique dates or blocks of dates
 
             if (error) return;
 
@@ -160,22 +167,16 @@ const SalesDashboard: React.FC = () => {
     const dailyData = useMemo(() => {
         const map: any = {};
 
-        // Ensure ALL days of the month are present for a complete XAxis
-        const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-        for (let i = 1; i <= lastDay; i++) {
-            const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-            map[dateStr] = { date: dateStr, revenue: 0, units: 0 };
-        }
-
         filteredItems.forEach(item => {
             const dateStr = item.date;
-            if (map[dateStr]) {
-                map[dateStr].revenue += Number(item.total_price || 0);
-                map[dateStr].units += Number(item.quantity || 0);
+            if (!map[dateStr]) {
+                map[dateStr] = { date: dateStr, revenue: 0, units: 0 };
             }
+            map[dateStr].revenue += Number(item.total_price || 0);
+            map[dateStr].units += Number(item.quantity || 0);
         });
         return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
-    }, [filteredItems, selectedMonth, selectedYear]);
+    }, [filteredItems]);
 
     const targetRevenue = 12942.71;
     const balancePercentage = Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100);
@@ -307,12 +308,12 @@ const SalesDashboard: React.FC = () => {
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                                         <XAxis
                                             dataKey="date"
-                                            tickFormatter={(val) => val.split('-')[2]}
+                                            tickFormatter={(val) => parseInt(val.split('-')[2]).toString()}
                                             stroke="#64748b"
-                                            fontSize={9}
+                                            fontSize={10}
                                             axisLine={false}
                                             tickLine={false}
-                                            interval={0} // Force all labels to show
+                                            interval={0}
                                         />
                                         <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })} />
                                         <Tooltip
@@ -374,9 +375,9 @@ const SalesDashboard: React.FC = () => {
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                                         <XAxis
                                             dataKey="date"
-                                            tickFormatter={(val) => val.split('-')[2]}
+                                            tickFormatter={(val) => parseInt(val.split('-')[2]).toString()}
                                             stroke="#64748b"
-                                            fontSize={9}
+                                            fontSize={10}
                                             axisLine={false}
                                             tickLine={false}
                                             interval={0}

@@ -21,13 +21,12 @@ export const useSales = () => {
                 let query = supabase
                     .from('sales')
                     .select(`
-                        *,
-                        customers (name, cpf),
-                        sale_items (
-                            *,
-                            products (name, code, cost, category)
-                        )
-                    `)
+                    id, date, store_name,
+                    sale_items (
+                        total_price, quantity,
+                        products (name, code, category)
+                    )
+                `)
                     .order('date', { ascending: false })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 
