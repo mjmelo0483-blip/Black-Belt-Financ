@@ -36,8 +36,7 @@ const SalesDashboard: React.FC = () => {
             const { data: qData } = await supabase
                 .from('sales')
                 .select('date')
-                .eq('user_id', (await supabase.auth.getSession()).data.session?.user.id)
-                .eq('is_business', true); // Safe enough as we just want periods
+                .eq('user_id', (await supabase.auth.getSession()).data.session?.user.id);
 
             if (qData) {
                 const p = new Set<string>();
@@ -177,20 +176,26 @@ const SalesDashboard: React.FC = () => {
                         </select>
                     </div>
 
-                    <div className="flex gap-1">
-                        {periods.slice(-4).reverse().map(period => {
-                            const [m, y] = period.split('-').map(Number);
-                            const active = selectedMonth === m && selectedYear === y;
-                            return (
-                                <button
-                                    key={period}
-                                    onClick={() => { setSelectedMonth(m); setSelectedYear(y); }}
-                                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border ${active ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-[#1e293b] border-[#334155] text-slate-400 hover:text-white'}`}
-                                >
-                                    {monthNames[m]}/{y}
-                                </button>
-                            );
-                        })}
+                    <div className="flex gap-1 flex-nowrap overflow-x-auto pb-1 max-w-[300px]">
+                        {periods.length > 0 ? (
+                            periods.slice(-10).reverse().map(period => {
+                                const [m, y] = period.split('-').map(Number);
+                                const active = selectedMonth === m && selectedYear === y;
+                                return (
+                                    <button
+                                        key={period}
+                                        onClick={() => { setSelectedMonth(m); setSelectedYear(y); }}
+                                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${active ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#1e293b] border-[#334155] text-slate-400 hover:text-white'}`}
+                                    >
+                                        {monthNames[m]}/{y}
+                                    </button>
+                                );
+                            })
+                        ) : (
+                            <div className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#1e293b] border border-[#334155] text-slate-500">
+                                {monthNames[selectedMonth]}/{selectedYear}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
