@@ -15,6 +15,12 @@ const DRE: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
     const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
     const [allPeriods, setAllPeriods] = useState<string[]>([]);
+    const [showConfig, setShowConfig] = useState(false);
+    const [params, setParams] = useState({
+        tax_rate: 3.24,
+        royalty_rate: 6.00,
+        pix_fee_rate: 0.80
+    });
 
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -69,6 +75,30 @@ const DRE: React.FC = () => {
     useEffect(() => {
         const load = async () => {
             setLoading(true);
+
+            // Fetch Parameters
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                const { data: pData } = await supabase
+                    .from('dre_parameters')
+                    .select('*')
+                    .eq('user_id', session.user.id)
+                    .eq('month', selectedMonth)
+                    .eq('year', selectedYear)
+                    .maybeSingle();
+
+                if (pData) {
+                    setParams({
+                        tax_rate: Number(pData.tax_rate),
+                        royalty_rate: Number(pData.royalty_rate),
+                        pix_fee_rate: Number(pData.pix_fee_rate)
+                    });
+                } else {
+                    // Default values if none found for this month
+                    setParams({ tax_rate: 3.24, royalty_rate: 6.00, pix_fee_rate: 0.80 });
+                }
+            }
+
             const { data } = await fetchSales({ month: selectedMonth, year: selectedYear });
             if (data) setSalesData(data);
 
@@ -89,6 +119,28 @@ const DRE: React.FC = () => {
         };
         load();
     }, [fetchSales, selectedMonth, selectedYear]);
+
+    const saveParams = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+
+        const { error } = await supabase
+            .from('dre_parameters')
+            .upsert({
+                user_id: session.user.id,
+                month: selectedMonth,
+                year: selectedYear,
+                ...params,
+                is_business: true
+            }, { onConflict: 'user_id, month, year, is_business' });
+
+        if (error) {
+            alert('Erro ao salvar configurações. Certifique-se de que a tabela dre_parameters existe.');
+        } else {
+            setShowConfig(false);
+            // Re-calc metrics by just keeping state
+        }
+    };
 
     interface DREMetrics {
         revByMethod: Record<string, number>;
@@ -125,7 +177,9 @@ const DRE: React.FC = () => {
             if (sale.sale_items && sale.sale_items.length > 0) {
                 sale.sale_items.forEach((item: any) => {
                     saleTotal += Number(item.total_price || 0);
-                    cmv += (Number(item.products?.cost || 0) * Number(item.quantity || 0));
+                    // Use Math.round to mitigate floating point issues
+                    const itemCost = Math.round(Number(item.products?.cost || 0) * Number(item.quantity || 0) * 100);
+                    cmv += (itemCost / 100);
                 });
             } else {
                 saleTotal = Number(sale.total_amount || 0);
@@ -169,18 +223,20 @@ const DRE: React.FC = () => {
             const amount = Number(exp.amount || 0);
 
             // Mapping logic based on keywords
-            if (catName.includes('imposto') || desc.includes('imposto') || desc.includes('simples nacional')) {
-                impostos += amount;
-            } else if (catName.includes('perda') || desc.includes('perda') || desc.includes('furto') || desc.includes('vencido') || desc.includes('danificado')) {
+            // Skip calculated ones if they match by description to avoid double counting
+            const isCalculated = desc.includes('royalties') || desc.includes('imposto') || desc.includes('tarifa de pix') || desc.includes('tarifa pix');
+
+            if (catName.includes('perda') || desc.includes('perda') || desc.includes('furto') || desc.includes('vencido') || desc.includes('danificado')) {
                 perdaEstoque += amount;
             }
-            // Variable Groups
+            // Variable Groups (Only diverse/marketing/manual ones)
             else if (desc.includes('cashback') || desc.includes('condominio')) varGroups.cashback.amount += amount;
-            else if (catName.includes('royalties') || desc.includes('royalties')) varGroups.royalties.amount += amount;
             else if (desc.includes('tarifa de cartao') || desc.includes('taxa de cartao') || desc.includes('maquininha')) varGroups.tarifaCartao.amount += amount;
-            else if (desc.includes('tarifa de pix') || desc.includes('taxa de pix')) varGroups.tarifaPix.amount += amount;
             else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda')) varGroups.marketing.amount += amount;
-            else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) varGroups.diversas.amount += amount;
+            else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) {
+                // Only add if not already matched
+                if (!isCalculated) varGroups.diversas.amount += amount;
+            }
             // Fixed Groups
             else if (catName.includes('funcionario') || catName.includes('salario') || desc.includes('pgto') || desc.includes('salario')) fixGroups.funcionarios.amount += amount;
             else if (desc.includes('veiculo') || desc.includes('carro') || desc.includes('moto')) fixGroups.manutencaoVeiculo.amount += amount;
@@ -193,8 +249,13 @@ const DRE: React.FC = () => {
             else if (catName.includes('contabil') || desc.includes('contador')) fixGroups.contabilidade.amount += amount;
             else if (desc.includes('internet') || desc.includes('wi-fi')) fixGroups.internet.amount += amount;
             else if (desc.includes('energia') || desc.includes('luz') || desc.includes('equatorial')) fixGroups.energia.amount += amount;
-            else fixGroups.outros.amount += amount;
+            else if (!isCalculated) fixGroups.outros.amount += amount;
         });
+
+        // Apply Calculation Formulas
+        impostos = (totalRev * (params.tax_rate / 100));
+        varGroups.royalties.amount = (totalRev * (params.royalty_rate / 100));
+        varGroups.tarifaPix.amount = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
 
         const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
@@ -219,7 +280,7 @@ const DRE: React.FC = () => {
             totalFix,
             netProfit
         };
-    }, [salesData, expensesData]);
+    }, [salesData, expensesData, params]);
 
     const Row = ({ label, value, percentage, isTotal, isSubTotal, isNegative, isFinal }: any) => (
         <div className={`flex items-center justify-between px-4 ${isTotal || isFinal ? 'bg-[#1e293b] text-white font-black uppercase text-xs border-y border-[#334155] py-2.5' : 'border-b border-[#1e293b] text-slate-300 py-1.5'} ${isSubTotal ? 'bg-slate-800/30 font-bold' : ''}`}>
@@ -246,24 +307,85 @@ const DRE: React.FC = () => {
                     <p className="text-slate-400 text-xs mt-1">Visão detalhada de faturamento, custos e lucratividade</p>
                 </div>
 
-                <div className="flex gap-1 flex-nowrap overflow-x-auto pb-1 max-w-[600px] custom-scrollbar">
-                    {allPeriods.length > 0 ? (
-                        [...allPeriods].reverse().map(period => {
-                            const [m, y] = period.split('-').map(Number);
-                            const active = selectedMonth === m && selectedYear === y;
-                            return (
-                                <button
-                                    key={period}
-                                    onClick={() => { setSelectedMonth(m); setSelectedYear(y); }}
-                                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${active ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#1e293b] border-[#334155] text-slate-400 hover:text-white'}`}
-                                >
-                                    {monthNames[m].substring(0, 3)}/{y}
-                                </button>
-                            );
-                        })
-                    ) : null}
+                <div className="flex gap-4 items-center">
+                    <button
+                        onClick={() => setShowConfig(!showConfig)}
+                        className={`p-2 rounded-lg transition-all flex items-center gap-2 text-xs font-bold border ${showConfig ? 'bg-amber-600 border-amber-500 text-white' : 'bg-[#1e293b] border-[#334155] text-amber-400 hover:bg-amber-600/10'}`}
+                    >
+                        <span className="material-symbols-outlined text-sm">settings</span>
+                        Taxas/Config
+                    </button>
+
+                    <div className="flex gap-1 flex-nowrap overflow-x-auto pb-1 max-w-[600px] custom-scrollbar">
+                        {allPeriods.length > 0 ? (
+                            [...allPeriods].reverse().map(period => {
+                                const [m, y] = period.split('-').map(Number);
+                                const active = selectedMonth === m && selectedYear === y;
+                                return (
+                                    <button
+                                        key={period}
+                                        onClick={() => { setSelectedMonth(m); setSelectedYear(y); }}
+                                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${active ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#1e293b] border-[#334155] text-slate-400 hover:text-white'}`}
+                                    >
+                                        {monthNames[m].substring(0, 3)}/{y}
+                                    </button>
+                                );
+                            })
+                        ) : null}
+                    </div>
                 </div>
             </div>
+
+            {showConfig && (
+                <div className="bg-[#1e293b] border border-amber-500/30 p-4 rounded-xl shadow-xl animate-in zoom-in-95 duration-200">
+                    <h3 className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm">tune</span>
+                        Parâmetros da DRE - {monthNames[selectedMonth]}/{selectedYear}
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Impostos (Geral %)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    value={params.tax_rate}
+                                    onChange={(e) => setParams({ ...params, tax_rate: Number(e.target.value) })}
+                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                />
+                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Royalties (% Faturamento)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    value={params.royalty_rate}
+                                    onChange={(e) => setParams({ ...params, royalty_rate: Number(e.target.value) })}
+                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                />
+                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa PIX (% sobre PIX)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    value={params.pix_fee_rate}
+                                    onChange={(e) => setParams({ ...params, pix_fee_rate: Number(e.target.value) })}
+                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                />
+                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="mt-6 flex justify-end gap-3">
+                        <button onClick={() => setShowConfig(false)} className="text-[10px] font-black uppercase text-slate-400 hover:text-white px-4 py-2">Cancelar</button>
+                        <button onClick={saveParams} className="bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest px-6 py-2 rounded-lg shadow-lg shadow-amber-600/20 transition-all">Salvar para este mês</button>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-[#111a22] rounded-2xl border border-[#233648] overflow-hidden shadow-2xl">
                 <div className="p-4 bg-[#1e293b] border-b border-[#233648] flex justify-between items-center font-black text-[10px] uppercase tracking-widest text-slate-400">
