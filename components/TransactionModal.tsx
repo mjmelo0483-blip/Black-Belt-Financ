@@ -82,11 +82,18 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
             // Fetch stores if in business mode
             if (isBusiness) {
                 const fetchStores = async () => {
+                    const knownStores = [
+                        'Vitta Bela Fonte',
+                        'Associação Dos Amigos Do Residencial Cenere',
+                        'Condomínio Lar Chile',
+                        'Condomínio Lar Portugal',
+                        'Associação dos Proprietarios em loteamento village costa Sul'
+                    ];
+
                     const { data } = await supabase.from('sales').select('store_name');
-                    if (data) {
-                        const stores = Array.from(new Set(data.map(s => s.store_name).filter(Boolean))) as string[];
-                        setAvailableStores(stores.sort());
-                    }
+                    const dbStores = data ? data.map(s => s.store_name) : [];
+                    const stores = Array.from(new Set([...knownStores, ...dbStores])).filter(Boolean).sort() as string[];
+                    setAvailableStores(stores);
                 };
                 fetchStores();
             }

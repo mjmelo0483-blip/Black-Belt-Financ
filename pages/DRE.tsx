@@ -79,15 +79,22 @@ const DRE: React.FC = () => {
             }
 
             // Fetch all known stores to ensure config is always populated
+            const knownStores = [
+                'Vitta Bela Fonte',
+                'Associação Dos Amigos Do Residencial Cenere',
+                'Condomínio Lar Chile',
+                'Condomínio Lar Portugal',
+                'Associação dos Proprietarios em loteamento village costa Sul'
+            ];
+
             const { data: storeData } = await supabase
                 .from('sales')
                 .select('store_name')
                 .not('store_name', 'is', null);
 
-            if (storeData) {
-                const uniqueStores = Array.from(new Set(storeData.map(s => s.store_name))).sort() as string[];
-                setAllKnownStores(uniqueStores);
-            }
+            const dbStores = storeData ? storeData.map(s => s.store_name) : [];
+            const uniqueStores = Array.from(new Set([...knownStores, ...dbStores])).filter(Boolean).sort() as string[];
+            setAllKnownStores(uniqueStores);
         };
         loadInitialData();
     }, []);
