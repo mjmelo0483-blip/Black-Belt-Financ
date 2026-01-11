@@ -90,14 +90,35 @@ const DRE: React.FC = () => {
         load();
     }, [fetchSales, selectedMonth, selectedYear]);
 
-    const metrics = useMemo(() => {
+    interface DREMetrics {
+        revByMethod: Record<string, number>;
+        totalRev: number;
+        impostos: number;
+        rl: number;
+        cmv: number;
+        grossMargin: number;
+        perdaEstoque: number;
+        marginAfterLoss: number;
+        varGroups: Record<string, { label: string; amount: number }>;
+        totalVar: number;
+        fixGroups: Record<string, { label: string; amount: number }>;
+        totalFix: number;
+        netProfit: number;
+    }
+
+    const metrics = useMemo<DREMetrics>(() => {
         // Revenue by Payment Method
-        const revByMethod: Record<string, number> = {};
+        const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Outros': 0 };
         let totalRev = 0;
         let cmv = 0;
 
         salesData.forEach(sale => {
-            const method = sale.payment_method || 'Outros';
+            let method = sale.payment_method || 'Outros';
+            if (method.toLowerCase().includes('credito')) method = 'Crédito';
+            else if (method.toLowerCase().includes('debito')) method = 'Débito';
+            else if (method.toLowerCase().includes('pix')) method = 'PIX';
+            else method = 'Outros';
+
             revByMethod[method] = (revByMethod[method] || 0) + Number(sale.total_amount || 0);
             totalRev += Number(sale.total_amount || 0);
 
@@ -106,60 +127,102 @@ const DRE: React.FC = () => {
             });
         });
 
-        // Expenses breakdown
-        // We group by category name or specific keywords for Variable vs Fixed
-        let fixedExpenses = 0;
-        let variableExpenses = 0;
+        // Detailed Categorization for Expenses
+        let impostos = 0;
+        let perdaEstoque = 0;
 
-        // Specific sub-metrics from the image (Mocking some based on category names or descriptions)
-        const detailedExpenses: any[] = [];
+        const varGroups: Record<string, { label: string; amount: number }> = {
+            cashback: { label: 'Comissão paga ao condominio (cashback)', amount: 0 },
+            royalties: { label: 'Royalties', amount: 0 },
+            tarifaCartao: { label: 'Tarifa de cartão', amount: 0 },
+            tarifaPix: { label: 'Tarifa de Pix', amount: 0 },
+            marketing: { label: 'Investimento Marketing da loja', amount: 0 },
+            diversas: { label: 'Despesas diversas da loja', amount: 0 },
+        };
+
+        const fixGroups: Record<string, { label: string; amount: number }> = {
+            funcionarios: { label: 'Funcionários', amount: 0 },
+            manutencaoVeiculo: { label: 'Manutenção de veículo', amount: 0 },
+            taxaSistema: { label: 'Taxa de uso do sistema', amount: 0 },
+            aluguelContainer: { label: 'Aluguel de container', amount: 0 },
+            combustivel: { label: 'Despesa com combustível', amount: 0 },
+            aluguelEscritorio: { label: 'Aluguel de Escritório', amount: 0 },
+            tef: { label: 'Elgin+TEF+LgoPass', amount: 0 },
+            aluguelLoja: { label: 'Aluguel do espaço da loja', amount: 0 },
+            contabilidade: { label: 'Despesa com contabilidade', amount: 0 },
+            internet: { label: 'Despesa com internet', amount: 0 },
+            energia: { label: 'Despesa com energia elétrica', amount: 0 },
+            outros: { label: 'Outros', amount: 0 },
+        };
 
         expensesData.forEach(exp => {
             const catName = (exp.categories?.name || 'Geral').toLowerCase();
             const desc = (exp.description || '').toLowerCase();
             const amount = Number(exp.amount || 0);
 
-            // Image-specific mapping
-            const varKeywords = ['comissao', 'royalties', 'taxa de cartao', 'taxa de pix', 'marketing', 'caixa', 'cashback', 'imposto', 'simples nacional'];
-            const fixKeywords = ['funcionario', 'salario', 'veiculo', 'sistema', 'software', 'aluguel', 'pro-labore', 'prolabore', 'contador', 'internet', 'telefone', 'energia', 'agua', 'contabilidade'];
-
-            const isVariable = varKeywords.some(k => catName.includes(k) || desc.includes(k));
-            const isFixed = fixKeywords.some(k => catName.includes(k) || desc.includes(k));
-
-            if (isVariable) {
-                variableExpenses += amount;
-                detailedExpenses.push({ description: exp.description || catName, amount, isVariable: true });
-            } else {
-                fixedExpenses += amount;
-                detailedExpenses.push({ description: exp.description || catName, amount, isVariable: false });
+            // Mapping logic based on keywords
+            if (catName.includes('imposto') || desc.includes('imposto') || desc.includes('simples nacional')) {
+                impostos += amount;
+            } else if (catName.includes('perda') || desc.includes('perda') || desc.includes('furto') || desc.includes('vencido') || desc.includes('danificado')) {
+                perdaEstoque += amount;
             }
+            // Variable Groups
+            else if (desc.includes('cashback') || desc.includes('condominio')) varGroups.cashback.amount += amount;
+            else if (catName.includes('royalties') || desc.includes('royalties')) varGroups.royalties.amount += amount;
+            else if (desc.includes('tarifa de cartao') || desc.includes('taxa de cartao') || desc.includes('maquininha')) varGroups.tarifaCartao.amount += amount;
+            else if (desc.includes('tarifa de pix') || desc.includes('taxa de pix')) varGroups.tarifaPix.amount += amount;
+            else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda')) varGroups.marketing.amount += amount;
+            else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) varGroups.diversas.amount += amount;
+            // Fixed Groups
+            else if (catName.includes('funcionario') || catName.includes('salario') || desc.includes('pgto') || desc.includes('salario')) fixGroups.funcionarios.amount += amount;
+            else if (desc.includes('veiculo') || desc.includes('carro') || desc.includes('moto')) fixGroups.manutencaoVeiculo.amount += amount;
+            else if (desc.includes('sistema') || desc.includes('software') || desc.includes('mensalidade')) fixGroups.taxaSistema.amount += amount;
+            else if (desc.includes('container')) fixGroups.aluguelContainer.amount += amount;
+            else if (desc.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel')) fixGroups.combustivel.amount += amount;
+            else if (desc.includes('escritorio')) fixGroups.aluguelEscritorio.amount += amount;
+            else if (desc.includes('elgin') || desc.includes('tef') || desc.includes('lgopass')) fixGroups.tef.amount += amount;
+            else if (desc.includes('aluguel do espaço') || desc.includes('aluguel da loja')) fixGroups.aluguelLoja.amount += amount;
+            else if (catName.includes('contabil') || desc.includes('contador')) fixGroups.contabilidade.amount += amount;
+            else if (desc.includes('internet') || desc.includes('wi-fi')) fixGroups.internet.amount += amount;
+            else if (desc.includes('energia') || desc.includes('luz') || desc.includes('equatorial')) fixGroups.energia.amount += amount;
+            else fixGroups.outros.amount += amount;
         });
 
-        const grossProfit = totalRev - cmv;
-        const netProfit = grossProfit - variableExpenses - fixedExpenses;
+        const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
+        const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
+
+        const rl = totalRev - impostos;
+        const grossMargin = rl - cmv;
+        const marginAfterLoss = grossMargin - perdaEstoque;
+        const netProfit = marginAfterLoss - totalVar - totalFix;
 
         return {
             revByMethod,
             totalRev,
+            impostos,
+            rl,
             cmv,
-            grossProfit,
-            variableExpenses,
-            fixedExpenses,
-            netProfit,
-            detailedExpenses
+            grossMargin,
+            perdaEstoque,
+            marginAfterLoss,
+            varGroups,
+            totalVar,
+            fixGroups,
+            totalFix,
+            netProfit
         };
     }, [salesData, expensesData]);
 
-    const Row = ({ label, value, percentage, isHeader, isTotal, isSubTotal, isNegative }: any) => (
-        <div className={`flex items-center justify-between py-2 px-4 ${isHeader ? 'bg-[#1e293b] text-white font-black uppercase text-xs' : 'border-b border-[#1e293b] text-slate-300'} ${isTotal ? 'bg-indigo-600/20 font-black' : ''} ${isSubTotal ? 'bg-slate-800/50 font-bold italic' : ''}`}>
-            <div className="flex-1 text-xs">
+    const Row = ({ label, value, percentage, isTotal, isSubTotal, isNegative, isFinal }: any) => (
+        <div className={`flex items-center justify-between px-4 ${isTotal || isFinal ? 'bg-[#1e293b] text-white font-black uppercase text-xs border-y border-[#334155] py-2.5' : 'border-b border-[#1e293b] text-slate-300 py-1.5'} ${isSubTotal ? 'bg-slate-800/30 font-bold' : ''}`}>
+            <div className={`flex-1 text-[11px] ${isTotal || isFinal || isSubTotal ? 'font-black' : ''} ${isFinal ? 'text-sm' : ''}`}>
                 {label}
             </div>
-            <div className={`w-32 text-right text-xs font-bold ${isNegative ? 'text-red-400' : ''}`}>
-                {isNegative && value > 0 ? '-' : ''} R$ {Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            <div className={`w-32 text-right font-bold ${isFinal ? 'text-sm' : 'text-[11px]'} ${isNegative ? 'text-red-400' : (isFinal ? (value >= 0 ? 'text-emerald-400' : 'text-red-500') : '')}`}>
+                {isNegative && value > 0 ? '-' : ''} R$ {Math.abs(Number(value)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </div>
             <div className="w-24 text-right text-[10px] font-medium text-slate-500">
-                {percentage ? `${percentage.toFixed(2)}%` : '--'}
+                {percentage !== undefined ? `${percentage.toFixed(2)}%` : '--'}
             </div>
         </div>
     );
@@ -203,113 +266,107 @@ const DRE: React.FC = () => {
                     </div>
                 </div>
 
-                {/* VENDAS */}
-                <Row label="VENDAS REALIZADAS" isHeader />
+                {/* RECEITA */}
                 {Object.entries(metrics.revByMethod).map(([method, val]) => (
                     <Row
                         key={method}
                         label={`Vendas realizadas no ${method}`}
                         value={val}
-                        percentage={metrics.totalRev > 0 ? (val / metrics.totalRev) * 100 : 0}
+                        percentage={Number(metrics.totalRev) > 0 ? (Number(val) / Number(metrics.totalRev)) * 100 : 0}
                     />
                 ))}
                 <Row
-                    label="RECEITA BRUTA (R$)"
+                    label="RECEITA BRUTA (RB)"
                     value={metrics.totalRev}
                     percentage={100}
                     isTotal
                 />
 
-                <div className="h-4 bg-[#0f172a]/50"></div>
-
-                {/* IMPOSTOS & CMV */}
-                <Row label="DEDUÇÕES E CUSTOS" isHeader />
                 <Row
-                    label="Impostos sobre vendas (-)"
-                    value={0} // To be implemented if we add tax field
-                    percentage={0}
+                    label="Impostos sobre as vendas"
+                    value={metrics.impostos}
+                    percentage={metrics.totalRev > 0 ? (metrics.impostos / metrics.totalRev) * 100 : 0}
                     isNegative
                 />
                 <Row
-                    label="RECEITA SEM IMPOSTOS (R$)"
-                    value={metrics.totalRev}
-                    percentage={100}
+                    label="RECEITA SEM IMPOSTOS (RL)"
+                    value={metrics.rl}
+                    percentage={metrics.totalRev > 0 ? (metrics.rl / metrics.totalRev) * 100 : 0}
                     isSubTotal
                 />
+
                 <Row
-                    label="Custo de mercadoria vendido (CMV) (-)"
+                    label="Custos de mercadoria vendida (CMV)"
                     value={metrics.cmv}
                     percentage={metrics.totalRev > 0 ? (metrics.cmv / metrics.totalRev) * 100 : 0}
                     isNegative
                 />
                 <Row
                     label="MARGEM BRUTA"
-                    value={metrics.grossProfit}
-                    percentage={metrics.totalRev > 0 ? (metrics.grossProfit / metrics.totalRev) * 100 : 0}
+                    value={metrics.grossMargin}
+                    percentage={metrics.totalRev > 0 ? (metrics.grossMargin / metrics.totalRev) * 100 : 0}
                     isTotal
                 />
 
-                <div className="h-4 bg-[#0f172a]/50"></div>
+                <Row
+                    label="Perda do estoque (Furto, vencido, danificado)"
+                    value={metrics.perdaEstoque}
+                    percentage={metrics.totalRev > 0 ? (metrics.perdaEstoque / metrics.totalRev) * 100 : 0}
+                    isNegative
+                />
+                <Row
+                    label="MARGEM BRUTA SEM PERDA DE ESTOQUE"
+                    value={metrics.marginAfterLoss}
+                    percentage={metrics.totalRev > 0 ? (metrics.marginAfterLoss / metrics.totalRev) * 100 : 0}
+                    isSubTotal
+                />
+
+                <div className="h-4 bg-[#0f172a]/20"></div>
 
                 {/* DESPESAS VARIÁVEIS */}
-                <Row label="DESPESAS VARIÁVEIS" isHeader />
-                {metrics.detailedExpenses.filter(e => e.isVariable).map((exp, i) => (
+                {Object.values(metrics.varGroups).map((group: { label: string; amount: number }, i) => (
                     <Row
                         key={i}
-                        label={exp.description}
-                        value={exp.amount}
-                        percentage={metrics.totalRev > 0 ? (exp.amount / metrics.totalRev) * 100 : 0}
+                        label={group.label}
+                        value={group.amount}
+                        percentage={Number(metrics.totalRev) > 0 ? (Number(group.amount) / Number(metrics.totalRev)) * 100 : 0}
                         isNegative
                     />
                 ))}
                 <Row
-                    label="TOTAL DESPESAS VARIÁVEIS"
-                    value={metrics.variableExpenses}
-                    percentage={metrics.totalRev > 0 ? (metrics.variableExpenses / metrics.totalRev) * 100 : 0}
-                    isSubTotal
-                    isNegative
+                    label="DESPESAS VARIÁVEIS"
+                    value={metrics.totalVar}
+                    percentage={metrics.totalRev > 0 ? (metrics.totalVar / metrics.totalRev) * 100 : 0}
+                    isTotal
                 />
 
-                <div className="h-4 bg-[#0f172a]/50"></div>
+                <div className="h-4 bg-[#0f172a]/20"></div>
 
                 {/* DESPESAS FIXAS */}
-                <Row label="DESPESAS FIXAS" isHeader />
-                {metrics.detailedExpenses.filter(e => !e.isVariable).map((exp, i) => (
+                {Object.values(metrics.fixGroups).map((group: { label: string; amount: number }, i) => (
                     <Row
                         key={i}
-                        label={exp.description}
-                        value={exp.amount}
-                        percentage={metrics.totalRev > 0 ? (exp.amount / metrics.totalRev) * 100 : 0}
+                        label={group.label}
+                        value={group.amount}
+                        percentage={Number(metrics.totalRev) > 0 ? (Number(group.amount) / Number(metrics.totalRev)) * 100 : 0}
                         isNegative
                     />
                 ))}
                 <Row
-                    label="TOTAL DESPESAS FIXAS"
-                    value={metrics.fixedExpenses}
-                    percentage={metrics.totalRev > 0 ? (metrics.fixedExpenses / metrics.totalRev) * 100 : 0}
-                    isSubTotal
-                    isNegative
+                    label="DESPESAS FIXAS"
+                    value={metrics.totalFix}
+                    percentage={metrics.totalRev > 0 ? (metrics.totalFix / metrics.totalRev) * 100 : 0}
+                    isTotal
                 />
 
-                <div className="h-8 bg-[#0f172a]"></div>
-
                 {/* RESULTADO FINAL */}
-                <div className="bg-indigo-600 p-6 flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                        <span className="material-symbols-outlined text-3xl">account_balance_wallet</span>
-                        <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Resultado do Exercício</p>
-                            <h2 className="text-4xl font-black">LUCRO LÍQUIDO</h2>
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-5xl font-black">
-                            R$ {metrics.netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </p>
-                        <p className="text-sm font-bold opacity-80 mt-1">
-                            Margem Líquida: {((metrics.netProfit / metrics.totalRev) * 100).toFixed(2)}%
-                        </p>
-                    </div>
+                <div className="mt-8">
+                    <Row
+                        label={metrics.netProfit >= 0 ? "LUCRO LÍQUIDO" : "PREJUÍZO LÍQUIDO"}
+                        value={metrics.netProfit}
+                        percentage={metrics.totalRev > 0 ? (metrics.netProfit / metrics.totalRev) * 100 : 0}
+                        isFinal
+                    />
                 </div>
             </div>
         </div>
