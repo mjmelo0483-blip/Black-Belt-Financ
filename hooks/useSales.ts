@@ -210,7 +210,7 @@ export const useSales = () => {
                             customersMap.get(getVal(row, ['Cliente', 'Nome do Cliente', 'Nome Cliente'])) || null,
                         date: date,
                         time: getVal(row, ['Hora da Compra', 'Hora', 'Horário']),
-                        payment_method: getVal(row, ['Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento']),
+                        payment_method: getVal(row, ['Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'E', 'Tipo de Pagamento', 'Pagto']),
                         store_name: store,
                         device: getVal(row, ['Dispositivo', 'Origem', 'Canal']),
                         import_filename: fileName,

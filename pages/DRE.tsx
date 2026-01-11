@@ -114,9 +114,11 @@ const DRE: React.FC = () => {
 
         salesData.forEach(sale => {
             let method = sale.payment_method || 'Outros';
-            if (method.toLowerCase().includes('credito')) method = 'Crédito';
-            else if (method.toLowerCase().includes('debito')) method = 'Débito';
-            else if (method.toLowerCase().includes('pix')) method = 'PIX';
+            const normMethod = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+            if (normMethod.includes('credito')) method = 'Crédito';
+            else if (normMethod.includes('debito')) method = 'Débito';
+            else if (normMethod.includes('pix')) method = 'PIX';
             else method = 'Outros';
 
             let saleTotal = 0;
