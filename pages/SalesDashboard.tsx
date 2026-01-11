@@ -45,16 +45,15 @@ const SalesDashboard: React.FC = () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return;
 
-            // Only scan for periods if we don't have them yet
-            if (allPeriods.length > 0) return;
-
-            // Optimization: Fetch only distinct dates to find periods
+            // We need to find all unique months. 
+            // To be efficient but thorough, we fetch only the 'date' column.
+            // 10,000 records is usually enough to cover several months of high-volume sales.
             const { data: qData, error } = await supabase
                 .from('sales')
                 .select('date')
                 .eq('user_id', session.user.id)
                 .order('date', { ascending: false })
-                .limit(3000); // 3k should cover several active months of unique dates or blocks of dates
+                .limit(10000);
 
             if (error) return;
 
@@ -62,17 +61,23 @@ const SalesDashboard: React.FC = () => {
                 const p = new Set<string>();
                 qData.forEach((s: any) => {
                     const parts = s.date?.split('-');
-                    if (parts?.length === 3) p.add(`${parseInt(parts[1]) - 1}-${parts[0]}`);
+                    if (parts?.length === 3) {
+                        // Store as "monthIndex-Year"
+                        p.add(`${parseInt(parts[1]) - 1}-${parts[0]}`);
+                    }
                 });
-                setAllPeriods(Array.from(p).sort((a, b) => {
+
+                const sortedPeriods = Array.from(p).sort((a, b) => {
                     const [am, ay] = a.split('-').map(Number);
                     const [bm, by] = b.split('-').map(Number);
                     return ay !== by ? ay - by : am - bm;
-                }));
+                });
+
+                setAllPeriods(sortedPeriods);
             }
         };
         loadPeriods();
-    }, [allPeriods]);
+    }, []);
 
     const periods = allPeriods;
 
