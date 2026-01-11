@@ -24,7 +24,7 @@ export const useSales = () => {
                     id, date, store_name,
                     sale_items (
                         total_price, quantity,
-                        products (name, code, category)
+                        products (name, code, category, cost)
                     )
                 `)
                     .order('date', { ascending: false })
