@@ -243,16 +243,13 @@ export const useSales = () => {
                 const parsedLineTotal = parseNumber(lineTotalRaw);
 
                 let lineTotalPrice = 0;
-                if (unitPrice > 0 && qty > 0) {
-                    // Always use multiplication if both are present for maximum accuracy
-                    lineTotalPrice = qty * unitPrice;
-                } else if (parsedLineTotal > 0) {
+                if (parsedLineTotal > 0) {
+                    // PRIORITIZE explicit total column as requested by the user
                     lineTotalPrice = parsedLineTotal;
+                } else if (unitPrice > 0 && qty > 0) {
+                    lineTotalPrice = qty * unitPrice;
                 } else if (unitPrice > 0) {
                     lineTotalPrice = unitPrice;
-                } else if (qty > 0 && parsedLineTotal > 0) {
-                    // If we have total and qty but no unit price
-                    lineTotalPrice = parsedLineTotal;
                 }
 
                 const sale = salesGroups.get(groupKey);
