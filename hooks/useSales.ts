@@ -12,31 +12,55 @@ export const useSales = () => {
         if (!isBusiness) return { data: [], error: null };
         setLoading(true);
         try {
-            let query = supabase
-                .from('sales')
-                .select(`
-                    *,
-                    customers (name, cpf),
-                    sale_items (
-                        *,
-                        products (name, code, cost, category)
-                    )
-                `)
-                .order('date', { ascending: false })
-                .limit(10000);
+            let allData: any[] = [];
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
 
-            if (filters?.startDate) query = query.gte('date', filters.startDate);
-            if (filters?.endDate) query = query.lte('date', filters.endDate);
-            if (filters?.month !== undefined && filters?.year !== undefined) {
-                const startDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-01`;
-                const lastDay = new Date(filters.year, filters.month + 1, 0).getDate();
-                const endDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-                query = query.gte('date', startDate).lte('date', endDate);
+            while (hasMore) {
+                let query = supabase
+                    .from('sales')
+                    .select(`
+                        *,
+                        customers (name, cpf),
+                        sale_items (
+                            *,
+                            products (name, code, cost, category)
+                        )
+                    `)
+                    .order('date', { ascending: false })
+                    .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                if (filters?.startDate) query = query.gte('date', filters.startDate);
+                if (filters?.endDate) query = query.lte('date', filters.endDate);
+                if (filters?.month !== undefined && filters?.year !== undefined) {
+                    const startDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-01`;
+                    const lastDay = new Date(filters.year, filters.month + 1, 0).getDate();
+                    const endDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+                    query = query.gte('date', startDate).lte('date', endDate);
+                }
+
+                const { data, error } = await withRetry(async () => await query);
+
+                if (error) throw error;
+                if (!data || data.length === 0) {
+                    hasMore = false;
+                } else {
+                    allData = [...allData, ...data];
+                    if (data.length < pageSize) {
+                        hasMore = false;
+                    } else {
+                        page++;
+                    }
+                }
+
+                // Safety break to avoid infinite loops if something goes wrong
+                if (page > 50) break;
             }
 
-            const { data, error } = await withRetry(async () => await query);
-            return { data, error };
+            return { data: allData, error: null };
         } catch (err: any) {
+            console.error('Fetch sales error:', err);
             return { error: err };
         } finally {
             setLoading(false);
