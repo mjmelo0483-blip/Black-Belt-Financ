@@ -343,17 +343,51 @@ export const useSales = () => {
             const user = session?.user;
             if (!user) throw new Error('Usuário não autenticado');
 
-            let query = supabase.from('sales').delete().eq('user_id', user.id);
-            if (fileName === null) {
-                query = query.is('import_filename', null);
-            } else {
-                query = query.eq('import_filename', fileName);
+            // 1. Fetch IDs of sales to delete (standard limit applies, so we might need a loop or just delete until 0)
+            // But let's try a more robust way: fetch all IDs first
+            let allIds: string[] = [];
+            let hasMore = true;
+            let page = 0;
+
+            while (hasMore) {
+                let query = supabase
+                    .from('sales')
+                    .select('id')
+                    .eq('user_id', user.id);
+
+                if (fileName === null) {
+                    query = query.is('import_filename', null);
+                } else {
+                    query = query.eq('import_filename', fileName);
+                }
+
+                const { data, error } = await query.range(page * 1000, (page + 1) * 1000 - 1);
+                if (error) throw error;
+                if (!data || data.length === 0) {
+                    hasMore = false;
+                } else {
+                    allIds = [...allIds, ...data.map(s => s.id)];
+                    if (data.length < 1000) hasMore = false;
+                    else page++;
+                }
+                if (page > 50) break; // Safety
             }
 
-            const { error } = await query;
-            if (error) throw error;
+            // 2. Delete in chunks to avoid timeout
+            const chunkSize = 200; // Small chunks for safe deletion (cascading items can be many)
+            for (let i = 0; i < allIds.length; i += chunkSize) {
+                const chunk = allIds.slice(i, i + chunkSize);
+                const { error: deleteError } = await supabase
+                    .from('sales')
+                    .delete()
+                    .in('id', chunk);
+
+                if (deleteError) throw deleteError;
+            }
+
             return { success: true };
         } catch (err: any) {
+            console.error('Delete error:', err);
             return { error: formatError(err) };
         } finally {
             setLoading(false);
@@ -365,16 +399,32 @@ export const useSales = () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return { data: [] };
 
-            const { data, error } = await supabase
-                .from('sales')
-                .select('import_filename, created_at, date')
-                .eq('user_id', session.user.id);
+            // Fetch all records in pages to group them correctly (PostgREST limit is 1000)
+            let allData: any[] = [];
+            let page = 0;
+            let hasMore = true;
 
-            if (error) throw error;
+            while (hasMore) {
+                const { data, error } = await supabase
+                    .from('sales')
+                    .select('import_filename, created_at, date')
+                    .eq('user_id', session.user.id)
+                    .range(page * 1000, (page + 1) * 1000 - 1);
+
+                if (error) throw error;
+                if (!data || data.length === 0) {
+                    hasMore = false;
+                } else {
+                    allData = [...allData, ...data];
+                    if (data.length < 1000) hasMore = false;
+                    else page++;
+                }
+                if (page > 20) break; // Limit to 20k records for summary
+            }
 
             // Group by filename and date
             const groups = new Map();
-            data?.forEach(s => {
+            allData.forEach(s => {
                 const key = s.import_filename || 'Importação Antiga/Sem Nome';
                 if (!groups.has(key)) {
                     groups.set(key, {
@@ -388,9 +438,8 @@ export const useSales = () => {
                 }
                 const g = groups.get(key);
                 g.count++;
-                if (s.date < g.firstDate) g.firstDate = s.date;
-                if (s.date > g.lastDate) g.lastDate = s.date;
-                // Keep the latest importedAt for the same filename (redundant but safe)
+                if (s.date && (!g.firstDate || s.date < g.firstDate)) g.firstDate = s.date;
+                if (s.date && (!g.lastDate || s.date > g.lastDate)) g.lastDate = s.date;
                 if (s.created_at > g.importedAt) g.importedAt = s.created_at;
             });
 
