@@ -45,28 +45,36 @@ const SalesDashboard: React.FC = () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return;
 
-            // We need to find all unique months. 
-            // To be efficient but thorough, we fetch only the 'date' column.
-            // 10,000 records is usually enough to cover several months of high-volume sales.
-            // Fetch all dates for this user to identify all unique months
-            // Removing limit to ensure we see the entire history (17k+ records)
-            const { data: qData, error } = await supabase
-                .from('sales')
-                .select('date')
-                .eq('user_id', session.user.id)
-                .order('date', { ascending: false });
+            let allDates: any[] = [];
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
 
-            if (error) {
-                console.error('Error loading periods:', error);
-                return;
+            while (hasMore) {
+                const { data, error } = await supabase
+                    .from('sales')
+                    .select('date')
+                    .eq('user_id', session.user.id)
+                    .order('date', { ascending: false })
+                    .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                if (error) break;
+                if (!data || data.length === 0) {
+                    hasMore = false;
+                } else {
+                    allDates = [...allDates, ...data];
+                    if (data.length < pageSize) hasMore = false;
+                    else page++;
+                }
+                // Stop after 50k records to prevent infinite loops/too much memory
+                if (page > 50) break;
             }
 
-            if (qData && qData.length > 0) {
+            if (allDates.length > 0) {
                 const p = new Set<string>();
-                qData.forEach((s: any) => {
+                allDates.forEach((s: any) => {
                     const parts = s.date?.split('-');
                     if (parts?.length === 3) {
-                        // Store as "monthIndex-Year"
                         p.add(`${parseInt(parts[1]) - 1}-${parts[0]}`);
                     }
                 });
