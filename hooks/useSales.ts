@@ -36,7 +36,7 @@ export const useSales = () => {
         }
     }, [isBusiness]);
 
-    const importSalesFromExcel = useCallback(async (rows: any[]) => {
+    const importSalesFromExcel = useCallback(async (rows: any[], fileName: string) => {
         if (!isBusiness) return { error: { message: 'Importação permitida apenas no modo Business' } };
         setLoading(true);
         try {
@@ -61,11 +61,11 @@ export const useSales = () => {
                     return foundKey ? r[foundKey] : undefined;
                 };
 
-                const customerName = getVal(row, ['Cliente', 'Nome do Cliente']);
-                const customerCpf = getVal(row, ['CPF do Cliente', 'CPF']);
-                const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref']));
-                const productName = getVal(row, ['Nome do Produto', 'Produto', 'Descricao', 'Description']);
-                const category = getVal(row, ['Categoria', 'Grupo', 'Familia', 'Categoria do Produto']) || 'Geral';
+                const customerName = getVal(row, ['Cliente', 'Nome do Cliente', 'Nome Cliente', 'Destinatario']);
+                const customerCpf = getVal(row, ['CPF do Cliente', 'CPF', 'CNPJ/CPF', 'CPF/CNPJ']);
+                const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto']) || '');
+                const productName = getVal(row, ['Nome do Produto', 'Produto', 'Descricao', 'Description', 'Item']);
+                const category = getVal(row, ['Categoria', 'Grupo', 'Familia', 'Categoria do Produto', 'Departamento']) || 'Geral';
 
                 if (customerName && customerName !== '-' && !uniqueCustomerKeys.has(customerCpf || customerName)) {
                     customersToUpsert.push({
@@ -127,7 +127,35 @@ export const useSales = () => {
                 if (typeof val === 'number') return Math.abs(val);
                 if (!val) return 0;
                 let str = String(val).replace('R$', '').replace(/\s/g, '');
-                str = str.replace(/\./g, '').replace(',', '.').trim();
+
+                // Detect format: 1.234,56 (BR) vs 1,234.56 (US)
+                const hasComma = str.includes(',');
+                const hasDot = str.includes('.');
+
+                if (hasComma && hasDot) {
+                    if (str.indexOf(',') > str.indexOf('.')) {
+                        // BR Format: 1.234,56
+                        str = str.replace(/\./g, '').replace(',', '.');
+                    } else {
+                        // US Format: 1,234.56
+                        str = str.replace(/,/g, '');
+                    }
+                } else if (hasComma) {
+                    // Only comma: 1234,56 -> 1234.56
+                    str = str.replace(',', '.');
+                } else if (hasDot) {
+                    // Only dot: could be 1.234 (thousands) or 1234.56 (decimal)
+                    // If it's something like .XX or .XXX we need to be careful
+                    const parts = str.split('.');
+                    if (parts[parts.length - 1].length === 3 && parts.length > 1) {
+                        // Likely thousands separator: 1.234
+                        str = str.replace(/\./g, '');
+                    } else {
+                        // Likely decimal separator: 1234.56
+                        // Do nothing, parseFloat will handle it
+                    }
+                }
+
                 return Math.abs(parseFloat(str) || 0);
             };
 
@@ -141,29 +169,60 @@ export const useSales = () => {
                         external_code: code,
                         customer_id: customersMap.get(getVal(row, ['CPF do Cliente', 'CPF'])) || customersMap.get(getVal(row, ['Cliente', 'Nome do Cliente'])) || null,
                         date: formatDate(getVal(row, ['Data da Compra', 'Data', 'Data Venda'])),
-                        time: getVal(row, ['Hora da Compra', 'Hora']),
-                        payment_method: getVal(row, ['Forma de Pagamento', 'Pagamento', 'Metodo']),
-                        store_name: getVal(row, ['Loja', 'Unidade']),
-                        device: getVal(row, ['Dispositivo', 'Origem']),
+                        time: getVal(row, ['Hora da Compra', 'Hora', 'Horário']),
+                        payment_method: getVal(row, ['Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento']),
+                        store_name: getVal(row, ['Loja', 'Unidade', 'Filial', 'Ponto de Venda']),
+                        device: getVal(row, ['Dispositivo', 'Origem', 'Canal']),
+                        import_filename: fileName,
                         total_amount: 0,
                         items: []
                     });
                 }
 
-                const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd']) || 1);
-                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco']));
-                const totalPrice = parseNumber(getVal(row, ['Valor Total', 'Vlr Total', 'Total']) || (qty * unitPrice));
+                const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd', 'Quant.']) || 1);
+                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.']));
+                const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto']) || '');
 
-                // Log values for debugging if they are 0
-                if (totalPrice === 0) {
-                    console.log('Zero price detected for row:', row);
+                // Synonyms for "Line Total" (item quantity * unit price)
+                const lineTotalRaw = getVal(row, ['Valor Total', 'Vlr Total', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr. Total Item', 'Vlr Total Item']);
+                // Synonyms for "Order Total" (total value of the whole receipt/invoice)
+                const orderTotalRaw = getVal(row, ['Total', 'Valor da Venda', 'Total Pedido', 'Vlr. Total Venda', 'Valor Total Pedido']);
+
+                let totalPrice = 0;
+                const parsedLineTotal = parseNumber(lineTotalRaw);
+                const parsedOrderTotal = parseNumber(orderTotalRaw);
+
+                // LOGIC: If we have an explicit line total, use it.
+                if (lineTotalRaw) {
+                    totalPrice = parsedLineTotal;
+                } else if (unitPrice > 0) {
+                    // If no line total but we have unit price, calculate it.
+                    totalPrice = qty * unitPrice;
+                } else if (orderTotalRaw) {
+                    // Last resort: use the order total, but only if it's the first time we see this sale id
+                    // or if it seems to be different from the first line (unlikely for order totals).
+                    const sale = salesGroups.get(code);
+                    if (sale.items.length === 0) {
+                        totalPrice = parsedOrderTotal;
+                    } else {
+                        // If it's the 2nd+ item and we only have "Order Total", 
+                        // we shouldn't add it again unless it's clearly a line total.
+                        // For now, if it matches the first row's total, we don't add it to total_amount.
+                        const firstItemTotal = sale.items[0].total_price;
+                        if (parsedOrderTotal === firstItemTotal) {
+                            totalPrice = 0; // Don't add to sum, but we can still record the item? 
+                            // Actually, let's keep it 0 so total_amount is correct.
+                        } else {
+                            totalPrice = parsedOrderTotal;
+                        }
+                    }
                 }
 
                 const sale = salesGroups.get(code);
                 sale.items.push({
-                    product_id: productsMap.get(String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref']))),
+                    product_id: productsMap.get(productCode),
                     quantity: qty,
-                    unit_price: unitPrice,
+                    unit_price: unitPrice || (qty > 0 ? totalPrice / qty : 0),
                     total_price: totalPrice
                 });
                 sale.total_amount += totalPrice;
@@ -220,7 +279,71 @@ export const useSales = () => {
         }
     }, []);
 
-    return { loading, fetchSales, importSalesFromExcel, clearSales };
+    const deleteSalesByFilename = useCallback(async (fileName: string | null) => {
+        setLoading(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const user = session?.user;
+            if (!user) throw new Error('Usuário não autenticado');
+
+            let query = supabase.from('sales').delete().eq('user_id', user.id);
+            if (fileName === null) {
+                query = query.is('import_filename', null);
+            } else {
+                query = query.eq('import_filename', fileName);
+            }
+
+            const { error } = await query;
+            if (error) throw error;
+            return { success: true };
+        } catch (err: any) {
+            return { error: formatError(err) };
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    const fetchImports = useCallback(async () => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) return { data: [] };
+
+            const { data, error } = await supabase
+                .from('sales')
+                .select('import_filename, created_at, date')
+                .eq('user_id', session.user.id);
+
+            if (error) throw error;
+
+            // Group by filename and date
+            const groups = new Map();
+            data?.forEach(s => {
+                const key = s.import_filename || 'Importação Antiga/Sem Nome';
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        name: key,
+                        count: 0,
+                        firstDate: s.date,
+                        lastDate: s.date,
+                        importedAt: s.created_at,
+                        isLegacy: !s.import_filename
+                    });
+                }
+                const g = groups.get(key);
+                g.count++;
+                if (s.date < g.firstDate) g.firstDate = s.date;
+                if (s.date > g.lastDate) g.lastDate = s.date;
+                // Keep the latest importedAt for the same filename (redundant but safe)
+                if (s.created_at > g.importedAt) g.importedAt = s.created_at;
+            });
+
+            return { data: Array.from(groups.values()).sort((a, b) => b.importedAt.localeCompare(a.importedAt)) };
+        } catch (err: any) {
+            return { error: err };
+        }
+    }, []);
+
+    return { loading, fetchSales, importSalesFromExcel, clearSales, deleteSalesByFilename, fetchImports };
 };
 
 // Helper to convert DD/MM/YYYY to YYYY-MM-DD
