@@ -22,7 +22,8 @@ export const useSales = () => {
                         products (name, code, cost, category)
                     )
                 `)
-                .order('date', { ascending: false });
+                .order('date', { ascending: false })
+                .limit(10000);
 
             if (filters?.startDate) query = query.gte('date', filters.startDate);
             if (filters?.endDate) query = query.lte('date', filters.endDate);
@@ -161,22 +162,29 @@ export const useSales = () => {
 
             rows.forEach(row => {
                 // Try to find a unique Sale ID (Order Number, Ticket, etc)
-                // We prefer "Order Number" over "Product Code"
-                const code = String(getVal(row, ['Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda']) ||
+                const rawCode = String(getVal(row, ['Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda']) ||
                     getVal(row, ['Codigo', 'ID']) || '');
 
-                if (!code || code === 'undefined' || code === '') return;
+                if (!rawCode || rawCode === 'undefined' || rawCode === '') return;
 
-                if (!salesGroups.has(code)) {
-                    salesGroups.set(code, {
+                const date = formatDate(getVal(row, ['Data da Compra', 'Data', 'Data Venda', 'Data Emissão']));
+                const store = getVal(row, ['Loja', 'Unidade', 'Filial', 'Ponto de Venda']) || 'Unica';
+
+                // Create a unique key for grouping and for the DB external_code
+                // This prevents "Order 100" from Store A from overwriting "Order 100" from Store B
+                // or the same order number on different dates.
+                const groupKey = `${rawCode}_${store}_${date}`;
+
+                if (!salesGroups.has(groupKey)) {
+                    salesGroups.set(groupKey, {
                         user_id: user.id,
-                        external_code: code,
+                        external_code: groupKey, // Use the concatenated key as the unique identifier
                         customer_id: customersMap.get(getVal(row, ['CPF do Cliente', 'CPF', 'CNPJ/CPF', 'CPF/CNPJ'])) ||
                             customersMap.get(getVal(row, ['Cliente', 'Nome do Cliente', 'Nome Cliente'])) || null,
-                        date: formatDate(getVal(row, ['Data da Compra', 'Data', 'Data Venda', 'Data Emissão'])),
+                        date: date,
                         time: getVal(row, ['Hora da Compra', 'Hora', 'Horário']),
                         payment_method: getVal(row, ['Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento']),
-                        store_name: getVal(row, ['Loja', 'Unidade', 'Filial', 'Ponto de Venda']),
+                        store_name: store,
                         device: getVal(row, ['Dispositivo', 'Origem', 'Canal']),
                         import_filename: fileName,
                         total_amount: 0,
@@ -199,7 +207,7 @@ export const useSales = () => {
                     lineTotalPrice = qty * unitPrice;
                 }
 
-                const sale = salesGroups.get(code);
+                const sale = salesGroups.get(groupKey);
                 const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto']) || '');
 
                 sale.items.push({
