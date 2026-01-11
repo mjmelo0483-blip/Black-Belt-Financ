@@ -19,7 +19,9 @@ const DRE: React.FC = () => {
     const [params, setParams] = useState({
         tax_rate: 3.24,
         royalty_rate: 6.00,
-        pix_fee_rate: 0.80
+        pix_fee_rate: 0.80,
+        loss_rate: 2.00,
+        card_fee_rate: 1.110284
     });
 
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -89,13 +91,21 @@ const DRE: React.FC = () => {
 
                 if (pData) {
                     setParams({
-                        tax_rate: Number(pData.tax_rate),
-                        royalty_rate: Number(pData.royalty_rate),
-                        pix_fee_rate: Number(pData.pix_fee_rate)
+                        tax_rate: Number(pData.tax_rate || 3.24),
+                        royalty_rate: Number(pData.royalty_rate || 6.00),
+                        pix_fee_rate: Number(pData.pix_fee_rate || 0.80),
+                        loss_rate: Number(pData.loss_rate || 2.00),
+                        card_fee_rate: Number(pData.card_fee_rate || 1.110284)
                     });
                 } else {
                     // Default values if none found for this month
-                    setParams({ tax_rate: 3.24, royalty_rate: 6.00, pix_fee_rate: 0.80 });
+                    setParams({
+                        tax_rate: 3.24,
+                        royalty_rate: 6.00,
+                        pix_fee_rate: 0.80,
+                        loss_rate: 2.00,
+                        card_fee_rate: 1.110284
+                    });
                 }
             }
 
@@ -162,7 +172,7 @@ const DRE: React.FC = () => {
         // Revenue by Payment Method
         const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Outros': 0 };
         let totalRev = 0;
-        let cmv = 0;
+        let cmvCents = 0;
 
         salesData.forEach(sale => {
             let method = sale.payment_method || 'Outros';
@@ -177,9 +187,10 @@ const DRE: React.FC = () => {
             if (sale.sale_items && sale.sale_items.length > 0) {
                 sale.sale_items.forEach((item: any) => {
                     saleTotal += Number(item.total_price || 0);
-                    // Use Math.round to mitigate floating point issues
-                    const itemCost = Math.round(Number(item.products?.cost || 0) * Number(item.quantity || 0) * 100);
-                    cmv += (itemCost / 100);
+                    // Use integer math (cents) to avoid floating point precision accumulation
+                    const itemQty = Number(item.quantity || 0);
+                    const itemCost = Number(item.products?.cost || 0);
+                    cmvCents += Math.round(itemCost * itemQty * 100);
                 });
             } else {
                 saleTotal = Number(sale.total_amount || 0);
@@ -188,6 +199,8 @@ const DRE: React.FC = () => {
             revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
             totalRev += saleTotal;
         });
+
+        const cmv = cmvCents / 100;
 
         // Detailed Categorization for Expenses
         let impostos = 0;
@@ -224,14 +237,21 @@ const DRE: React.FC = () => {
 
             // Mapping logic based on keywords
             // Skip calculated ones if they match by description to avoid double counting
-            const isCalculated = desc.includes('royalties') || desc.includes('imposto') || desc.includes('tarifa de pix') || desc.includes('tarifa pix');
+            const isCalculated =
+                desc.includes('royalties') ||
+                desc.includes('imposto') ||
+                desc.includes('tarifa de pix') ||
+                desc.includes('tarifa pix') ||
+                desc.includes('tarifa de cartao') ||
+                desc.includes('taxa de cartao') ||
+                desc.includes('perda');
 
-            if (catName.includes('perda') || desc.includes('perda') || desc.includes('furto') || desc.includes('vencido') || desc.includes('danificado')) {
+            if (!isCalculated && (catName.includes('perda') || desc.includes('perda') || desc.includes('furto') || desc.includes('vencido') || desc.includes('danificado'))) {
                 perdaEstoque += amount;
             }
             // Variable Groups (Only diverse/marketing/manual ones)
             else if (desc.includes('cashback') || desc.includes('condominio')) varGroups.cashback.amount += amount;
-            else if (desc.includes('tarifa de cartao') || desc.includes('taxa de cartao') || desc.includes('maquininha')) varGroups.tarifaCartao.amount += amount;
+            // Royalties, Tarifa Cartão and Tarifa Pix are now strictly calculated from params
             else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda')) varGroups.marketing.amount += amount;
             else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) {
                 // Only add if not already matched
@@ -254,8 +274,10 @@ const DRE: React.FC = () => {
 
         // Apply Calculation Formulas
         impostos = (totalRev * (params.tax_rate / 100));
+        perdaEstoque = (totalRev * (params.loss_rate / 100)); // Now calculated automatically
         varGroups.royalties.amount = (totalRev * (params.royalty_rate / 100));
         varGroups.tarifaPix.amount = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
+        varGroups.tarifaCartao.amount = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
 
         const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
@@ -348,6 +370,7 @@ const DRE: React.FC = () => {
                             <div className="relative">
                                 <input
                                     type="number"
+                                    step="0.01"
                                     value={params.tax_rate}
                                     onChange={(e) => setParams({ ...params, tax_rate: Number(e.target.value) })}
                                     className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
@@ -360,6 +383,7 @@ const DRE: React.FC = () => {
                             <div className="relative">
                                 <input
                                     type="number"
+                                    step="0.1"
                                     value={params.royalty_rate}
                                     onChange={(e) => setParams({ ...params, royalty_rate: Number(e.target.value) })}
                                     className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
@@ -372,8 +396,35 @@ const DRE: React.FC = () => {
                             <div className="relative">
                                 <input
                                     type="number"
+                                    step="0.01"
                                     value={params.pix_fee_rate}
                                     onChange={(e) => setParams({ ...params, pix_fee_rate: Number(e.target.value) })}
+                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                />
+                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Perdas (% Faturamento)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={params.loss_rate}
+                                    onChange={(e) => setParams({ ...params, loss_rate: Number(e.target.value) })}
+                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                />
+                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa Cartão (% Crédito+Débito)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    step="0.000001"
+                                    value={params.card_fee_rate}
+                                    onChange={(e) => setParams({ ...params, card_fee_rate: Number(e.target.value) })}
                                     className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
                                 />
                                 <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
