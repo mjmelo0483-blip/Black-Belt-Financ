@@ -190,21 +190,29 @@ export const useSales = () => {
                 return Math.abs(parseFloat(str) || 0);
             };
 
+            let lastDate: string | null = null;
+            let lastCode: string | null = null;
+            let lastStore: string | null = null;
+
             rows.forEach((row, index) => {
                 // Try to find a unique Sale ID (Order Number, Ticket, etc)
-                const rawCode = String(getVal(row, ['Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação']) ||
+                const rawCode = String(getVal(row, ['Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº']) ||
                     getVal(row, ['Codigo', 'ID']) || '');
 
-                const date = formatDate(getVal(row, ['Data da Compra', 'Data', 'Data Venda', 'Data Emissão', 'Data Movimento']));
-                if (!date) return; // Skip rows without date
+                const rawDate = getVal(row, ['Data da Compra', 'Data', 'Data Venda', 'Data Emissão', 'Data Movimento', 'Emissão']);
+                const date = formatDate(rawDate) || lastDate;
 
-                const store = getVal(row, ['Loja', 'Unidade', 'Filial', 'Ponto de Venda', 'Estabelecimento']) || 'Unica';
+                if (!date) return; // Skip rows without date (and no previous date to carry over)
+                lastDate = date;
 
-                // If no code, we'll treat the row as a unique sale if it has values, 
-                // or generate a key based on row info to at least import something.
-                const finalCode = rawCode && rawCode !== 'undefined' && rawCode !== ''
+                const store = getVal(row, ['Loja', 'Unidade', 'Filial', 'Ponto de Venda', 'Estabelecimento', 'Nome da Loja']) || lastStore || 'Unica';
+                lastStore = store;
+
+                // Carry over or generate code
+                const finalCode = (rawCode && rawCode !== 'undefined' && rawCode !== '')
                     ? rawCode
-                    : `ROW_${index}_${date}`;
+                    : (lastCode || `ROW_${index}_${date}`);
+                lastCode = (rawCode && rawCode !== 'undefined' && rawCode !== '') ? rawCode : lastCode;
 
                 const groupKey = `${finalCode}_${store}_${date}`;
 
@@ -227,11 +235,11 @@ export const useSales = () => {
                     });
                 }
 
-                const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.']) || 0);
-                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.']));
+                const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume']));
+                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.', 'Vlr. Liq.', 'Preço Venda Unitário']));
 
                 // Determine line total - PRIORITIZE calculation as requested by user
-                const lineTotalRaw = getVal(row, ['Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Total']);
+                const lineTotalRaw = getVal(row, ['Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Total', 'Vlr. Total']);
                 const parsedLineTotal = parseNumber(lineTotalRaw);
 
                 let lineTotalPrice = 0;
@@ -241,7 +249,10 @@ export const useSales = () => {
                 } else if (parsedLineTotal > 0) {
                     lineTotalPrice = parsedLineTotal;
                 } else if (unitPrice > 0) {
-                    lineTotalPrice = unitPrice; // qty default is 1 if not found, so unitPrice is the total
+                    lineTotalPrice = unitPrice;
+                } else if (qty > 0 && parsedLineTotal > 0) {
+                    // If we have total and qty but no unit price
+                    lineTotalPrice = parsedLineTotal;
                 }
 
                 const sale = salesGroups.get(groupKey);
