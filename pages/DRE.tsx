@@ -235,6 +235,9 @@ const DRE: React.FC = () => {
             const desc = (exp.description || '').toLowerCase();
             const amount = Number(exp.amount || 0);
 
+            // 1. Skip Suppliers (already in CMV)
+            if (catName.includes('fornecedor')) return;
+
             // Mapping logic based on keywords
             // Skip calculated ones if they match by description to avoid double counting
             const isCalculated =
@@ -260,16 +263,16 @@ const DRE: React.FC = () => {
             // Fixed Groups
             else if (catName.includes('funcionario') || catName.includes('salario') || desc.includes('pgto') || desc.includes('salario')) fixGroups.funcionarios.amount += amount;
             else if (desc.includes('veiculo') || desc.includes('carro') || desc.includes('moto')) fixGroups.manutencaoVeiculo.amount += amount;
-            else if (desc.includes('sistema') || desc.includes('software') || desc.includes('mensalidade')) fixGroups.taxaSistema.amount += amount;
-            else if (desc.includes('container')) fixGroups.aluguelContainer.amount += amount;
-            else if (desc.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel')) fixGroups.combustivel.amount += amount;
-            else if (desc.includes('escritorio')) fixGroups.aluguelEscritorio.amount += amount;
+            else if (catName.includes('sistema') || desc.includes('software') || desc.includes('mensalidade')) fixGroups.taxaSistema.amount += amount;
+            else if (catName.includes('container')) fixGroups.aluguelContainer.amount += amount;
+            else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel')) fixGroups.combustivel.amount += amount;
+            else if (catName.includes('escritorio')) fixGroups.aluguelEscritorio.amount += amount;
             else if (desc.includes('elgin') || desc.includes('tef') || desc.includes('lgopass')) fixGroups.tef.amount += amount;
-            else if (desc.includes('aluguel do espaço') || desc.includes('aluguel da loja')) fixGroups.aluguelLoja.amount += amount;
+            else if (catName.includes('aluguel do espaço') || desc.includes('aluguel da loja')) fixGroups.aluguelLoja.amount += amount;
             else if (catName.includes('contabil') || desc.includes('contador')) fixGroups.contabilidade.amount += amount;
-            else if (desc.includes('internet') || desc.includes('wi-fi')) fixGroups.internet.amount += amount;
-            else if (desc.includes('energia') || desc.includes('luz') || desc.includes('equatorial')) fixGroups.energia.amount += amount;
-            else if (!isCalculated) fixGroups.outros.amount += amount;
+            else if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) fixGroups.internet.amount += amount;
+            else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial')) fixGroups.energia.amount += amount;
+            else if (catName.includes('outros pagamentos') || !isCalculated) fixGroups.outros.amount += amount;
         });
 
         // Apply Calculation Formulas
