@@ -119,12 +119,18 @@ const DRE: React.FC = () => {
             else if (method.toLowerCase().includes('pix')) method = 'PIX';
             else method = 'Outros';
 
-            revByMethod[method] = (revByMethod[method] || 0) + Number(sale.total_amount || 0);
-            totalRev += Number(sale.total_amount || 0);
+            let saleTotal = 0;
+            if (sale.sale_items && sale.sale_items.length > 0) {
+                sale.sale_items.forEach((item: any) => {
+                    saleTotal += Number(item.total_price || 0);
+                    cmv += (Number(item.products?.cost || 0) * Number(item.quantity || 0));
+                });
+            } else {
+                saleTotal = Number(sale.total_amount || 0);
+            }
 
-            sale.sale_items?.forEach((item: any) => {
-                cmv += (Number(item.products?.cost || 0) * Number(item.quantity || 0));
-            });
+            revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
+            totalRev += saleTotal;
         });
 
         // Detailed Categorization for Expenses

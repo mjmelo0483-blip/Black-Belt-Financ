@@ -18,15 +18,19 @@ export const useSales = () => {
             let hasMore = true;
 
             while (hasMore) {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.user) return { data: [], error: null };
+
                 let query = supabase
                     .from('sales')
                     .select(`
-                    id, date, store_name,
+                    id, date, store_name, payment_method, total_amount,
                     sale_items (
                         total_price, quantity,
                         products (name, code, category, cost)
                     )
                 `)
+                    .eq('user_id', session.user.id)
                     .order('date', { ascending: false })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -96,6 +100,7 @@ export const useSales = () => {
                 const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto']) || '');
                 const productName = getVal(row, ['Nome do Produto', 'Produto', 'Descricao', 'Description', 'Item']);
                 const category = getVal(row, ['Categoria', 'Grupo', 'Familia', 'Categoria do Produto', 'Departamento']) || 'Geral';
+                const cost = parseNumber(getVal(row, ['Custo', 'Vlr. Custo', 'Preço de Custo', 'Custo Unitário', 'Markup Cost', 'Cost', 'P', 'Vlr Custo']));
 
                 if (customerName && customerName !== '-' && !uniqueCustomerKeys.has(customerCpf || customerName)) {
                     customersToUpsert.push({
@@ -111,7 +116,8 @@ export const useSales = () => {
                         user_id: user.id,
                         code: productCode,
                         name: productName ? String(productName).trim() : 'Produto sem nome',
-                        category: category ? String(category).trim() : 'Geral'
+                        category: category ? String(category).trim() : 'Geral',
+                        cost: cost || 0
                     });
                     uniqueProductCodes.add(productCode);
                 }
