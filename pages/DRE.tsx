@@ -186,7 +186,6 @@ const DRE: React.FC = () => {
         let cmvCents = 0;
 
         const filteredSales = selectedStore === 'Todas' ? salesData : salesData.filter(s => s.store_name === selectedStore);
-        const filteredExpenses = selectedStore === 'Todas' ? expensesData : expensesData.filter(e => e.store_name === selectedStore);
 
         filteredSales.forEach(sale => {
             let method = sale.payment_method || 'Outros';
@@ -214,6 +213,10 @@ const DRE: React.FC = () => {
             totalRev += saleTotal;
         });
 
+        // Identify Active Stores for Linear Proration
+        const activeStores = Array.from(new Set(salesData.map(s => s.store_name).filter(Boolean)));
+        const activeStoresCount = activeStores.length || 1;
+        const prorationFactor = selectedStore !== 'Todas' ? (1 / activeStoresCount) : 1;
         const cmv = cmvCents / 100;
 
         // Detailed Categorization for Expenses
@@ -244,10 +247,28 @@ const DRE: React.FC = () => {
             outros: { label: 'Outros', amount: 0, items: [] },
         };
 
-        filteredExpenses.forEach(exp => {
+        expensesData.forEach(exp => {
             const catName = (exp.categories?.name || 'Geral').toLowerCase();
             const desc = (exp.description || '').toLowerCase();
-            const amount = Number(exp.amount || 0);
+            let amount = Number(exp.amount || 0);
+
+            // Proration Logic:
+            // 1. If 'Todas' is selected, include all expenses as they are.
+            // 2. If a specific store is selected:
+            //    - If exp belongs to that store: include 100%.
+            //    - If exp belongs to NO store (Geral): include prorated amount based on revenue share.
+            //    - Otherwise: skip.
+            if (selectedStore !== 'Todas') {
+                if (exp.store_name === selectedStore) {
+                    // Direct expense for this store - keep 100%
+                } else if (!exp.store_name) {
+                    // General expense - prorate it
+                    amount = amount * prorationFactor;
+                } else {
+                    // Belongs to another store - skip
+                    return;
+                }
+            }
 
             // 1. Skip Suppliers (already in CMV)
             if (catName.includes('fornecedor')) return;
