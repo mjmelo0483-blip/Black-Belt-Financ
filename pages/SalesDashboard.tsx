@@ -10,7 +10,6 @@ import { supabase } from '../supabase';
 const SalesDashboard: React.FC = () => {
     const { fetchSales, loading } = useSales();
     const [salesData, setSalesData] = useState<any[]>([]);
-    const [expensesData, setExpensesData] = useState<any[]>([]);
 
     const now = new Date();
     const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
@@ -34,23 +33,6 @@ const SalesDashboard: React.FC = () => {
             if (data) {
                 setSalesData(data);
                 setCache(prev => ({ ...prev, [cacheKey]: data }));
-            }
-
-            // Fetch business expenses for DRE
-            const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
-            const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-            const endDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
-            const { data: expData } = await supabase
-                .from('transactions')
-                .select('amount, type, description, categories(name)')
-                .eq('is_business', true)
-                .eq('type', 'expense')
-                .gte('date', startDate)
-                .lte('date', endDate);
-
-            if (expData) {
-                setExpensesData(expData);
             }
         };
         load();
@@ -217,13 +199,6 @@ const SalesDashboard: React.FC = () => {
     const balancePercentage = Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100);
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-    // DRE Calculations
-    const cmv = filteredItems.reduce((acc, item) => acc + (Number(item.products?.cost || 0) * Number(item.quantity || 0)), 0);
-    const grossProfit = totalRevenue - cmv;
-    const totalOperatingExpenses = expensesData.reduce((acc, exp) => acc + Number(exp.amount || 0), 0);
-    const netProfit = grossProfit - totalOperatingExpenses;
-    const netProfitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
-
     return (
         <div className="p-6 space-y-6 bg-[#0f172a] min-h-screen text-white">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
@@ -297,38 +272,7 @@ const SalesDashboard: React.FC = () => {
                         <p className="text-xl font-black text-indigo-400">R$ {bestProduct.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                     </div>
 
-                    <div className="bg-[#1e293b] p-6 rounded-xl border border-[#334155] space-y-4">
-                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
-                            <span className="material-symbols-outlined text-xs">list_alt</span> DRE Resumida
-                        </p>
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center text-xs">
-                                <span className="text-slate-400">Receita Bruta</span>
-                                <span className="font-bold">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-xs">
-                                <span className="text-slate-400">CMV (Custo)</span>
-                                <span className="font-bold text-red-400">- R$ {cmv.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="h-px bg-[#334155] my-1"></div>
-                            <div className="flex justify-between items-center text-xs">
-                                <span className="text-white font-bold italic">Lucro Bruto</span>
-                                <span className="font-black text-emerald-400">R$ {grossProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-xs">
-                                <span className="text-slate-400">Despesas Oper.</span>
-                                <span className="font-bold text-red-400">- R$ {totalOperatingExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="h-px bg-[#334155] my-2"></div>
-                            <div className="flex justify-between items-center bg-[#0f172a] p-2 rounded-lg">
-                                <span className="text-[10px] font-black uppercase text-indigo-400">Lucro Líquido</span>
-                                <div className="text-right">
-                                    <p className="text-sm font-black text-emerald-400">R$ {netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                    <p className="text-[8px] font-bold text-slate-500">{netProfitMargin.toFixed(1)}% de margem</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+
 
                     <div className="bg-[#1e293b] p-6 rounded-xl border border-[#334155]">
                         <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
