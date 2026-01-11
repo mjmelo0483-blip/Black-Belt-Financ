@@ -78,6 +78,43 @@ export const useSales = () => {
             const user = session?.user;
             if (!user) throw new Error('Usuário não autenticado');
 
+            // --- Robust Parsing Helpers ---
+            const getVal = (row: any, possibleKeys: string[]) => {
+                const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+                const keys = Object.keys(row);
+                const foundKey = keys.find(k => {
+                    const normalizedK = normalize(k);
+                    return possibleKeys.some(pk => normalize(pk) === normalizedK);
+                });
+                return foundKey ? row[foundKey] : undefined;
+            };
+
+            const parseNumber = (val: any) => {
+                if (typeof val === 'number') return Math.abs(val);
+                if (!val) return 0;
+                let str = String(val).replace('R$', '').replace(/\s/g, '');
+
+                const hasComma = str.includes(',');
+                const hasDot = str.includes('.');
+
+                if (hasComma && hasDot) {
+                    if (str.indexOf(',') > str.indexOf('.')) {
+                        str = str.replace(/\./g, '').replace(',', '.');
+                    } else {
+                        str = str.replace(/,/g, '');
+                    }
+                } else if (hasComma) {
+                    str = str.replace(',', '.');
+                } else if (hasDot) {
+                    const parts = str.split('.');
+                    if (parts[parts.length - 1].length === 3 && parts.length > 1) {
+                        str = str.replace(/\./g, '');
+                    }
+                }
+                return Math.abs(parseFloat(str) || 0);
+            };
+            // ------------------------------
+
             // 1. Process Customers and Products in bulk to avoid duplicates
             const customersToUpsert: any[] = [];
             const productsToUpsert: any[] = [];
@@ -85,16 +122,6 @@ export const useSales = () => {
             const uniqueProductCodes = new Set();
 
             rows.forEach(row => {
-                const getVal = (r: any, possibleKeys: string[]) => {
-                    const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
-                    const keys = Object.keys(r);
-                    const foundKey = keys.find(k => {
-                        const normalizedK = normalize(k);
-                        return possibleKeys.some(pk => normalize(pk) === normalizedK);
-                    });
-                    return foundKey ? r[foundKey] : undefined;
-                };
-
                 const customerName = getVal(row, ['Cliente', 'Nome do Cliente', 'Nome Cliente', 'Destinatario']);
                 const customerCpf = getVal(row, ['CPF do Cliente', 'CPF', 'CNPJ/CPF', 'CPF/CNPJ']);
                 const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto']) || '');
@@ -149,52 +176,6 @@ export const useSales = () => {
 
             // 2. Process Sales
             const salesGroups = new Map();
-            const getVal = (row: any, possibleKeys: string[]) => {
-                const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
-                const keys = Object.keys(row);
-                const foundKey = keys.find(k => {
-                    const normalizedK = normalize(k);
-                    return possibleKeys.some(pk => normalize(pk) === normalizedK);
-                });
-                return foundKey ? row[foundKey] : undefined;
-            };
-
-            const parseNumber = (val: any) => {
-                if (typeof val === 'number') return Math.abs(val);
-                if (!val) return 0;
-                let str = String(val).replace('R$', '').replace(/\s/g, '');
-
-                // Detect format: 1.234,56 (BR) vs 1,234.56 (US)
-                const hasComma = str.includes(',');
-                const hasDot = str.includes('.');
-
-                if (hasComma && hasDot) {
-                    if (str.indexOf(',') > str.indexOf('.')) {
-                        // BR Format: 1.234,56
-                        str = str.replace(/\./g, '').replace(',', '.');
-                    } else {
-                        // US Format: 1,234.56
-                        str = str.replace(/,/g, '');
-                    }
-                } else if (hasComma) {
-                    // Only comma: 1234,56 -> 1234.56
-                    str = str.replace(',', '.');
-                } else if (hasDot) {
-                    // Only dot: could be 1.234 (thousands) or 1234.56 (decimal)
-                    // If it's something like .XX or .XXX we need to be careful
-                    const parts = str.split('.');
-                    if (parts[parts.length - 1].length === 3 && parts.length > 1) {
-                        // Likely thousands separator: 1.234
-                        str = str.replace(/\./g, '');
-                    } else {
-                        // Likely decimal separator: 1234.56
-                        // Do nothing, parseFloat will handle it
-                    }
-                }
-
-                return Math.abs(parseFloat(str) || 0);
-            };
-
             let lastDate: string | null = null;
             let lastCode: string | null = null;
             let lastStore: string | null = null;
