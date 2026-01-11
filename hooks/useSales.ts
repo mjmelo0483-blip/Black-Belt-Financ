@@ -160,73 +160,71 @@ export const useSales = () => {
             };
 
             rows.forEach(row => {
-                const code = String(getVal(row, ['Codigo', 'Nº Pedido', 'Venda', 'ID']) || '');
+                // Try to find a unique Sale ID (Order Number, Ticket, etc)
+                // We prefer "Order Number" over "Product Code"
+                const code = String(getVal(row, ['Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda']) ||
+                    getVal(row, ['Codigo', 'ID']) || '');
+
                 if (!code || code === 'undefined' || code === '') return;
 
                 if (!salesGroups.has(code)) {
                     salesGroups.set(code, {
                         user_id: user.id,
                         external_code: code,
-                        customer_id: customersMap.get(getVal(row, ['CPF do Cliente', 'CPF'])) || customersMap.get(getVal(row, ['Cliente', 'Nome do Cliente'])) || null,
-                        date: formatDate(getVal(row, ['Data da Compra', 'Data', 'Data Venda'])),
+                        customer_id: customersMap.get(getVal(row, ['CPF do Cliente', 'CPF', 'CNPJ/CPF', 'CPF/CNPJ'])) ||
+                            customersMap.get(getVal(row, ['Cliente', 'Nome do Cliente', 'Nome Cliente'])) || null,
+                        date: formatDate(getVal(row, ['Data da Compra', 'Data', 'Data Venda', 'Data Emissão'])),
                         time: getVal(row, ['Hora da Compra', 'Hora', 'Horário']),
                         payment_method: getVal(row, ['Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento']),
                         store_name: getVal(row, ['Loja', 'Unidade', 'Filial', 'Ponto de Venda']),
                         device: getVal(row, ['Dispositivo', 'Origem', 'Canal']),
                         import_filename: fileName,
                         total_amount: 0,
+                        raw_order_total: parseNumber(getVal(row, ['Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda'])),
                         items: []
                     });
                 }
 
                 const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd', 'Quant.']) || 1);
-                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.']));
-                const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto']) || '');
+                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda']));
 
-                // Synonyms for "Line Total" (item quantity * unit price)
+                // Determine line total
                 const lineTotalRaw = getVal(row, ['Valor Total', 'Vlr Total', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr. Total Item', 'Vlr Total Item']);
-                // Synonyms for "Order Total" (total value of the whole receipt/invoice)
-                const orderTotalRaw = getVal(row, ['Total', 'Valor da Venda', 'Total Pedido', 'Vlr. Total Venda', 'Valor Total Pedido']);
-
-                let totalPrice = 0;
                 const parsedLineTotal = parseNumber(lineTotalRaw);
-                const parsedOrderTotal = parseNumber(orderTotalRaw);
 
-                // LOGIC: If we have an explicit line total, use it.
-                if (lineTotalRaw) {
-                    totalPrice = parsedLineTotal;
+                let lineTotalPrice = 0;
+                if (lineTotalRaw && parsedLineTotal > 0) {
+                    lineTotalPrice = parsedLineTotal;
                 } else if (unitPrice > 0) {
-                    // If no line total but we have unit price, calculate it.
-                    totalPrice = qty * unitPrice;
-                } else if (orderTotalRaw) {
-                    // Last resort: use the order total, but only if it's the first time we see this sale id
-                    // or if it seems to be different from the first line (unlikely for order totals).
-                    const sale = salesGroups.get(code);
-                    if (sale.items.length === 0) {
-                        totalPrice = parsedOrderTotal;
-                    } else {
-                        // If it's the 2nd+ item and we only have "Order Total", 
-                        // we shouldn't add it again unless it's clearly a line total.
-                        // For now, if it matches the first row's total, we don't add it to total_amount.
-                        const firstItemTotal = sale.items[0].total_price;
-                        if (parsedOrderTotal === firstItemTotal) {
-                            totalPrice = 0; // Don't add to sum, but we can still record the item? 
-                            // Actually, let's keep it 0 so total_amount is correct.
-                        } else {
-                            totalPrice = parsedOrderTotal;
-                        }
-                    }
+                    lineTotalPrice = qty * unitPrice;
                 }
 
                 const sale = salesGroups.get(code);
+                const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto']) || '');
+
                 sale.items.push({
                     product_id: productsMap.get(productCode),
                     quantity: qty,
-                    unit_price: unitPrice || (qty > 0 ? totalPrice / qty : 0),
-                    total_price: totalPrice
+                    unit_price: unitPrice || (qty > 0 ? lineTotalPrice / qty : 0),
+                    total_price: lineTotalPrice
                 });
-                sale.total_amount += totalPrice;
+
+                // Add to total amount using the detected line price
+                sale.total_amount += lineTotalPrice;
             });
+
+            // Final adjustment: if total_amount is 0 but we have a raw_order_total, use that
+            for (const sale of salesGroups.values()) {
+                if (sale.total_amount === 0 && sale.raw_order_total > 0) {
+                    sale.total_amount = sale.raw_order_total;
+                    // If we have items but no prices, distribute the total or set 0 to first
+                    if (sale.items.length === 1 && sale.items[0].total_price === 0) {
+                        sale.items[0].total_price = sale.raw_order_total;
+                        sale.items[0].unit_price = sale.raw_order_total / (sale.items[0].quantity || 1);
+                    }
+                }
+                delete sale.raw_order_total; // Clean up before sending to DB
+            }
 
             // Insert Sales and Items
             for (const sale of salesGroups.values()) {
