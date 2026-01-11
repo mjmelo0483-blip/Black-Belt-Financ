@@ -204,9 +204,9 @@ const SalesDashboard: React.FC = () => {
                         </select>
                     </div>
 
-                    <div className="flex gap-1 flex-nowrap overflow-x-auto pb-1 max-w-[300px]">
+                    <div className="flex gap-1 flex-nowrap overflow-x-auto pb-1 max-w-[500px] scrollbar-hide">
                         {periods.length > 0 ? (
-                            periods.slice(-10).reverse().map(period => {
+                            [...periods].reverse().map(period => {
                                 const [m, y] = period.split('-').map(Number);
                                 const active = selectedMonth === m && selectedYear === y;
                                 return (
