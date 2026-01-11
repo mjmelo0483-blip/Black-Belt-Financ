@@ -48,14 +48,18 @@ const SalesDashboard: React.FC = () => {
             // We need to find all unique months. 
             // To be efficient but thorough, we fetch only the 'date' column.
             // 10,000 records is usually enough to cover several months of high-volume sales.
+            // Fetch all dates for this user to identify all unique months
+            // Removing limit to ensure we see the entire history (17k+ records)
             const { data: qData, error } = await supabase
                 .from('sales')
                 .select('date')
                 .eq('user_id', session.user.id)
-                .order('date', { ascending: false })
-                .limit(10000);
+                .order('date', { ascending: false });
 
-            if (error) return;
+            if (error) {
+                console.error('Error loading periods:', error);
+                return;
+            }
 
             if (qData && qData.length > 0) {
                 const p = new Set<string>();
@@ -204,7 +208,7 @@ const SalesDashboard: React.FC = () => {
                         </select>
                     </div>
 
-                    <div className="flex gap-1 flex-nowrap overflow-x-auto pb-1 max-w-[500px] scrollbar-hide">
+                    <div className="flex gap-1 flex-nowrap overflow-x-auto pb-1 max-w-[600px] custom-scrollbar">
                         {periods.length > 0 ? (
                             [...periods].reverse().map(period => {
                                 const [m, y] = period.split('-').map(Number);
