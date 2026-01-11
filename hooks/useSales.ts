@@ -203,18 +203,21 @@ export const useSales = () => {
                     });
                 }
 
-                const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd', 'Quant.']) || 1);
-                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda']));
+                const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.']) || 0);
+                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.']));
 
-                // Prioritize explicit row/item totals
-                const lineTotalRaw = getVal(row, ['Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item']);
+                // Determine line total - PRIORITIZE calculation as requested by user
+                const lineTotalRaw = getVal(row, ['Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Total']);
                 const parsedLineTotal = parseNumber(lineTotalRaw);
 
                 let lineTotalPrice = 0;
-                if (lineTotalRaw && parsedLineTotal > 0) {
+                if (unitPrice > 0 && qty > 0) {
+                    // Always use multiplication if both are present for maximum accuracy
+                    lineTotalPrice = qty * unitPrice;
+                } else if (parsedLineTotal > 0) {
                     lineTotalPrice = parsedLineTotal;
                 } else if (unitPrice > 0) {
-                    lineTotalPrice = qty * unitPrice;
+                    lineTotalPrice = unitPrice; // qty default is 1 if not found, so unitPrice is the total
                 }
 
                 const sale = salesGroups.get(groupKey);
@@ -244,8 +247,8 @@ export const useSales = () => {
                 return { ...saleData, total_amount: finalTotal, items };
             });
 
-            // Bulk Upsert Sales in chunks of 100 to avoid request size limits
-            const chunkSize = 100;
+            // Bulk Upsert Sales in larger chunks to improve speed
+            const chunkSize = 500;
             for (let i = 0; i < allSalesData.length; i += chunkSize) {
                 const chunk = allSalesData.slice(i, i + chunkSize);
                 const salesToUpsert = chunk.map(({ items, ...sale }) => sale);
