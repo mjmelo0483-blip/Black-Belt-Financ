@@ -379,6 +379,10 @@ const DRE: React.FC = () => {
 
             // --- Prioridade 1: Categorias específicas e Serviços Fixos (Fallback Inteligente) ---
 
+            // Se já foi identificado como um item calculado por fórmula (imposto, royalty, etc), 
+            // não deve cair nos grupos manuais por coincidência de palavras (ex: imPOSTO)
+            if (isCalculated && !dreGroup) return;
+
             // Internet e Celular
             if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) {
                 fixGroups.internet.amount += amount;
@@ -389,8 +393,8 @@ const DRE: React.FC = () => {
                 fixGroups.energia.amount += amount;
                 fixGroups.energia.items.push(exp);
             }
-            // Combustível
-            else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel') || desc.includes('etanol') || desc.includes('posto ')) {
+            // Combustível - Proteção contra "Imposto" contendo "posto"
+            else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel') || desc.includes('etanol') || (desc.includes('posto ') && !desc.includes('imposto'))) {
                 fixGroups.combustivel.amount += amount;
                 fixGroups.combustivel.items.push(exp);
             }
