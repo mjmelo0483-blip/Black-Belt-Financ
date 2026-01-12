@@ -29,6 +29,27 @@ const DRE: React.FC = () => {
         card_fee_rate: 1.110284,
         cashback_rates: {} as Record<string, number>
     });
+    const [configTab, setConfigTab] = useState<'rates' | 'mapping'>('rates');
+    const [categories, setCategories] = useState<any[]>([]);
+
+    const DRE_GROUPS = [
+        { id: 'cashback', label: 'Comissão paga ao condominio (cashback)', type: 'variable' },
+        { id: 'marketing', label: 'Investimento Marketing da loja', type: 'variable' },
+        { id: 'diversas', label: 'Despesas diversas da loja', type: 'variable' },
+        { id: 'funcionarios', label: 'Funcionários', type: 'fixed' },
+        { id: 'manutencaoVeiculo', label: 'Manutenção de veículo', type: 'fixed' },
+        { id: 'taxaSistema', label: 'Taxa de uso do sistema', type: 'fixed' },
+        { id: 'aluguelContainer', label: 'Aluguel de container', type: 'fixed' },
+        { id: 'combustivel', label: 'Despesa com combustível', type: 'fixed' },
+        { id: 'aluguelEscritorio', label: 'Aluguel de Escritório', type: 'fixed' },
+        { id: 'tef', label: 'Elgin+TEF+LgoPass', type: 'fixed' },
+        { id: 'despesasFinanceiras', label: 'Despesas financeiras', type: 'fixed' },
+        { id: 'contabilidade', label: 'Despesa com contabilidade', type: 'fixed' },
+        { id: 'internet', label: 'Despesa com internet', type: 'fixed' },
+        { id: 'energia', label: 'Despesa com energia elétrica', type: 'fixed' },
+        { id: 'outros', label: 'Outros', type: 'fixed' },
+        { id: 'perda', label: 'Perda do estoque', type: 'variable' },
+    ];
 
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -95,6 +116,14 @@ const DRE: React.FC = () => {
             const dbStores = storeData ? storeData.map(s => s.store_name) : [];
             const uniqueStores = Array.from(new Set([...knownStores, ...dbStores])).filter(Boolean).sort() as string[];
             setAllKnownStores(uniqueStores);
+
+            // Fetch categories for mapping
+            const { data: catData } = await supabase
+                .from('categories')
+                .select('*')
+                .eq('is_business', true)
+                .order('name');
+            setCategories(catData || []);
         };
         loadInitialData();
     }, []);
@@ -144,7 +173,7 @@ const DRE: React.FC = () => {
 
             const { data: expData } = await supabase
                 .from('transactions')
-                .select('amount, type, description, date, category_id, store_name, categories(name, parent_id)')
+                .select('amount, type, description, date, category_id, store_name, categories(name, parent_id, dre_group)')
                 .eq('is_business', true)
                 .eq('type', 'expense')
                 .gte('date', startDate)
@@ -181,6 +210,19 @@ const DRE: React.FC = () => {
             alert('Erro ao salvar configurações.');
         } else {
             setShowConfig(false);
+        }
+    };
+
+    const updateCategoryMapping = async (catId: string, dreGroup: string) => {
+        const { error } = await supabase
+            .from('categories')
+            .update({ dre_group: dreGroup || null })
+            .eq('id', catId);
+
+        if (error) {
+            alert('Erro ao atualizar mapeamento.');
+        } else {
+            setCategories(prev => prev.map(c => c.id === catId ? { ...c, dre_group: dreGroup || null } : c));
         }
     };
 
@@ -289,6 +331,7 @@ const DRE: React.FC = () => {
 
         expensesData.forEach(exp => {
             const catName = (exp.categories?.name || 'Geral').toLowerCase();
+            const dreGroup = exp.categories?.dre_group;
             const desc = (exp.description || '').toLowerCase();
             let amount = Number(exp.amount || 0);
 
@@ -312,7 +355,29 @@ const DRE: React.FC = () => {
                 desc.includes('taxa de cartao') ||
                 desc.includes('perda');
 
-            // --- Prioridade 1: Categorias específicas e Serviços Fixos ---
+            // --- Prioridade 0: Mapeamento Fixo da Categoria ---
+            if (dreGroup) {
+                if (dreGroup === 'cashback') {
+                    if (exp.store_name && storeManualCashback[exp.store_name]) {
+                        storeManualCashback[exp.store_name].amount += amount;
+                        storeManualCashback[exp.store_name].items.push(exp);
+                    } else {
+                        varGroups.cashback.amount += amount;
+                        varGroups.cashback.items.push(exp);
+                    }
+                } else if (varGroups[dreGroup]) {
+                    varGroups[dreGroup].amount += amount;
+                    varGroups[dreGroup].items.push(exp);
+                } else if (fixGroups[dreGroup]) {
+                    fixGroups[dreGroup].amount += amount;
+                    fixGroups[dreGroup].items.push(exp);
+                } else if (dreGroup === 'perda') {
+                    perdaEstoque += amount;
+                }
+                return;
+            }
+
+            // --- Prioridade 1: Categorias específicas e Serviços Fixos (Fallback Inteligente) ---
 
             // Internet e Celular
             if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) {
@@ -538,110 +603,174 @@ const DRE: React.FC = () => {
 
             {showConfig && (
                 <div className="bg-[#1e293b] border border-amber-500/30 p-4 rounded-xl shadow-xl animate-in zoom-in-95 duration-200">
-                    <h3 className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-sm">tune</span>
-                        Parâmetros da DRE - {monthNames[selectedMonth]}/{selectedYear}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Impostos (Geral %)</label>
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={params.tax_rate}
-                                    onChange={(e) => setParams({ ...params, tax_rate: Number(e.target.value) })}
-                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                />
-                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
-                            </div>
+                    <div className="flex justify-between items-center mb-6 border-b border-[#334155]/50">
+                        <div className="flex gap-6">
+                            <button
+                                onClick={() => setConfigTab('rates')}
+                                className={`text-[10px] font-black uppercase tracking-widest pb-3 border-b-2 transition-all ${configTab === 'rates' ? 'border-amber-500 text-amber-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-sm">percent</span>
+                                    Taxas e Comissões
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => setConfigTab('mapping')}
+                                className={`text-[10px] font-black uppercase tracking-widest pb-3 border-b-2 transition-all ${configTab === 'mapping' ? 'border-amber-500 text-amber-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-sm">account_tree</span>
+                                    Mapeamento de Contas
+                                </span>
+                            </button>
                         </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Royalties (% Faturamento)</label>
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    value={params.royalty_rate}
-                                    onChange={(e) => setParams({ ...params, royalty_rate: Number(e.target.value) })}
-                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                />
-                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa PIX (% sobre PIX)</label>
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={params.pix_fee_rate}
-                                    onChange={(e) => setParams({ ...params, pix_fee_rate: Number(e.target.value) })}
-                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                />
-                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Perdas (% Faturamento)</label>
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    value={params.loss_rate}
-                                    onChange={(e) => setParams({ ...params, loss_rate: Number(e.target.value) })}
-                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                />
-                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa Cartão (% Crédito+Débito)</label>
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    step="0.000001"
-                                    value={params.card_fee_rate}
-                                    onChange={(e) => setParams({ ...params, card_fee_rate: Number(e.target.value) })}
-                                    className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                />
-                                <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
-                            </div>
-                        </div>
+                        <h3 className="text-amber-400 font-bold text-xs uppercase tracking-widest flex items-center gap-2 mb-3">
+                            <span className="material-symbols-outlined text-sm">tune</span>
+                            Configurações da DRE
+                        </h3>
                     </div>
 
-                    {stores.length > 0 && (
-                        <div className="mt-6 pt-6 border-t border-[#334155]">
-                            <h4 className="text-amber-400 font-bold text-[10px] uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-sm">storefront</span>
-                                Comissões (Cashback) por Condomínio (%)
-                            </h4>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {stores.map(storeName => (
-                                    <div key={storeName} className="space-y-1">
-                                        <label className="text-[9px] text-slate-500 font-black uppercase truncate block">{storeName}</label>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                placeholder="0.00"
-                                                value={(params.cashback_rates as Record<string, number>)[storeName] || ''}
-                                                onChange={(e) => setParams({
-                                                    ...params,
-                                                    cashback_rates: {
-                                                        ...params.cashback_rates,
-                                                        [storeName]: Number(e.target.value)
-                                                    }
-                                                })}
-                                                className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                            />
-                                            <span className="absolute right-2 top-1.5 text-slate-600 text-[10px]">%</span>
+                    {configTab === 'rates' ? (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Impostos (Geral %)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={params.tax_rate}
+                                            onChange={(e) => setParams({ ...params, tax_rate: Number(e.target.value) })}
+                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Royalties (% Faturamento)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            value={params.royalty_rate}
+                                            onChange={(e) => setParams({ ...params, royalty_rate: Number(e.target.value) })}
+                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa PIX (% sobre PIX)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={params.pix_fee_rate}
+                                            onChange={(e) => setParams({ ...params, pix_fee_rate: Number(e.target.value) })}
+                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Perdas (% Faturamento)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            value={params.loss_rate}
+                                            onChange={(e) => setParams({ ...params, loss_rate: Number(e.target.value) })}
+                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa Cartão (% Crédito+Débito)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            step="0.000001"
+                                            value={params.card_fee_rate}
+                                            onChange={(e) => setParams({ ...params, card_fee_rate: Number(e.target.value) })}
+                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {stores.length > 0 && (
+                                <div className="mt-6 pt-6 border-t border-[#334155]">
+                                    <h4 className="text-amber-400 font-bold text-[10px] uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm">storefront</span>
+                                        Comissões (Cashback) por Condomínio (%)
+                                    </h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        {stores.map(storeName => (
+                                            <div key={storeName} className="space-y-1">
+                                                <label className="text-[9px] text-slate-500 font-black uppercase truncate block">{storeName}</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        placeholder="0.00"
+                                                        value={(params.cashback_rates as Record<string, number>)[storeName] || ''}
+                                                        onChange={(e) => setParams({
+                                                            ...params,
+                                                            cashback_rates: {
+                                                                ...params.cashback_rates,
+                                                                [storeName]: Number(e.target.value)
+                                                            }
+                                                        })}
+                                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                                    />
+                                                    <span className="absolute right-2 top-1.5 text-slate-600 text-[10px]">%</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="p-3 bg-amber-600/10 border border-amber-500/20 rounded-lg">
+                                <p className="text-amber-200 text-[10px] uppercase font-black leading-relaxed">
+                                    Vincule suas categorias diretamente às contas da DRE para garantir 100% de precisão nos relatórios.
+                                    <br /><span className="text-white/60 font-medium">Categorias não vinculadas continuarão sendo classificadas automaticamente pelo sistema.</span>
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar p-1">
+                                {categories.filter(c => c.type === 'expense').map(cat => (
+                                    <div key={cat.id} className="bg-[#0f172a] p-3 rounded-xl border border-[#334155] hover:border-amber-500/30 transition-colors flex flex-col gap-2 shadow-inner">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-black text-white truncate max-w-[70%]">{cat.name}</span>
+                                            <span className="material-symbols-outlined text-slate-600 text-sm">link</span>
                                         </div>
+                                        <select
+                                            value={cat.dre_group || ''}
+                                            onChange={(e) => updateCategoryMapping(cat.id, e.target.value)}
+                                            className={`w-full bg-[#1e293b] border rounded-lg px-2 py-2 text-[10px] font-black transition-all focus:outline-none ${cat.dre_group ? 'border-amber-500/50 text-amber-400' : 'border-[#334155] text-slate-400'}`}
+                                        >
+                                            <option value="" className="text-slate-500 italic">AUTOMÁTICO (Fuzzy Match)</option>
+                                            <optgroup label="Despesas Variáveis" className="bg-[#0f172a] text-indigo-400">
+                                                {DRE_GROUPS.filter(g => g.type === 'variable').map(group => (
+                                                    <option key={group.id} value={group.id} className="text-white">{group.label}</option>
+                                                ))}
+                                            </optgroup>
+                                            <optgroup label="Despesas Fixas" className="bg-[#0f172a] text-emerald-400">
+                                                {DRE_GROUPS.filter(g => g.type === 'fixed').map(group => (
+                                                    <option key={group.id} value={group.id} className="text-white">{group.label}</option>
+                                                ))}
+                                            </optgroup>
+                                        </select>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
+
 
                     <div className="mt-6 flex justify-end gap-3 border-t border-[#334155] pt-4">
                         <button onClick={() => setShowConfig(false)} className="text-[10px] font-black uppercase text-slate-400 hover:text-white px-4 py-2">Cancelar</button>
