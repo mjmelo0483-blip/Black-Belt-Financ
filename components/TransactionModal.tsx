@@ -91,9 +91,22 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                     ];
 
                     const { data } = await supabase.from('sales').select('store_name');
-                    const dbStores = data ? data.map(s => s.store_name) : [];
-                    const stores = Array.from(new Set([...knownStores, ...dbStores])).filter(Boolean).sort() as string[];
-                    setAvailableStores(stores);
+                    const dbStores = data ? data.map((s: any) => s.store_name) : [];
+
+                    const storeMap = new Map<string, string>();
+                    const addStore = (name: string) => {
+                        if (!name) return;
+                        const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
+                        const current = storeMap.get(normalized);
+                        if (!current || (name.match(/[A-Z]/g)?.length || 0) > (current.match(/[A-Z]/g)?.length || 0)) {
+                            storeMap.set(normalized, name);
+                        }
+                    };
+
+                    knownStores.forEach(addStore);
+                    dbStores.forEach(addStore);
+
+                    setAvailableStores(Array.from(storeMap.values()).sort());
                 };
                 fetchStores();
             }

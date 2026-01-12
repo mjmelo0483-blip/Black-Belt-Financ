@@ -114,7 +114,20 @@ const DRE: React.FC = () => {
                 .not('store_name', 'is', null);
 
             const dbStores = storeData ? storeData.map(s => s.store_name) : [];
-            const uniqueStores = Array.from(new Set([...knownStores, ...dbStores])).filter(Boolean).sort() as string[];
+
+            // Deduplicate case-insensitive
+            const storeMap = new Map<string, string>();
+            [...knownStores, ...dbStores].forEach(name => {
+                if (!name) return;
+                const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
+                // If we don't have it yet, OR if the new name is "prettier" (more uppercase letters)
+                const current = storeMap.get(normalized);
+                if (!current || (name.match(/[A-Z]/g)?.length || 0) > (current.match(/[A-Z]/g)?.length || 0)) {
+                    storeMap.set(normalized, name);
+                }
+            });
+
+            const uniqueStores = Array.from(storeMap.values()).sort();
             setAllKnownStores(uniqueStores);
 
             // Fetch categories for mapping
@@ -186,10 +199,23 @@ const DRE: React.FC = () => {
     }, [fetchSales, selectedMonth, selectedYear]);
 
     const stores = useMemo(() => {
-        const s = new Set<string>(allKnownStores);
-        salesData.forEach(sale => { if (sale.store_name) s.add(sale.store_name); });
-        expensesData.forEach(exp => { if (exp.store_name) s.add(exp.store_name); });
-        return Array.from(s).filter(Boolean).sort();
+        const storeMap = new Map<string, string>();
+
+        const addStore = (name: string) => {
+            if (!name) return;
+            const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
+            const current = storeMap.get(normalized);
+            // Keep the version with more uppercase letters as it's likely better formatted
+            if (!current || (name.match(/[A-Z]/g)?.length || 0) > (current.match(/[A-Z]/g)?.length || 0)) {
+                storeMap.set(normalized, name);
+            }
+        };
+
+        allKnownStores.forEach(addStore);
+        salesData.forEach(sale => { if (sale.store_name) addStore(sale.store_name); });
+        expensesData.forEach(exp => { if (exp.store_name) addStore(exp.store_name); });
+
+        return Array.from(storeMap.values()).sort();
     }, [salesData, expensesData, allKnownStores]);
 
     const saveParams = async () => {
@@ -247,7 +273,12 @@ const DRE: React.FC = () => {
         let totalRev = 0;
         let cmvCents = 0;
 
-        const filteredSales = selectedStore === 'Todas' ? salesData : salesData.filter(s => s.store_name === selectedStore);
+        const normalizeStore = (name: string) => (name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+
+        const filteredSales = selectedStore === 'Todas' ? salesData : salesData.filter(s => {
+            if (!s.store_name) return false;
+            return normalizeStore(s.store_name) === normalizeStore(selectedStore);
+        });
 
         filteredSales.forEach(sale => {
             let method = sale.payment_method || 'Outros';
@@ -274,7 +305,14 @@ const DRE: React.FC = () => {
             totalRev += saleTotal;
         });
 
-        const activeStores = Array.from(new Set(salesData.map(s => s.store_name).filter(Boolean))) as string[];
+        const activeStoreMap = new Map<string, string>();
+        salesData.forEach(s => {
+            if (s.store_name) {
+                const norm = normalizeStore(s.store_name);
+                if (!activeStoreMap.has(norm)) activeStoreMap.set(norm, s.store_name);
+            }
+        });
+        const activeStores = Array.from(activeStoreMap.values());
         const activeStoresCount = activeStores.length || 1;
         const prorationFactor = selectedStore !== 'Todas' ? (1 / activeStoresCount) : 1;
         const cmv = cmvCents / 100;
@@ -336,7 +374,7 @@ const DRE: React.FC = () => {
             let amount = Number(exp.amount || 0);
 
             if (selectedStore !== 'Todas') {
-                if (exp.store_name === selectedStore) {
+                if (exp.store_name && normalizeStore(exp.store_name) === normalizeStore(selectedStore)) {
                 } else if (!exp.store_name) {
                     amount = amount * prorationFactor;
                 } else {
@@ -358,9 +396,12 @@ const DRE: React.FC = () => {
             // --- Prioridade 0: Mapeamento Fixo da Categoria ---
             if (dreGroup) {
                 if (dreGroup === 'cashback') {
-                    if (exp.store_name && storeManualCashback[exp.store_name]) {
-                        storeManualCashback[exp.store_name].amount += amount;
-                        storeManualCashback[exp.store_name].items.push(exp);
+                    const sNorm = exp.store_name ? normalizeStore(exp.store_name) : null;
+                    const cashbackKey = activeStores.find(as => normalizeStore(as) === sNorm);
+
+                    if (cashbackKey && storeManualCashback[cashbackKey]) {
+                        storeManualCashback[cashbackKey].amount += amount;
+                        storeManualCashback[cashbackKey].items.push(exp);
                     } else {
                         varGroups.cashback.amount += amount;
                         varGroups.cashback.items.push(exp);
@@ -423,9 +464,12 @@ const DRE: React.FC = () => {
 
             // Cashback / Comissão Condomínio (mais restrito para evitar falsos positivos)
             else if (catName.includes('comissão') || desc.includes('cashback') || desc.includes('comissão condomínio')) {
-                if (exp.store_name && storeManualCashback[exp.store_name]) {
-                    storeManualCashback[exp.store_name].amount += amount;
-                    storeManualCashback[exp.store_name].items.push(exp);
+                const sNorm = exp.store_name ? normalizeStore(exp.store_name) : null;
+                const cashbackKey = activeStores.find(as => normalizeStore(as) === sNorm);
+
+                if (cashbackKey && storeManualCashback[cashbackKey]) {
+                    storeManualCashback[cashbackKey].amount += amount;
+                    storeManualCashback[cashbackKey].items.push(exp);
                 } else {
                     varGroups.cashback.amount += amount;
                     varGroups.cashback.items.push(exp);
@@ -484,13 +528,18 @@ const DRE: React.FC = () => {
         varGroups.tarifaCartao.amount = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
 
         if (selectedStore !== 'Todas') {
-            const manual = storeManualCashback[selectedStore];
+            const sNorm = normalizeStore(selectedStore);
+            const key = Object.keys(storeManualCashback).find(k => normalizeStore(k) === sNorm);
+            const manual = key ? storeManualCashback[key] : null;
+
             if (manual && manual.amount > 0) {
                 varGroups.cashback.amount += manual.amount;
                 varGroups.cashback.items.push(...manual.items);
             } else {
                 const rates = params.cashback_rates as Record<string, number>;
-                const rate = rates[selectedStore] || 0;
+                // Find rate using normalized key
+                const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === sNorm);
+                const rate = rateKey ? rates[rateKey] : 0;
                 varGroups.cashback.amount += (totalRev * (rate / 100));
             }
         } else {
@@ -501,7 +550,9 @@ const DRE: React.FC = () => {
                     varGroups.cashback.items.push(...manual.items);
                 } else {
                     const rates = params.cashback_rates as Record<string, number>;
-                    const rate = rates[s] || 0;
+                    // Find rate using normalized key
+                    const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === normalizeStore(s));
+                    const rate = rateKey ? rates[rateKey] : 0;
                     const sRev = storeRevMap[s] || 0;
                     varGroups.cashback.amount += (sRev * (rate / 100));
                 }

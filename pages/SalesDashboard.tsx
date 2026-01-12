@@ -104,11 +104,23 @@ const SalesDashboard: React.FC = () => {
     }, [salesData]);
 
     const stores = useMemo(() => {
-        const s = new Set<string>();
+        const storeMap = new Map<string, string>();
+
+        const addStore = (name: string) => {
+            if (!name) return;
+            const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
+            const current = storeMap.get(normalized);
+            // Keep the version with more uppercase letters as it's likely better formatted
+            if (!current || (name.match(/[A-Z]/g)?.length || 0) > (current.match(/[A-Z]/g)?.length || 0)) {
+                storeMap.set(normalized, name);
+            }
+        };
+
         salesData.forEach(sale => {
-            if (sale.store_name) s.add(sale.store_name);
+            if (sale.store_name) addStore(sale.store_name);
         });
-        return ['Todas', ...Array.from(s).sort()];
+
+        return ['Todas', ...Array.from(storeMap.values()).sort()];
     }, [salesData]);
 
     // Pre-filter items based on period, store and category
@@ -123,7 +135,7 @@ const SalesDashboard: React.FC = () => {
 
             const matchesMonth = m === selectedMonth;
             const matchesYear = y === selectedYear;
-            const matchesStore = selectedStore === 'Todas' || sale.store_name === selectedStore;
+            const matchesStore = selectedStore === 'Todas' || (sale.store_name && sale.store_name.toLowerCase().trim().replace(/\s+/g, ' ') === selectedStore.toLowerCase().trim().replace(/\s+/g, ' '));
 
             if (matchesMonth && matchesYear && matchesStore) {
                 sale.sale_items?.forEach((item: any) => {
@@ -153,7 +165,7 @@ const SalesDashboard: React.FC = () => {
             const parts = sale.date.split('-');
             const m = parseInt(parts[1]) - 1;
             const y = parseInt(parts[0]);
-            if (m === selectedMonth && y === selectedYear && (selectedStore === 'Todas' || sale.store_name === selectedStore)) {
+            if (m === selectedMonth && y === selectedYear && (selectedStore === 'Todas' || (sale.store_name && sale.store_name.toLowerCase().trim().replace(/\s+/g, ' ') === selectedStore.toLowerCase().trim().replace(/\s+/g, ' ')))) {
                 const hasMatchingItem = sale.sale_items?.some((item: any) => selectedCategory === 'Todas' || item.products?.category === selectedCategory);
                 if (hasMatchingItem) saleIds.add(sale.id);
             }
