@@ -66,28 +66,41 @@ const CashFlow: React.FC = () => {
   const groupedData = useMemo(() => {
     const groups: any = {
       income: { total: 0, categories: {} },
-      expense: { total: 0, categories: {} }
+      expense: { total: 0, categories: {} },
+      investments: { total: 0, items: [] },
+      transfers: { total: 0, items: [] }
     };
 
     transactions.forEach(t => {
-      const type = t.type === 'income' ? 'income' : 'expense';
-      const catId = t.category_id || 'unassigned';
-      const catName = t.categories?.name || 'Sem Categoria';
-      const catIcon = t.categories?.icon || (t.transfer_id ? 'sync_alt' : (type === 'income' ? 'arrow_downward' : 'arrow_upward'));
+      const isInv = !!t.investment_id;
+      const isTrans = !!t.transfer_id;
 
-      if (!groups[type].categories[catId]) {
-        groups[type].categories[catId] = {
-          id: catId,
-          name: catName,
-          icon: catIcon,
-          total: 0,
-          items: []
-        };
+      if (isInv) {
+        groups.investments.total += (t.type === 'income' ? Number(t.amount) : -Number(t.amount));
+        groups.investments.items.push(t);
+      } else if (isTrans) {
+        groups.transfers.total += Number(t.amount);
+        groups.transfers.items.push(t);
+      } else {
+        const type = t.type === 'income' ? 'income' : 'expense';
+        const catId = t.category_id || 'unassigned';
+        const catName = t.categories?.name || 'Sem Categoria';
+        const catIcon = t.categories?.icon || (type === 'income' ? 'arrow_downward' : 'arrow_upward');
+
+        if (!groups[type].categories[catId]) {
+          groups[type].categories[catId] = {
+            id: catId,
+            name: catName,
+            icon: catIcon,
+            total: 0,
+            items: []
+          };
+        }
+
+        groups[type].total += Number(t.amount);
+        groups[type].categories[catId].total += Number(t.amount);
+        groups[type].categories[catId].items.push(t);
       }
-
-      groups[type].total += Number(t.amount);
-      groups[type].categories[catId].total += Number(t.amount);
-      groups[type].categories[catId].items.push(t);
     });
 
     return groups;
@@ -140,15 +153,15 @@ const CashFlow: React.FC = () => {
   };
 
   const CategoryRow = ({ cat, type }: any) => {
-    const isExpanded = expandedCategories.has(cat.id + type);
+    const isExpanded = expandedCategories.has(cat.id + (type || ''));
     return (
       <div className="mb-2">
         <div
-          onClick={() => toggleCategory(cat.id + type)}
+          onClick={() => toggleCategory(cat.id + (type || ''))}
           className="flex items-center justify-between p-4 rounded-xl bg-[#1c2a38]/60 hover:bg-[#233648] border border-[#324d67]/30 cursor-pointer transition-all group shadow-sm"
         >
           <div className="flex items-center gap-4">
-            <div className={`size-10 rounded-xl flex items-center justify-center ${type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'} border border-white/5`}>
+            <div className={`size-10 rounded-xl flex items-center justify-center ${type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : (type === 'expense' ? 'bg-red-500/10 text-red-400' : 'bg-purple-500/10 text-purple-400')} border border-white/5`}>
               <span className="material-symbols-outlined text-[22px]">{cat.icon}</span>
             </div>
             <div>
@@ -157,8 +170,8 @@ const CashFlow: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-6">
-            <p className={`text-sm font-black ${type === 'income' ? 'text-emerald-400' : 'text-white'}`}>
-              {type === 'income' ? '+' : '-'} {formatCurrency(cat.total)}
+            <p className={`text-sm font-black ${type === 'income' ? 'text-emerald-400' : (type === 'expense' ? 'text-white' : 'text-slate-200')}`}>
+              {type === 'income' ? '+' : (type === 'expense' ? '-' : '')} {formatCurrency(Math.abs(cat.total))}
             </p>
             <span className={`material-symbols-outlined text-[#92adc9] transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
               expand_more
@@ -203,8 +216,8 @@ const CashFlow: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <p className={`text-xs font-black ${type === 'income' ? 'text-emerald-400' : 'text-slate-200'}`}>
-                    {formatCurrency(t.amount)}
+                  <p className={`text-xs font-black ${t.type === 'income' ? 'text-emerald-400' : 'text-slate-200'}`}>
+                    {t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
                   </p>
                   <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
                     <button onClick={() => handleEdit(t)} className="p-1.5 text-[#92adc9] hover:text-white rounded-lg hover:bg-white/5 transition-all">
@@ -225,7 +238,6 @@ const CashFlow: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-6 lg:p-10 flex flex-col gap-8">
-      {/* Header com Design Premium */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div>
           <h1 className="text-white text-3xl font-black leading-tight tracking-tight">Fluxo de Caixa</h1>
@@ -263,7 +275,6 @@ const CashFlow: React.FC = () => {
         </div>
       </div>
 
-      {/* Cards de Métricas - Estilo DRE / Premium */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         {[
           { label: 'Saldo Inicial', value: stats.initialBalance, color: 'primary', icon: 'account_balance_wallet' },
@@ -294,7 +305,6 @@ const CashFlow: React.FC = () => {
         ))}
       </div>
 
-      {/* Filtros e Ações */}
       <div className="flex flex-wrap items-center justify-between gap-4 py-2 border-b border-[#324d67]/30">
         <div className="flex items-center gap-3">
           <div className="relative group">
@@ -338,9 +348,7 @@ const CashFlow: React.FC = () => {
         )}
       </div>
 
-      {/* Listagem Categorizada Style DRE */}
       <div className="flex flex-col gap-10 pb-10">
-        {/* Seção de RECEITAS */}
         <div>
           <div className="flex items-center gap-4 mb-6">
             <div className="px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
@@ -356,19 +364,18 @@ const CashFlow: React.FC = () => {
           ) : (
             <div className="py-12 border-2 border-dashed border-[#324d67]/30 rounded-2xl flex flex-col items-center justify-center text-[#92adc9] gap-2 grayscale opacity-40">
               <span className="material-symbols-outlined text-[40px]">inbox</span>
-              <span className="text-xs font-bold uppercase tracking-widest">Sem entradas registradas</span>
+              <span className="text-xs font-bold uppercase tracking-widest">Sem entradas operacionais</span>
             </div>
           )}
 
           {Object.keys(groupedData.income.categories).length > 0 && (
-            <div className="flex justify-between items-center px-6 py-4 mt-2 bg-[#1c2a38]/40 border border-[#324d67]/20 rounded-xl">
-              <span className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">Total de Entradas</span>
+            <div className="flex justify-between items-center px-6 py-4 mt-2 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
+              <span className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">Total de Receitas Operacionais</span>
               <span className="text-emerald-400 font-black text-lg">{formatCurrency(groupedData.income.total)}</span>
             </div>
           )}
         </div>
 
-        {/* Seção de DESPESAS */}
         <div>
           <div className="flex items-center gap-4 mb-6">
             <div className="px-4 py-1.5 rounded-full bg-red-500/10 border border-red-500/20">
@@ -384,20 +391,63 @@ const CashFlow: React.FC = () => {
           ) : (
             <div className="py-12 border-2 border-dashed border-[#324d67]/30 rounded-2xl flex flex-col items-center justify-center text-[#92adc9] gap-2 grayscale opacity-40">
               <span className="material-symbols-outlined text-[40px]">inbox</span>
-              <span className="text-xs font-bold uppercase tracking-widest">Sem saídas registradas</span>
+              <span className="text-xs font-bold uppercase tracking-widest">Sem saídas operacionais</span>
             </div>
           )}
 
           {Object.keys(groupedData.expense.categories).length > 0 && (
             <div className="flex justify-between items-center px-6 py-4 mt-2 bg-red-400/5 border border-red-400/20 rounded-xl">
-              <span className="text-red-400 text-[10px] font-black uppercase tracking-widest">Total de Saídas</span>
+              <span className="text-red-400 text-[10px] font-black uppercase tracking-widest">Total de Despesas Operacionais</span>
               <span className="text-red-400 font-black text-lg">{formatCurrency(groupedData.expense.total)}</span>
             </div>
           )}
         </div>
+
+        {groupedData.investments.items.length > 0 && (
+          <div>
+            <div className="flex items-center gap-4 mb-6">
+              <div className="px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20">
+                <span className="text-purple-400 text-[10px] font-black uppercase tracking-[0.2em]">Movimentações de Investimento</span>
+              </div>
+              <div className="h-px flex-1 bg-gradient-to-r from-purple-500/20 to-transparent"></div>
+            </div>
+
+            <CategoryRow
+              cat={{
+                id: 'investments-section',
+                name: 'Investimentos (Aportes e Resgates)',
+                icon: 'payments',
+                items: groupedData.investments.items,
+                total: groupedData.investments.total
+              }}
+              type="investment"
+            />
+          </div>
+        )}
+
+        {groupedData.transfers.items.length > 0 && (
+          <div>
+            <div className="flex items-center gap-4 mb-6">
+              <div className="px-4 py-1.5 rounded-full bg-slate-500/10 border border-slate-500/20">
+                <span className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Transferências entre Contas</span>
+              </div>
+              <div className="h-px flex-1 bg-gradient-to-r from-slate-500/20 to-transparent"></div>
+            </div>
+
+            <CategoryRow
+              cat={{
+                id: 'transfers-section',
+                name: 'Transferências Recebidas/Enviadas',
+                icon: 'sync_alt',
+                items: groupedData.transfers.items,
+                total: 0
+              }}
+              type="transfer"
+            />
+          </div>
+        )}
       </div>
 
-      {/* Modais Customizados */}
       <TransactionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
