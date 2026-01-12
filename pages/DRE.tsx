@@ -304,7 +304,7 @@ const DRE: React.FC = () => {
                 sale.sale_items.forEach((item: any) => {
                     saleTotal += Number(item.total_price || 0);
                     const itemQty = Number(item.quantity || 0);
-                    const itemCost = Number(item.products?.cost || 0);
+                    const itemCost = Number(item.unit_cost !== undefined && item.unit_cost !== null ? item.unit_cost : (item.products?.cost || 0));
                     cmvCents += Math.round(itemCost * itemQty * 100);
                 });
             } else {

@@ -26,7 +26,7 @@ export const useSales = () => {
                     .select(`
                     id, date, store_name, payment_method, total_amount,
                     sale_items (
-                        total_price, quantity,
+                        total_price, quantity, unit_cost,
                         products (name, code, category, cost)
                     )
                 `)
@@ -221,7 +221,7 @@ export const useSales = () => {
                     });
                 }
 
-                const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume']));
+                const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume', 'O']));
                 const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.', 'Vlr. Liq.', 'Preço Venda Unitário']));
 
                 // Determine line total - PRIORITIZE calculation as requested by user
@@ -240,12 +240,14 @@ export const useSales = () => {
 
                 const sale = salesGroups.get(groupKey);
                 const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto']) || '');
+                const costPerUnit = parseNumber(getVal(row, ['Custo', 'Vlr. Custo', 'Preço de Custo', 'Custo Unitário', 'Markup Cost', 'Cost', 'P', 'Vlr Custo']));
 
                 sale.items.push({
                     product_id: productsMap.get(productCode),
                     quantity: qty,
                     unit_price: unitPrice || (qty > 0 ? lineTotalPrice / qty : 0),
-                    total_price: lineTotalPrice
+                    total_price: lineTotalPrice,
+                    unit_cost: costPerUnit
                 });
 
                 // Increment calculated total
