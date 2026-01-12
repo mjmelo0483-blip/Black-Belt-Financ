@@ -104,14 +104,17 @@ const SalesDashboard: React.FC = () => {
     }, [salesData]);
 
     const stores = useMemo(() => {
+        const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const storeMap = new Map<string, string>();
 
         const addStore = (name: string) => {
             if (!name) return;
-            const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
+            const normalized = normalize(name);
             const current = storeMap.get(normalized);
-            // Keep the version with more uppercase letters as it's likely better formatted
-            if (!current || (name.match(/[A-Z]/g)?.length || 0) > (current.match(/[A-Z]/g)?.length || 0)) {
+
+            const getScore = (s: string) => (s.match(/[A-Z]/g)?.length || 0) + (s.match(/[áéíóúâêîôûãõàèìòù]/gi)?.length || 0);
+
+            if (!current || getScore(name) > getScore(current)) {
                 storeMap.set(normalized, name);
             }
         };
@@ -124,8 +127,8 @@ const SalesDashboard: React.FC = () => {
     }, [salesData]);
 
     // Pre-filter items based on period, store and category
-    // This is the core fix: we extract ONLY the relevant items for metrics
     const filteredItems = useMemo(() => {
+        const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const items: any[] = [];
         salesData.forEach(sale => {
             if (!sale.date) return;
@@ -135,7 +138,7 @@ const SalesDashboard: React.FC = () => {
 
             const matchesMonth = m === selectedMonth;
             const matchesYear = y === selectedYear;
-            const matchesStore = selectedStore === 'Todas' || (sale.store_name && sale.store_name.toLowerCase().trim().replace(/\s+/g, ' ') === selectedStore.toLowerCase().trim().replace(/\s+/g, ' '));
+            const matchesStore = selectedStore === 'Todas' || (sale.store_name && normalize(sale.store_name) === normalize(selectedStore));
 
             if (matchesMonth && matchesYear && matchesStore) {
                 sale.sale_items?.forEach((item: any) => {
@@ -159,13 +162,14 @@ const SalesDashboard: React.FC = () => {
 
     // For average ticket, we still need to know how many actual transactions (sales) had those items
     const relevantSalesCount = useMemo(() => {
+        const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const saleIds = new Set();
         salesData.forEach(sale => {
             if (!sale.date) return;
             const parts = sale.date.split('-');
             const m = parseInt(parts[1]) - 1;
             const y = parseInt(parts[0]);
-            if (m === selectedMonth && y === selectedYear && (selectedStore === 'Todas' || (sale.store_name && sale.store_name.toLowerCase().trim().replace(/\s+/g, ' ') === selectedStore.toLowerCase().trim().replace(/\s+/g, ' ')))) {
+            if (m === selectedMonth && y === selectedYear && (selectedStore === 'Todas' || (sale.store_name && normalize(sale.store_name) === normalize(selectedStore)))) {
                 const hasMatchingItem = sale.sale_items?.some((item: any) => selectedCategory === 'Todas' || item.products?.category === selectedCategory);
                 if (hasMatchingItem) saleIds.add(sale.id);
             }

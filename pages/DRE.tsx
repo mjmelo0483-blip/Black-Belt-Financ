@@ -115,14 +115,20 @@ const DRE: React.FC = () => {
 
             const dbStores = storeData ? storeData.map(s => s.store_name) : [];
 
-            // Deduplicate case-insensitive
+            // Deduplicate case-insensitive and accent-insensitive
+            const normalize = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
             const storeMap = new Map<string, string>();
             [...knownStores, ...dbStores].forEach(name => {
                 if (!name) return;
-                const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
-                // If we don't have it yet, OR if the new name is "prettier" (more uppercase letters)
+                const normalized = normalize(name);
+                // If we don't have it yet, OR if the new name is "prettier" (more uppercase letters, or has accents which are usually more correct)
                 const current = storeMap.get(normalized);
-                if (!current || (name.match(/[A-Z]/g)?.length || 0) > (current.match(/[A-Z]/g)?.length || 0)) {
+
+                const currentScore = current ? (current.match(/[A-Z]/g)?.length || 0) + (current.match(/[áéíóúâêîôûãõàèìòù]/gi)?.length || 0) : -1;
+                const newScore = (name.match(/[A-Z]/g)?.length || 0) + (name.match(/[áéíóúâêîôûãõàèìòù]/gi)?.length || 0);
+
+                if (!current || newScore > currentScore) {
                     storeMap.set(normalized, name);
                 }
             });
@@ -199,14 +205,18 @@ const DRE: React.FC = () => {
     }, [fetchSales, selectedMonth, selectedYear]);
 
     const stores = useMemo(() => {
+        const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const storeMap = new Map<string, string>();
 
         const addStore = (name: string) => {
             if (!name) return;
-            const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
+            const normalized = normalize(name);
             const current = storeMap.get(normalized);
-            // Keep the version with more uppercase letters as it's likely better formatted
-            if (!current || (name.match(/[A-Z]/g)?.length || 0) > (current.match(/[A-Z]/g)?.length || 0)) {
+
+            // Score based on Uppercase letters and Accents (correct typing)
+            const getScore = (s: string) => (s.match(/[A-Z]/g)?.length || 0) + (s.match(/[áéíóúâêîôûãõàèìòù]/gi)?.length || 0);
+
+            if (!current || getScore(name) > getScore(current)) {
                 storeMap.set(normalized, name);
             }
         };
@@ -273,7 +283,7 @@ const DRE: React.FC = () => {
         let totalRev = 0;
         let cmvCents = 0;
 
-        const normalizeStore = (name: string) => (name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+        const normalizeStore = (name: string) => (name || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
         const filteredSales = selectedStore === 'Todas' ? salesData : salesData.filter(s => {
             if (!s.store_name) return false;

@@ -94,11 +94,15 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                     const dbStores = data ? data.map((s: any) => s.store_name) : [];
 
                     const storeMap = new Map<string, string>();
+                    const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                     const addStore = (name: string) => {
                         if (!name) return;
-                        const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
+                        const normalized = normalize(name);
                         const current = storeMap.get(normalized);
-                        if (!current || (name.match(/[A-Z]/g)?.length || 0) > (current.match(/[A-Z]/g)?.length || 0)) {
+
+                        const getScore = (s: string) => (s.match(/[A-Z]/g)?.length || 0) + (s.match(/[áéíóúâêîôûãõàèìòù]/gi)?.length || 0);
+
+                        if (!current || getScore(name) > getScore(current)) {
                             storeMap.set(normalized, name);
                         }
                     };

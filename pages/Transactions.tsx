@@ -240,7 +240,7 @@ const Transactions: React.FC = () => {
           alert('Erro ao importar: ' + result.error);
         } else {
           alert(`Sucesso! ${result.count} lançamentos importados.`);
-          fetchTransactions({});
+          fetchTransactions();
         }
       };
       reader.readAsBinaryString(file);
@@ -629,7 +629,7 @@ const Transactions: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={() => {
-          fetchTransactions({});
+          fetchTransactions();
           refreshInvestments();
           if (isEditing) setIsModalOpen(false);
         }}
