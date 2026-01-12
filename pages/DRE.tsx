@@ -312,10 +312,48 @@ const DRE: React.FC = () => {
                 desc.includes('taxa de cartao') ||
                 desc.includes('perda');
 
-            if (!isCalculated && (catName.includes('perda') || desc.includes('perda') || desc.includes('furto') || desc.includes('vencido') || desc.includes('danificado'))) {
-                perdaEstoque += amount;
+            // --- Prioridade 1: Categorias específicas e Serviços Fixos ---
+
+            // Internet e Celular
+            if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) {
+                fixGroups.internet.amount += amount;
+                fixGroups.internet.items.push(exp);
             }
-            else if (desc.includes('cashback') || desc.includes('condominio')) {
+            // Energia Elétrica
+            else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial') || desc.includes('enel') || desc.includes('celpa')) {
+                fixGroups.energia.amount += amount;
+                fixGroups.energia.items.push(exp);
+            }
+            // Combustível
+            else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel') || desc.includes('etanol') || desc.includes('posto ')) {
+                fixGroups.combustivel.amount += amount;
+                fixGroups.combustivel.items.push(exp);
+            }
+            // Funcionários e Pró-labore
+            else if (catName.includes('funcionario') || catName.includes('salario') || catName.includes('pro-labore') || desc.includes('salario') || desc.includes('folha pgto') || desc.includes('pro-labore')) {
+                fixGroups.funcionarios.amount += amount;
+                fixGroups.funcionarios.items.push(exp);
+            }
+            // Contabilidade
+            else if (catName.includes('contabil') || desc.includes('contador') || desc.includes('contabilidade')) {
+                fixGroups.contabilidade.amount += amount;
+                fixGroups.contabilidade.items.push(exp);
+            }
+            // Aluguel de Escritório
+            else if (catName.includes('escritorio') && (catName.includes('aluguel') || desc.includes('aluguel'))) {
+                fixGroups.aluguelEscritorio.amount += amount;
+                fixGroups.aluguelEscritorio.items.push(exp);
+            }
+            // Aluguel de Container
+            else if (catName.includes('container')) {
+                fixGroups.aluguelContainer.amount += amount;
+                fixGroups.aluguelContainer.items.push(exp);
+            }
+
+            // --- Prioridade 2: Despesas Variáveis Específicas ---
+
+            // Cashback / Comissão Condomínio (mais restrito para evitar falsos positivos)
+            else if (catName.includes('comissão') || desc.includes('cashback') || desc.includes('comissão condomínio')) {
                 if (exp.store_name && storeManualCashback[exp.store_name]) {
                     storeManualCashback[exp.store_name].amount += amount;
                     storeManualCashback[exp.store_name].items.push(exp);
@@ -324,61 +362,47 @@ const DRE: React.FC = () => {
                     varGroups.cashback.items.push(exp);
                 }
             }
-            else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda')) {
+            // Marketing e Propaganda
+            else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda') || desc.includes('facebook ads') || desc.includes('google ads')) {
                 varGroups.marketing.amount += amount;
                 varGroups.marketing.items.push(exp);
             }
+            // Perda de Estoque (se não for calculado automaticamente)
+            else if (!isCalculated && (catName.includes('perda') || desc.includes('perda') || desc.includes('furto') || desc.includes('vencido') || desc.includes('danificado'))) {
+                perdaEstoque += amount;
+            }
+
+            // --- Prioridade 3: Outros Grupos ---
+
+            // Manutenção de Veículos
+            else if (desc.includes('veiculo') || desc.includes('carro') || desc.includes('moto') || desc.includes('oficina') || desc.includes('pneu')) {
+                fixGroups.manutencaoVeiculo.amount += amount;
+                fixGroups.manutencaoVeiculo.items.push(exp);
+            }
+            // Taxas de Sistema
+            else if (catName.includes('taxa de uso do sistema') || (catName.includes('sistema') && (desc.includes('taxa') || desc.includes('mensalidade')))) {
+                fixGroups.taxaSistema.amount += amount;
+                fixGroups.taxaSistema.items.push(exp);
+            }
+            // TEF / Equipamentos Pagamento
+            else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass') || catName.includes('lgopass')) {
+                fixGroups.tef.amount += amount;
+                fixGroups.tef.items.push(exp);
+            }
+            // Despesas Financeiras e Espaço
+            else if (catName.includes('despesas financeiras') || catName.includes('aluguel do espaco') || desc.includes('aluguel da loja') || desc.includes('aluguel sala')) {
+                fixGroups.despesasFinanceiras.amount += amount;
+                fixGroups.despesasFinanceiras.items.push(exp);
+            }
+            // Despesas Diversas da Loja
             else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) {
                 if (!isCalculated) {
                     varGroups.diversas.amount += amount;
                     varGroups.diversas.items.push(exp);
                 }
             }
-            else if (catName.includes('funcionario') || catName.includes('salario') || desc.includes('pgto') || desc.includes('salario')) {
-                fixGroups.funcionarios.amount += amount;
-                fixGroups.funcionarios.items.push(exp);
-            }
-            else if (desc.includes('veiculo') || desc.includes('carro') || desc.includes('moto')) {
-                fixGroups.manutencaoVeiculo.amount += amount;
-                fixGroups.manutencaoVeiculo.items.push(exp);
-            }
-            else if (catName.includes('taxa de uso do sistema') || (catName.includes('sistema') && desc.includes('taxa'))) {
-                fixGroups.taxaSistema.amount += amount;
-                fixGroups.taxaSistema.items.push(exp);
-            }
-            else if (catName.includes('container')) {
-                fixGroups.aluguelContainer.amount += amount;
-                fixGroups.aluguelContainer.items.push(exp);
-            }
-            else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel')) {
-                fixGroups.combustivel.amount += amount;
-                fixGroups.combustivel.items.push(exp);
-            }
-            else if (catName.includes('escritorio')) {
-                fixGroups.aluguelEscritorio.amount += amount;
-                fixGroups.aluguelEscritorio.items.push(exp);
-            }
-            else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass') || catName.includes('lgopass')) {
-                fixGroups.tef.amount += amount;
-                fixGroups.tef.items.push(exp);
-            }
-            else if (catName.includes('despesas financeiras') || catName.includes('aluguel do espaco') || desc.includes('aluguel da loja')) {
-                fixGroups.despesasFinanceiras.amount += amount;
-                fixGroups.despesasFinanceiras.items.push(exp);
-            }
-            else if (catName.includes('contabil') || desc.includes('contador')) {
-                fixGroups.contabilidade.amount += amount;
-                fixGroups.contabilidade.items.push(exp);
-            }
-            else if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) {
-                fixGroups.internet.amount += amount;
-                fixGroups.internet.items.push(exp);
-            }
-            else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial')) {
-                fixGroups.energia.amount += amount;
-                fixGroups.energia.items.push(exp);
-            }
-            else if (catName.includes('outros pagamentos') || !isCalculated) {
+            // Outros (Fallback)
+            else if (!isCalculated) {
                 fixGroups.outros.amount += amount;
                 fixGroups.outros.items.push(exp);
             }
