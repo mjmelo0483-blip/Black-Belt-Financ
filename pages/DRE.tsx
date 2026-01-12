@@ -742,7 +742,19 @@ const DRE: React.FC = () => {
                                 </p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar p-1">
-                                {categories.filter(c => c.type === 'expense').map(cat => (
+                                {categories.filter(c => {
+                                    if (c.type !== 'expense') return false;
+                                    const n = (c.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                                    const isAuto = n.includes('royalties') ||
+                                        n.includes('imposto') ||
+                                        n.includes('tarifa de pix') ||
+                                        n.includes('tarifa pix') ||
+                                        n.includes('tarifa de cartao') ||
+                                        n.includes('taxa de cartao') ||
+                                        n.includes('perda') ||
+                                        n.includes('fornecedor');
+                                    return !isAuto;
+                                }).map(cat => (
                                     <div key={cat.id} className="bg-[#0f172a] p-3 rounded-xl border border-[#334155] hover:border-amber-500/30 transition-colors flex flex-col gap-2 shadow-inner">
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs font-black text-white truncate max-w-[70%]">{cat.name}</span>
