@@ -446,7 +446,7 @@ const SalesDashboard: React.FC = () => {
                         <div className="size-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4">
                             <span className="material-symbols-outlined text-indigo-400 text-3xl">api</span>
                         </div>
-                        <p className="text-3xl font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        <p className="text-3xl font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Total Faturado</p>
                     </div>
 
@@ -469,7 +469,7 @@ const SalesDashboard: React.FC = () => {
                     <div className="bg-[#1e293b] p-6 rounded-xl border border-[#334155] space-y-2">
                         <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Maior Faturamento</p>
                         <p className="text-sm font-bold text-white truncate">{bestProduct.name}</p>
-                        <p className="text-xl font-black text-indigo-400">R$ {bestProduct.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        <p className="text-xl font-black text-indigo-400">R$ {bestProduct.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
 
                     <div className="bg-[#1e293b] p-6 rounded-xl border border-[#334155]">
@@ -514,7 +514,7 @@ const SalesDashboard: React.FC = () => {
                                     <span className="text-3xl font-black text-amber-500">{balancePercentage}%</span>
                                 </div>
                             </div>
-                            <p className="mt-4 text-amber-500 font-black text-lg">R$ {targetRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            <p className="mt-4 text-amber-500 font-black text-lg">R$ {targetRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </div>
 
                         <div className="md:col-span-2 bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
@@ -603,12 +603,12 @@ const SalesDashboard: React.FC = () => {
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="bg-[#0f172a]/50 p-3 rounded-xl border border-[#334155]/50">
                                             <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Faturamento Atual</p>
-                                            <p className="text-sm font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                            <p className="text-sm font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             <p className="text-[9px] text-slate-600 font-bold mt-0.5">{projection.daysElapsed} dias decorridos</p>
                                         </div>
                                         <div className="bg-[#0f172a]/50 p-3 rounded-xl border border-[#334155]/50">
                                             <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Média Diária (Calendário)</p>
-                                            <p className="text-sm font-black text-white">R$ {projection.dailyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                            <p className="text-sm font-black text-white">R$ {projection.dailyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             <p className="text-[9px] text-slate-600 font-bold mt-0.5">Baseado em dias corridos</p>
                                         </div>
                                     </div>

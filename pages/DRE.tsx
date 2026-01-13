@@ -604,7 +604,7 @@ const DRE: React.FC = () => {
                 {onClick && <span className="material-symbols-outlined text-[14px] opacity-40 hover:opacity-100 transition-opacity">info</span>}
             </div>
             <div className={`w-32 text-right font-bold ${isFinal ? 'text-sm' : 'text-[11px]'} ${isNegative ? 'text-red-400' : (isFinal ? (value >= 0 ? 'text-emerald-400' : 'text-red-500') : '')}`}>
-                {isNegative && value > 0 ? '-' : ''} R$ {Math.abs(Number(value)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                {isNegative && value > 0 ? '-' : ''} R$ {Math.abs(Number(value)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="w-24 text-right text-[10px] font-medium text-slate-500">
                 {percentage !== undefined ? `${percentage.toFixed(2)}%` : '--'}
@@ -1004,7 +1004,7 @@ const DRE: React.FC = () => {
                                             <td className="py-2 px-2 text-indigo-400 font-bold">{exp.store_name || 'Geral'}</td>
                                             <td className="py-2 px-2 text-white font-medium">{exp.description}</td>
                                             <td className="py-2 px-2 text-slate-400">{exp.categories?.name}</td>
-                                            <td className="py-2 px-2 text-right text-red-400 font-bold">R$ {Number(exp.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                            <td className="py-2 px-2 text-right text-red-400 font-bold">R$ {Number(exp.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         </tr>
                                     ))}
                                     {detailingItems.length === 0 && (
@@ -1017,7 +1017,7 @@ const DRE: React.FC = () => {
                         </div>
                         <div className="p-4 bg-[#0f172a] border-t border-[#233648] flex justify-between items-center text-xs font-black uppercase">
                             <span className="text-slate-400">Total</span>
-                            <span className="text-white">R$ {detailingItems.reduce((acc, e) => acc + Number(e.amount), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="text-white">R$ {detailingItems.reduce((acc, e) => acc + Number(e.amount), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                     </div>
                 </div>
