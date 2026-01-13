@@ -17,6 +17,15 @@ const SalesDashboard: React.FC = () => {
 
     const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
     const [selectedStore, setSelectedStore] = useState<string>('Todas');
+    const [expensesData, setExpensesData] = useState<any[]>([]);
+    const [params, setParams] = useState({
+        tax_rate: 3.24,
+        royalty_rate: 6.00,
+        pix_fee_rate: 0.80,
+        loss_rate: 2.00,
+        card_fee_rate: 1.110284,
+        cashback_rates: {} as Record<string, number>
+    });
 
     // Simple local cache to avoid re-fetching same period
     const [cache, setCache] = useState<Record<string, any[]>>({});
@@ -24,16 +33,54 @@ const SalesDashboard: React.FC = () => {
     useEffect(() => {
         const load = async () => {
             const cacheKey = `${selectedMonth}-${selectedYear}`;
-            if (cache[cacheKey]) {
-                setSalesData(cache[cacheKey]);
-                return;
+
+            // Fetch Parameters
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                const { data: pData } = await supabase
+                    .from('dre_parameters')
+                    .select('*')
+                    .eq('user_id', session.user.id)
+                    .eq('month', selectedMonth)
+                    .eq('year', selectedYear)
+                    .maybeSingle();
+
+                if (pData) {
+                    setParams({
+                        tax_rate: Number(pData.tax_rate || 3.24),
+                        royalty_rate: Number(pData.royalty_rate || 6.00),
+                        pix_fee_rate: Number(pData.pix_fee_rate || 0.80),
+                        loss_rate: Number(pData.loss_rate || 2.00),
+                        card_fee_rate: Number(pData.card_fee_rate || 1.110284),
+                        cashback_rates: pData.cashback_rates || {}
+                    });
+                }
             }
 
-            const { data } = await fetchSales({ month: selectedMonth, year: selectedYear });
-            if (data) {
-                setSalesData(data);
-                setCache(prev => ({ ...prev, [cacheKey]: data }));
+            if (cache[cacheKey]) {
+                setSalesData(cache[cacheKey]);
+            } else {
+                const { data } = await fetchSales({ month: selectedMonth, year: selectedYear });
+                if (data) {
+                    setSalesData(data);
+                    setCache(prev => ({ ...prev, [cacheKey]: data }));
+                }
             }
+
+            // Fetch Expenses for Break-Even calculation
+            const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
+            const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+            const endDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+            const { data: expData } = await supabase
+                .from('transactions')
+                .select('amount, type, description, date, category_id, store_name, categories(name, parent_id, dre_group)')
+                .eq('is_business', true)
+                .eq('type', 'expense')
+                .gte('date', startDate)
+                .lte('date', endDate);
+
+            if (expData) setExpensesData(expData);
         };
         load();
     }, [fetchSales, selectedMonth, selectedYear]);
@@ -211,8 +258,138 @@ const SalesDashboard: React.FC = () => {
         return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
     }, [filteredItems]);
 
-    const targetRevenue = 12942.71;
-    const balancePercentage = Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100);
+    // Break-Even Point (PE) Calculation using DRE Logic
+    const dreMetrics = useMemo(() => {
+        let totalRev = 0;
+        let cmv = 0;
+        const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Outros': 0 };
+
+        const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const sNorm = selectedStore === 'Todas' ? null : normalize(selectedStore);
+
+        // Filter sales for the selected store/period matches
+        const sales = selectedStore === 'Todas' ? salesData : salesData.filter(s => s.store_name && normalize(s.store_name) === sNorm);
+
+        sales.forEach(sale => {
+            let method = sale.payment_method || 'Outros';
+            const mNorm = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            if (mNorm.includes('credito')) method = 'Crédito';
+            else if (mNorm.includes('debito')) method = 'Débito';
+            else if (mNorm.includes('pix')) method = 'PIX';
+            else method = 'Outros';
+
+            let saleTotal = 0;
+            if (sale.sale_items?.length > 0) {
+                sale.sale_items.forEach((item: any) => {
+                    const price = Number(item.total_price || 0);
+                    const qty = Number(item.quantity || 0);
+                    const cost = Number(item.unit_cost !== undefined && item.unit_cost !== null ? item.unit_cost : (item.products?.cost || 0));
+                    saleTotal += price;
+                    cmv += (cost * qty);
+                });
+            } else {
+                saleTotal = Number(sale.total_amount || 0);
+            }
+            revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
+            totalRev += saleTotal;
+        });
+
+        // Fixed and Variable Expenses from transactions
+        let totalFix = 0;
+        let manualVariable = 0; // Marketing, Diversas, etc.
+
+        // Proration factor for shared expenses
+        const activeStoreMap = new Set();
+        salesData.forEach(s => { if (s.store_name) activeStoreMap.add(normalize(s.store_name)); });
+        const activeStoresCount = activeStoreMap.size || 1;
+        const prorationFactor = selectedStore !== 'Todas' ? (1 / activeStoresCount) : 1;
+
+        expensesData.forEach(exp => {
+            const dreGroup = exp.categories?.dre_group;
+            const catName = (exp.categories?.name || '').toLowerCase();
+            const desc = (exp.description || '').toLowerCase();
+            let amount = Number(exp.amount || 0);
+
+            if (selectedStore !== 'Todas') {
+                if (exp.store_name && normalize(exp.store_name) === sNorm) {
+                    // Specific to this store
+                } else if (!exp.store_name) {
+                    amount = amount * prorationFactor;
+                } else {
+                    return; // Another store
+                }
+            }
+
+            if (catName.includes('fornecedor')) return;
+
+            // DRE Classification
+            const isCalculated = desc.includes('royalties') || desc.includes('imposto') || desc.includes('tarifa') || desc.includes('perda');
+            if (isCalculated && !dreGroup) return;
+
+            if (dreGroup) {
+                if (['funcionarios', 'manutencaoVeiculo', 'taxaSistema', 'aluguelContainer', 'combustivel', 'aluguelEscritorio', 'tef', 'despesasFinanceiras', 'contabilidade', 'internet', 'energia', 'outros'].includes(dreGroup)) {
+                    totalFix += amount;
+                } else if (['cashback', 'marketing', 'diversas', 'perda'].includes(dreGroup)) {
+                    manualVariable += amount;
+                }
+            } else {
+                // Fallback keywords (same as DRE.tsx)
+                if (catName.includes('internet') || catName.includes('celular') || catName.includes('energia') || catName.includes('luz') || catName.includes('funcionario') || catName.includes('salario') || catName.includes('contabil') || catName.includes('escritorio') || catName.includes('container')) {
+                    totalFix += amount;
+                } else if (catName.includes('marketing') || catName.includes('propaganda') || catName.includes('comissao') || desc.includes('cashback')) {
+                    manualVariable += amount;
+                } else {
+                    totalFix += amount;
+                }
+            }
+        });
+
+        // Variable Percentages
+        const taxRate = params.tax_rate / 100;
+        const royaltyRate = params.royalty_rate / 100;
+        const lossRate = params.loss_rate / 100;
+        const pixRate = params.pix_fee_rate / 100;
+        const cardRate = params.card_fee_rate / 100;
+
+        // Weighted Bank Fee Rate
+        const totalBankFees = (revByMethod['PIX'] * pixRate) + ((revByMethod['Crédito'] + revByMethod['Débito']) * cardRate);
+        const bankFeeRate = totalRev > 0 ? totalBankFees / totalRev : ((pixRate + cardRate) / 2);
+
+        // Cashback Rate
+        let avgCashbackRate = 0;
+        if (selectedStore !== 'Todas') {
+            const rates = params.cashback_rates as Record<string, number>;
+            const rateKey = Object.keys(rates).find(rk => normalize(rk) === sNorm);
+            avgCashbackRate = (rateKey ? rates[rateKey] : 0) / 100;
+        } else {
+            // Find avg rate across stores with revenue
+            let cbTotal = 0;
+            const rates = params.cashback_rates as Record<string, number>;
+            activeStoreMap.forEach((storeNorm: any) => {
+                const rateKey = Object.keys(rates).find(rk => normalize(rk) === storeNorm);
+                const r = (rateKey ? rates[rateKey] : 0) / 100;
+                cbTotal += r;
+            });
+            avgCashbackRate = activeStoreMap.size > 0 ? cbTotal / activeStoreMap.size : 0;
+        }
+
+        // CMV Rate
+        const cmvRate = totalRev > 0 ? cmv / totalRev : 0.45; // 45% fallback if no sales
+
+        // MC% Ratio = 1 - (Variable Rates)
+        // Note: manualVariable is treated as a "fixed" revenue offset for PE purposes if it's a dollar amount
+        // because it doesn't scale 1:1 with every new sale in the same way taxes do.
+        const mcRatio = 1 - taxRate - royaltyRate - lossRate - bankFeeRate - avgCashbackRate - cmvRate;
+
+        // PE = (Fixed Costs + Manual Variable Costs) / MC Ratio
+        // We use Math.max(0.1, mcRatio) to avoid division by zero
+        const breakEven = (totalFix + manualVariable) / Math.max(0.01, mcRatio);
+
+        return { breakEven, totalRev, totalFix, manualVariable, mcRatio };
+    }, [salesData, expensesData, params, selectedStore]);
+
+    const targetRevenue = dreMetrics.breakEven;
+    const balancePercentage = targetRevenue > 0 ? Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100) : (totalRevenue > 0 ? 100 : 0);
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
     return (
