@@ -1,14 +1,13 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { useSales } from '../hooks/useSales';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    BarChart, Bar, Cell, PieChart, Pie, RadialBarChart, RadialBar, Legend
+    BarChart, Bar, Cell, PieChart, Pie
 } from 'recharts';
 import { supabase } from '../supabase';
 
 const SalesDashboard: React.FC = () => {
-    const { fetchSales, loading } = useSales();
+    const { fetchSales } = useSales();
     const [salesData, setSalesData] = useState<any[]>([]);
 
     const now = new Date();
@@ -27,14 +26,12 @@ const SalesDashboard: React.FC = () => {
         cashback_rates: {} as Record<string, number>
     });
 
-    // Simple local cache to avoid re-fetching same period
     const [cache, setCache] = useState<Record<string, any[]>>({});
 
     useEffect(() => {
         const load = async () => {
             const cacheKey = `${selectedMonth}-${selectedYear}`;
 
-            // Fetch Parameters
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
                 const { data: pData } = await supabase
@@ -67,7 +64,6 @@ const SalesDashboard: React.FC = () => {
                 }
             }
 
-            // Fetch Expenses for Break-Even calculation
             const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
             const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
             const endDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
@@ -85,7 +81,6 @@ const SalesDashboard: React.FC = () => {
         load();
     }, [fetchSales, selectedMonth, selectedYear]);
 
-    // Separate effect to load all periods for the navigator buttons
     const [allPeriods, setAllPeriods] = useState<string[]>([]);
     useEffect(() => {
         const loadPeriods = async () => {
@@ -113,7 +108,6 @@ const SalesDashboard: React.FC = () => {
                     if (data.length < pageSize) hasMore = false;
                     else page++;
                 }
-                // Stop after 50k records to prevent infinite loops/too much memory
                 if (page > 50) break;
             }
 
@@ -158,7 +152,6 @@ const SalesDashboard: React.FC = () => {
             if (!name) return;
             const normalized = normalize(name);
             const current = storeMap.get(normalized);
-
             const getScore = (s: string) => (s.match(/[A-Z]/g)?.length || 0) + (s.match(/[áéíóúâêîôûãõàèìòù]/gi)?.length || 0);
 
             if (!current || getScore(name) > getScore(current)) {
@@ -173,7 +166,6 @@ const SalesDashboard: React.FC = () => {
         return ['Todas', ...Array.from(storeMap.values()).sort()];
     }, [salesData]);
 
-    // Pre-filter items based on period, store and category
     const filteredItems = useMemo(() => {
         const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const items: any[] = [];
@@ -203,11 +195,9 @@ const SalesDashboard: React.FC = () => {
         return items;
     }, [salesData, selectedMonth, selectedYear, selectedCategory, selectedStore]);
 
-    // KPI Calculations based on strictly filtered items
     const totalRevenue = filteredItems.reduce((acc, item) => acc + Number(item.total_price || 0), 0);
     const totalUnits = filteredItems.reduce((acc, item) => acc + Number(item.quantity || 0), 0);
 
-    // For average ticket, we still need to know how many actual transactions (sales) had those items
     const relevantSalesCount = useMemo(() => {
         const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const saleIds = new Set();
@@ -226,7 +216,6 @@ const SalesDashboard: React.FC = () => {
 
     const averageTicket = relevantSalesCount > 0 ? totalRevenue / relevantSalesCount : 0;
 
-    // Top Product by Revenue
     const productSales = useMemo(() => {
         const map: any = {};
         filteredItems.forEach(item => {
@@ -243,10 +232,8 @@ const SalesDashboard: React.FC = () => {
 
     const bestProduct = productSales[0] || { name: '-', total: 0 };
 
-    // Charts Data
     const dailyData = useMemo(() => {
         const map: any = {};
-
         filteredItems.forEach(item => {
             const dateStr = item.date;
             if (!map[dateStr]) {
@@ -258,16 +245,12 @@ const SalesDashboard: React.FC = () => {
         return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
     }, [filteredItems]);
 
-    // Break-Even Point (PE) Calculation using DRE Logic
     const dreMetrics = useMemo(() => {
         let totalRev = 0;
         let cmv = 0;
         const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Outros': 0 };
-
         const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const sNorm = selectedStore === 'Todas' ? null : normalize(selectedStore);
-
-        // Filter sales for the selected store/period matches
         const sales = selectedStore === 'Todas' ? salesData : salesData.filter(s => s.store_name && normalize(s.store_name) === sNorm);
 
         sales.forEach(sale => {
@@ -294,11 +277,8 @@ const SalesDashboard: React.FC = () => {
             totalRev += saleTotal;
         });
 
-        // Fixed and Variable Expenses from transactions
         let totalFix = 0;
-        let manualVariable = 0; // Marketing, Diversas, etc.
-
-        // Proration factor for shared expenses
+        let manualVariable = 0;
         const activeStoreMap = new Set();
         salesData.forEach(s => { if (s.store_name) activeStoreMap.add(normalize(s.store_name)); });
         const activeStoresCount = activeStoreMap.size || 1;
@@ -312,17 +292,14 @@ const SalesDashboard: React.FC = () => {
 
             if (selectedStore !== 'Todas') {
                 if (exp.store_name && normalize(exp.store_name) === sNorm) {
-                    // Specific to this store
                 } else if (!exp.store_name) {
                     amount = amount * prorationFactor;
                 } else {
-                    return; // Another store
+                    return;
                 }
             }
 
             if (catName.includes('fornecedor')) return;
-
-            // DRE Classification
             const isCalculated = desc.includes('royalties') || desc.includes('imposto') || desc.includes('tarifa') || desc.includes('perda');
             if (isCalculated && !dreGroup) return;
 
@@ -333,7 +310,6 @@ const SalesDashboard: React.FC = () => {
                     manualVariable += amount;
                 }
             } else {
-                // Fallback keywords (same as DRE.tsx)
                 if (catName.includes('internet') || catName.includes('celular') || catName.includes('energia') || catName.includes('luz') || catName.includes('funcionario') || catName.includes('salario') || catName.includes('contabil') || catName.includes('escritorio') || catName.includes('container')) {
                     totalFix += amount;
                 } else if (catName.includes('marketing') || catName.includes('propaganda') || catName.includes('comissao') || desc.includes('cashback')) {
@@ -344,25 +320,21 @@ const SalesDashboard: React.FC = () => {
             }
         });
 
-        // Variable Percentages
         const taxRate = params.tax_rate / 100;
         const royaltyRate = params.royalty_rate / 100;
         const lossRate = params.loss_rate / 100;
         const pixRate = params.pix_fee_rate / 100;
         const cardRate = params.card_fee_rate / 100;
 
-        // Weighted Bank Fee Rate
         const totalBankFees = (revByMethod['PIX'] * pixRate) + ((revByMethod['Crédito'] + revByMethod['Débito']) * cardRate);
         const bankFeeRate = totalRev > 0 ? totalBankFees / totalRev : ((pixRate + cardRate) / 2);
 
-        // Cashback Rate
         let avgCashbackRate = 0;
         if (selectedStore !== 'Todas') {
             const rates = params.cashback_rates as Record<string, number>;
             const rateKey = Object.keys(rates).find(rk => normalize(rk) === sNorm);
             avgCashbackRate = (rateKey ? rates[rateKey] : 0) / 100;
         } else {
-            // Find avg rate across stores with revenue
             let cbTotal = 0;
             const rates = params.cashback_rates as Record<string, number>;
             activeStoreMap.forEach((storeNorm: any) => {
@@ -373,16 +345,8 @@ const SalesDashboard: React.FC = () => {
             avgCashbackRate = activeStoreMap.size > 0 ? cbTotal / activeStoreMap.size : 0;
         }
 
-        // CMV Rate
-        const cmvRate = totalRev > 0 ? cmv / totalRev : 0.45; // 45% fallback if no sales
-
-        // MC% Ratio = 1 - (Variable Rates)
-        // Note: manualVariable is treated as a "fixed" revenue offset for PE purposes if it's a dollar amount
-        // because it doesn't scale 1:1 with every new sale in the same way taxes do.
+        const cmvRate = totalRev > 0 ? cmv / totalRev : 0.45;
         const mcRatio = 1 - taxRate - royaltyRate - lossRate - bankFeeRate - avgCashbackRate - cmvRate;
-
-        // PE = (Fixed Costs + Manual Variable Costs) / MC Ratio
-        // We use Math.max(0.1, mcRatio) to avoid division by zero
         const breakEven = (totalFix + manualVariable) / Math.max(0.01, mcRatio);
 
         return { breakEven, totalRev, totalFix, manualVariable, mcRatio };
@@ -391,6 +355,49 @@ const SalesDashboard: React.FC = () => {
     const targetRevenue = dreMetrics.breakEven;
     const balancePercentage = targetRevenue > 0 ? Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100) : (totalRevenue > 0 ? 100 : 0);
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    // Projeção de Faturamento Mensal (Baseada na Data da Última Venda)
+    const projection = useMemo(() => {
+        const today = new Date();
+        const isCurrentMonth = today.getMonth() === selectedMonth && today.getFullYear() === selectedYear;
+        const totalDaysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+
+        if (!isCurrentMonth) {
+            return {
+                isCurrent: false,
+                projectedTotal: totalRevenue,
+                dailyAverage: totalRevenue / totalDaysInMonth,
+                daysRemaining: 0,
+                daysElapsed: totalDaysInMonth,
+                daysInMonth: totalDaysInMonth
+            };
+        }
+
+        // Encontrar a data da última venda realizada no mês selecionado
+        const saleDates = filteredItems
+            .map(item => item.date)
+            .filter(Boolean)
+            .sort();
+
+        const lastSaleDateStr = saleDates.length > 0 ? saleDates[saleDates.length - 1] : null;
+        const lastSaleDay = lastSaleDateStr ? parseInt(lastSaleDateStr.split('-')[2]) : today.getDate();
+
+        const daysInMonth = totalDaysInMonth;
+        const daysElapsed = lastSaleDay; // Dias corridos até a última venda
+        const daysRemaining = daysInMonth - daysElapsed;
+
+        const dailyAverage = totalRevenue / Math.max(1, daysElapsed);
+        const projectedTotal = totalRevenue + (dailyAverage * daysRemaining);
+
+        return {
+            isCurrent: true,
+            projectedTotal,
+            dailyAverage,
+            daysRemaining,
+            daysElapsed,
+            daysInMonth
+        };
+    }, [totalRevenue, selectedMonth, selectedYear, filteredItems]);
 
     return (
         <div className="p-6 space-y-6 bg-[#0f172a] min-h-screen text-white">
@@ -464,8 +471,6 @@ const SalesDashboard: React.FC = () => {
                         <p className="text-sm font-bold text-white truncate">{bestProduct.name}</p>
                         <p className="text-xl font-black text-indigo-400">R$ {bestProduct.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                     </div>
-
-
 
                     <div className="bg-[#1e293b] p-6 rounded-xl border border-[#334155]">
                         <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -546,36 +551,89 @@ const SalesDashboard: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Top 10 Produtos Mais Vendidos</h3>
-                            <div className="h-[450px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart layout="vertical" data={productSales.slice(0, 10)}>
-                                        <XAxis type="number" hide />
-                                        <YAxis
-                                            type="category"
-                                            dataKey="name"
-                                            stroke="#94a3b8"
-                                            fontSize={10}
-                                            width={180}
-                                            tick={{ fill: '#94a3b8' }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                            tickFormatter={(value) => value.length > 25 ? `${value.substring(0, 25)}...` : value}
-                                        />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
-                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Total Vendido']}
-                                        />
-                                        <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
+                        <div className="space-y-6">
+                            <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Top 10 Produtos Mais Vendidos</h3>
+                                <div className="h-[450px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart layout="vertical" data={productSales.slice(0, 10)}>
+                                            <XAxis type="number" hide />
+                                            <YAxis
+                                                type="category"
+                                                dataKey="name"
+                                                stroke="#94a3b8"
+                                                fontSize={10}
+                                                width={180}
+                                                tick={{ fill: '#94a3b8' }}
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tickFormatter={(value) => value.length > 25 ? `${value.substring(0, 25)}...` : value}
+                                            />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                                formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Total Vendido']}
+                                            />
+                                            <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            <div className="bg-[#1e293b] overflow-hidden rounded-2xl border border-[#334155] shadow-xl">
+                                <div className="bg-indigo-600/10 px-6 py-4 border-b border-[#334155] flex justify-between items-center">
+                                    <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm">trending_up</span> Projeção de Faturamento
+                                    </h3>
+                                    {projection.isCurrent && (
+                                        <span className="bg-indigo-500/20 text-indigo-400 text-[10px] px-2 py-0.5 rounded-full font-black uppercase">
+                                            {projection.daysRemaining} DIAS CORRIDOS RESTANTES
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="p-6">
+                                    <div className="flex items-baseline gap-2 mb-1">
+                                        <p className="text-4xl font-black text-white">
+                                            R$ {projection.projectedTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
+                                        <span className="text-slate-500 text-xs font-bold uppercase">Previsto</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">Total estimado para o final do mês</p>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-[#0f172a]/50 p-3 rounded-xl border border-[#334155]/50">
+                                            <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Faturamento Atual</p>
+                                            <p className="text-sm font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                            <p className="text-[9px] text-slate-600 font-bold mt-0.5">{projection.daysElapsed} dias decorridos</p>
+                                        </div>
+                                        <div className="bg-[#0f172a]/50 p-3 rounded-xl border border-[#334155]/50">
+                                            <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Média Diária (Calendário)</p>
+                                            <p className="text-sm font-black text-white">R$ {projection.dailyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                            <p className="text-[9px] text-slate-600 font-bold mt-0.5">Baseado em dias corridos</p>
+                                        </div>
+                                    </div>
+
+                                    {projection.isCurrent && (
+                                        <div className="mt-6 pt-6 border-t border-[#334155]/50">
+                                            <div className="flex justify-between text-[10px] font-black uppercase text-slate-500 mb-2">
+                                                <span>Progresso do Mês</span>
+                                                <span>{projection.daysElapsed} / {projection.daysInMonth} DIAS CORRIDOS</span>
+                                            </div>
+                                            <div className="h-2 bg-[#0f172a] rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-1000"
+                                                    style={{ width: `${(projection.daysElapsed / projection.daysInMonth) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
                         <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Quantidade Vendida por Dia</h3>
-                            <div className="h-[300px] w-full">
+                            <div className="h-[350px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={dailyData}>
                                         <defs>
