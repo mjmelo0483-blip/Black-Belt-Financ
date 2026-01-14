@@ -192,7 +192,7 @@ const DRE: React.FC = () => {
 
             const { data: expData } = await supabase
                 .from('transactions')
-                .select('amount, type, description, date, category_id, store_name, categories(name, parent_id, dre_group)')
+                .select('amount, type, description, date, due_date, category_id, store_name, categories(name, parent_id, dre_group)')
                 .eq('is_business', true)
                 .eq('type', 'expense')
                 .gte('date', startDate)
@@ -211,6 +211,7 @@ const DRE: React.FC = () => {
         const addStore = (name: string) => {
             if (!name) return;
             const normalized = normalize(name);
+            if (normalized === 'geral' || normalized === 'administrativo' || normalized === 'todos') return;
             const current = storeMap.get(normalized);
 
             // Score based on Uppercase letters and Accents (correct typing)
@@ -319,12 +320,42 @@ const DRE: React.FC = () => {
         salesData.forEach(s => {
             if (s.store_name) {
                 const norm = normalizeStore(s.store_name);
-                if (!activeStoreMap.has(norm)) activeStoreMap.set(norm, s.store_name);
+                if (norm !== 'geral' && norm !== 'administrativo') {
+                    if (!activeStoreMap.has(norm)) activeStoreMap.set(norm, s.store_name);
+                }
             }
         });
         const activeStores = Array.from(activeStoreMap.values());
-        const activeStoresCount = activeStores.length || 1;
-        const prorationFactor = selectedStore !== 'Todas' ? (1 / activeStoresCount) : 1;
+
+        // Identify stores with actual revenue to perform linear proration
+        const storeRevMapTotal: Record<string, number> = {};
+        salesData.forEach(sale => {
+            if (sale.store_name) {
+                const norm = normalizeStore(sale.store_name);
+                if (norm === 'geral' || norm === 'administrativo') return;
+
+                let saleTotal = 0;
+                if (sale.sale_items && sale.sale_items.length > 0) {
+                    sale.sale_items.forEach((item: any) => {
+                        saleTotal += Number(item.total_price || 0);
+                    });
+                } else {
+                    saleTotal = Number(sale.total_amount || 0);
+                }
+                storeRevMapTotal[norm] = (storeRevMapTotal[norm] || 0) + saleTotal;
+            }
+        });
+
+        const storesWithRevenue = activeStores.filter(s => (storeRevMapTotal[normalizeStore(s)] || 0) > 0);
+        const storesWithRevenueCount = storesWithRevenue.length || 1;
+
+        const isCurrentStoreInRevenueList = selectedStore !== 'Todas' && storesWithRevenue.some(s => normalizeStore(s) === normalizeStore(selectedStore));
+
+        // Linear proration factor: 1/N for stores with revenue, 0 for others
+        const prorationFactor = selectedStore === 'Todas'
+            ? 1
+            : (isCurrentStoreInRevenueList ? (1 / storesWithRevenueCount) : 0);
+
         const cmv = cmvCents / 100;
 
         let impostos = 0;
@@ -383,14 +414,25 @@ const DRE: React.FC = () => {
             const desc = (exp.description || '').toLowerCase();
             let amount = Number(exp.amount || 0);
 
+            const sNorm = normalizeStore(exp.store_name);
+            const isGeralItem = !exp.store_name || sNorm === 'geral' || sNorm === 'administrativo';
+
             if (selectedStore !== 'Todas') {
-                if (exp.store_name && normalizeStore(exp.store_name) === normalizeStore(selectedStore)) {
-                } else if (!exp.store_name) {
+                const selNorm = normalizeStore(selectedStore);
+                if (sNorm === selNorm) {
+                    // Specific to this store
+                } else if (isGeralItem) {
                     amount = amount * prorationFactor;
                 } else {
                     return;
                 }
             }
+
+            const expToPush = (selectedStore !== 'Todas' && isGeralItem) ? { ...exp, amount, is_prorated: true } : exp;
+            const pushToGroup = (group: any) => {
+                group.amount += amount;
+                group.items.push(expToPush);
+            };
 
             if (catName.includes('fornecedor')) return;
 
@@ -436,59 +478,50 @@ const DRE: React.FC = () => {
 
             // Internet e Celular
             if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) {
-                fixGroups.internet.amount += amount;
-                fixGroups.internet.items.push(exp);
+                pushToGroup(fixGroups.internet);
             }
             // Energia Elétrica
             else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial') || desc.includes('enel') || desc.includes('celpa')) {
-                fixGroups.energia.amount += amount;
-                fixGroups.energia.items.push(exp);
+                pushToGroup(fixGroups.energia);
             }
             // Combustível - Proteção contra "Imposto" contendo "posto"
             else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel') || desc.includes('etanol') || (desc.includes('posto ') && !desc.includes('imposto'))) {
-                fixGroups.combustivel.amount += amount;
-                fixGroups.combustivel.items.push(exp);
+                pushToGroup(fixGroups.combustivel);
             }
             // Funcionários e Pró-labore
             else if (catName.includes('funcionario') || catName.includes('salario') || catName.includes('pro-labore') || desc.includes('salario') || desc.includes('folha pgto') || desc.includes('pro-labore')) {
-                fixGroups.funcionarios.amount += amount;
-                fixGroups.funcionarios.items.push(exp);
+                pushToGroup(fixGroups.funcionarios);
             }
             // Contabilidade
             else if (catName.includes('contabil') || desc.includes('contador') || desc.includes('contabilidade')) {
-                fixGroups.contabilidade.amount += amount;
-                fixGroups.contabilidade.items.push(exp);
+                pushToGroup(fixGroups.contabilidade);
             }
             // Aluguel de Escritório
             else if (catName.includes('escritorio') && (catName.includes('aluguel') || desc.includes('aluguel'))) {
-                fixGroups.aluguelEscritorio.amount += amount;
-                fixGroups.aluguelEscritorio.items.push(exp);
+                pushToGroup(fixGroups.aluguelEscritorio);
             }
             // Aluguel de Container
             else if (catName.includes('container')) {
-                fixGroups.aluguelContainer.amount += amount;
-                fixGroups.aluguelContainer.items.push(exp);
+                pushToGroup(fixGroups.aluguelContainer);
             }
 
             // --- Prioridade 2: Despesas Variáveis Específicas ---
 
             // Cashback / Comissão Condomínio (mais restrito para evitar falsos positivos)
             else if (catName.includes('comissão') || desc.includes('cashback') || desc.includes('comissão condomínio')) {
-                const sNorm = exp.store_name ? normalizeStore(exp.store_name) : null;
-                const cashbackKey = activeStores.find(as => normalizeStore(as) === sNorm);
+                const sNormExp = exp.store_name ? normalizeStore(exp.store_name) : null;
+                const cashbackKey = activeStores.find(as => normalizeStore(as) === sNormExp);
 
                 if (cashbackKey && storeManualCashback[cashbackKey]) {
                     storeManualCashback[cashbackKey].amount += amount;
-                    storeManualCashback[cashbackKey].items.push(exp);
+                    storeManualCashback[cashbackKey].items.push(expToPush);
                 } else {
-                    varGroups.cashback.amount += amount;
-                    varGroups.cashback.items.push(exp);
+                    pushToGroup(varGroups.cashback);
                 }
             }
             // Marketing e Propaganda
             else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda') || desc.includes('facebook ads') || desc.includes('google ads')) {
-                varGroups.marketing.amount += amount;
-                varGroups.marketing.items.push(exp);
+                pushToGroup(varGroups.marketing);
             }
             // Perda de Estoque (se não for calculado automaticamente)
             else if (!isCalculated && (catName.includes('perda') || desc.includes('perda') || desc.includes('furto') || desc.includes('vencido') || desc.includes('danificado'))) {
@@ -499,35 +532,29 @@ const DRE: React.FC = () => {
 
             // Manutenção de Veículos
             else if (desc.includes('veiculo') || desc.includes('carro') || desc.includes('moto') || desc.includes('oficina') || desc.includes('pneu')) {
-                fixGroups.manutencaoVeiculo.amount += amount;
-                fixGroups.manutencaoVeiculo.items.push(exp);
+                pushToGroup(fixGroups.manutencaoVeiculo);
             }
             // Taxas de Sistema
             else if (catName.includes('taxa de uso do sistema') || (catName.includes('sistema') && (desc.includes('taxa') || desc.includes('mensalidade')))) {
-                fixGroups.taxaSistema.amount += amount;
-                fixGroups.taxaSistema.items.push(exp);
+                pushToGroup(fixGroups.taxaSistema);
             }
             // TEF / Equipamentos Pagamento
             else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass') || catName.includes('lgopass')) {
-                fixGroups.tef.amount += amount;
-                fixGroups.tef.items.push(exp);
+                pushToGroup(fixGroups.tef);
             }
             // Despesas Financeiras e Espaço
             else if (catName.includes('despesas financeiras') || catName.includes('aluguel do espaco') || desc.includes('aluguel da loja') || desc.includes('aluguel sala')) {
-                fixGroups.despesasFinanceiras.amount += amount;
-                fixGroups.despesasFinanceiras.items.push(exp);
+                pushToGroup(fixGroups.despesasFinanceiras);
             }
             // Despesas Diversas da Loja
             else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) {
                 if (!isCalculated) {
-                    varGroups.diversas.amount += amount;
-                    varGroups.diversas.items.push(exp);
+                    pushToGroup(varGroups.diversas);
                 }
             }
             // Outros (Fallback)
             else if (!isCalculated) {
-                fixGroups.outros.amount += amount;
-                fixGroups.outros.items.push(exp);
+                pushToGroup(fixGroups.outros);
             }
         });
 
@@ -1000,9 +1027,28 @@ const DRE: React.FC = () => {
                                 <tbody className="divide-y divide-[#233648]">
                                     {detailingItems.map((exp, i) => (
                                         <tr key={i} className="hover:bg-white/5 transition-colors">
-                                            <td className="py-2 px-2 text-slate-400">{new Date(exp.date).toLocaleDateString()}</td>
+                                            <td className="py-2 px-2 whitespace-nowrap">
+                                                <div className="flex flex-col">
+                                                    <span className="text-white font-medium">
+                                                        {new Date((exp.due_date || exp.date) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                                                    </span>
+                                                    <span className="text-slate-500 text-[10px] font-bold uppercase tracking-tighter">
+                                                        Inc: {new Date(exp.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                            </td>
                                             <td className="py-2 px-2 text-indigo-400 font-bold">{exp.store_name || 'Geral'}</td>
-                                            <td className="py-2 px-2 text-white font-medium">{exp.description}</td>
+                                            <td className="py-2 px-2 text-white font-medium">
+                                                <div className="flex flex-col">
+                                                    <span>{exp.description}</span>
+                                                    {exp.is_prorated && (
+                                                        <span className="text-[9px] text-amber-500 font-bold uppercase tracking-tighter flex items-center gap-1">
+                                                            <span className="material-symbols-outlined text-[12px]">balance</span>
+                                                            Valor Rateado (Sócio-Estatístico)
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="py-2 px-2 text-slate-400">{exp.categories?.name}</td>
                                             <td className="py-2 px-2 text-right text-red-400 font-bold">R$ {Number(exp.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         </tr>

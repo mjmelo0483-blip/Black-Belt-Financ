@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useTransactions } from '../hooks/useTransactions';
 import { useInvestments } from '../hooks/useInvestments';
 import TransactionModal from '../components/TransactionModal';
+import { useView } from '../contexts/ViewContext';
 import BulkEditModal from '../components/BulkEditModal';
 import * as XLSX from 'xlsx';
 
@@ -23,6 +24,7 @@ const Transactions: React.FC = () => {
     deleteTransactions,
     importTransactionsFromExcel,
   } = useTransactions();
+  const { isBusiness } = useView();
 
   const { investments, refresh: refreshInvestments } = useInvestments();
 
@@ -580,7 +582,14 @@ const Transactions: React.FC = () => {
                       <div className="size-9 rounded-full bg-[#111a22] flex items-center justify-center text-white"><span className="material-symbols-outlined text-[20px]">{t.categories?.icon || (t.transfer_id ? 'sync_alt' : 'receipt_long')}</span></div>
                       <div>
                         <p className="text-white font-bold text-sm truncate max-w-[200px]">{t.description}</p>
-                        <p className="text-[#92adc9] text-[10px] uppercase tracking-wider">{t.categories?.name || 'Sem categoria'}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-[#92adc9] text-[10px] uppercase tracking-wider">{t.categories?.name || 'Sem categoria'}</p>
+                          {isBusiness && (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
+                              {t.store_name || 'Geral'}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>
