@@ -96,7 +96,7 @@ const Cards: React.FC = () => {
         setLoadingTransactions(true);
         // Buscar transações filtradas pelo mês/ano selecionado
         const { data } = await getCardTransactions(currentCard.id, selectedMonth, selectedYear);
-        const transactions = data || [];
+        const transactions = (data || []).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setCardTransactions(transactions);
 
         // Total da fatura do mês selecionado

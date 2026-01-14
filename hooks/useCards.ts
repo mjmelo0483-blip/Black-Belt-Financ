@@ -106,7 +106,7 @@ export const useCards = () => {
                 .lte('due_date', endDate);
         }
 
-        const { data, error } = await withRetry(async () => await query.order('due_date', { ascending: false }));
+        const { data, error } = await withRetry(async () => await query.order('date', { ascending: false }));
 
         return { data, error };
     }, [isBusiness]);
