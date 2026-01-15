@@ -27,7 +27,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
     const checkConnection = async () => {
       try {
         const { error } = await withRetry(
-          async () => await supabase.from('accounts').select('id', { count: 'exact', head: true }).limit(1),
+          async () => await supabase.from('profiles').select('id', { count: 'exact', head: true }).limit(1),
           2,
           500
         );
