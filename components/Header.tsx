@@ -53,8 +53,18 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/auth');
+    try {
+      await supabase.auth.signOut();
+      localStorage.clear();
+      sessionStorage.clear();
+      navigate('/auth', { replace: true });
+      window.location.reload();
+    } catch (err) {
+      console.error('Logout error:', err);
+      localStorage.clear();
+      navigate('/auth', { replace: true });
+      window.location.reload();
+    }
   };
 
   const handleViewToggle = () => {
@@ -99,7 +109,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           <span className="text-[10px] font-black uppercase tracking-widest text-[#92adc9]">
             {isOnline ? 'Conectado' : 'Sem Conexão'}
           </span>
-          <span className="text-[9px] text-white/20 ml-1">v1.0.7</span>
+          <span className="text-[9px] text-white/20 ml-1">v1.0.8</span>
         </div>
 
         {isBusiness && (

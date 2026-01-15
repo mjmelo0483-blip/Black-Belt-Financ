@@ -133,7 +133,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 </div>
               </div>
               <button
-                onClick={() => supabase.auth.signOut()}
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  window.location.href = '/#/auth';
+                  window.location.reload();
+                }}
                 className="flex items-center gap-3 px-3 py-2 rounded-lg text-red-400 hover:bg-red-400/10 transition-all text-sm font-medium mt-2"
               >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
