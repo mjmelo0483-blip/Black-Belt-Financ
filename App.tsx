@@ -16,6 +16,7 @@ import Sales from './pages/Sales';
 import SalesDashboard from './pages/SalesDashboard';
 import DRE from './pages/DRE';
 import Profile from './pages/Profile';
+import CompanyManagement from './pages/CompanyManagement';
 import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
 import { ProfileProvider } from './contexts/ProfileContext';
@@ -79,6 +80,7 @@ const AppContent: React.FC = () => {
                 <Route path="/sales-dashboard" element={<SalesDashboard />} />
                 <Route path="/dre" element={<DRE />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/companies" element={<CompanyManagement />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </main>

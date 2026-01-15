@@ -102,19 +102,29 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           <span className="text-[9px] text-white/20 ml-1">v1.0.4</span>
         </div>
 
-        {isBusiness && activeCompany && (
+        {isBusiness && (
           <div className="relative">
-            <button
-              onClick={() => setShowCompanies(!showCompanies)}
-              className="flex items-center gap-2 px-3 h-9 rounded-lg bg-[#233648] border border-[#324d67] hover:bg-[#2d445a] transition-all"
-            >
-              <span className="text-xs font-bold text-white uppercase truncate max-w-[120px]">
-                {activeCompany.name}
-              </span>
-              <span className="material-symbols-outlined text-[16px] text-[#92adc9]">corporate_fare</span>
-            </button>
+            {activeCompany ? (
+              <button
+                onClick={() => setShowCompanies(!showCompanies)}
+                className="flex items-center gap-2 px-3 h-9 rounded-lg bg-[#233648] border border-[#324d67] hover:bg-[#2d445a] transition-all"
+              >
+                <span className="text-xs font-bold text-white uppercase truncate max-w-[120px]">
+                  {activeCompany.name}
+                </span>
+                <span className="material-symbols-outlined text-[16px] text-[#92adc9]">corporate_fare</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/companies')} // Redirect to management
+                className="flex items-center gap-2 px-3 h-9 rounded-lg bg-indigo-600/20 border border-indigo-500 text-indigo-400 hover:bg-indigo-600/30 transition-all font-bold text-[10px] uppercase"
+              >
+                <span>Selecionar Empresa</span>
+                <span className="material-symbols-outlined text-[16px]">add_business</span>
+              </button>
+            )}
 
-            {showCompanies && (
+            {activeCompany && showCompanies && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowCompanies(false)}></div>
                 <div className="absolute left-0 mt-2 w-56 bg-[#233648] border border-[#324d67] rounded-xl shadow-2xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2">

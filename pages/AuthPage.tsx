@@ -12,8 +12,10 @@ const AuthPage: React.FC = () => {
     const [isSignUp, setIsSignUp] = useState(false);
     const [isBusinessLogin, setIsBusinessLogin] = useState(false);
     const [showCompanySelection, setShowCompanySelection] = useState(false);
+    const [showCompanyManager, setShowCompanyManager] = useState(false); // To force manager if needed
     const [error, setError] = useState<string | null>(null);
     const [newCompanyName, setNewCompanyName] = useState('');
+    const [newCompanyCNPJ, setNewCompanyCNPJ] = useState('');
 
     const navigate = useNavigate();
     const { companies, setActiveCompany, createCompany, refreshCompanies } = useCompany();
@@ -65,7 +67,7 @@ const AuthPage: React.FC = () => {
         if (!newCompanyName.trim()) return;
         setLoading(true);
         try {
-            const company = await createCompany(newCompanyName);
+            const company = await createCompany(newCompanyName, newCompanyCNPJ);
             if (company) {
                 handleSelectCompany(company);
             }
@@ -97,21 +99,38 @@ const AuthPage: React.FC = () => {
                     </div>
 
                     <div className="pt-6 border-t border-[#324d67]/30">
-                        <label className="block text-sm font-medium text-[#92adc9] mb-4">Ou crie uma nova empresa</label>
-                        <form onSubmit={handleCreateCompany} className="flex gap-2">
-                            <input
-                                type="text"
-                                value={newCompanyName}
-                                onChange={(e) => setNewCompanyName(e.target.value)}
-                                className="flex-1 bg-[#111a22] border border-[#324d67] rounded-xl py-2 px-4 text-white placeholder-[#4a6b8a]"
-                                placeholder="Nome da Empresa"
-                            />
+                        <label className="block text-sm font-medium text-[#92adc9] mb-4 uppercase tracking-widest text-[10px] font-black">Ou crie uma nova organização</label>
+                        <form onSubmit={handleCreateCompany} className="space-y-3">
+                            <div className="space-y-2">
+                                <input
+                                    type="text"
+                                    value={newCompanyName}
+                                    onChange={(e) => setNewCompanyName(e.target.value)}
+                                    className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white placeholder-[#4a6b8a] text-sm font-bold outline-none focus:border-primary"
+                                    placeholder="Nome da Empresa"
+                                    required
+                                />
+                                <input
+                                    type="text"
+                                    value={newCompanyCNPJ}
+                                    onChange={(e) => setNewCompanyCNPJ(e.target.value)}
+                                    className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white placeholder-[#4a6b8a] text-sm font-bold outline-none focus:border-primary"
+                                    placeholder="CNPJ (Opcional)"
+                                />
+                            </div>
                             <button
                                 type="submit"
-                                disabled={loading}
-                                className="bg-primary hover:bg-blue-600 p-2 rounded-xl text-white transition-all"
+                                disabled={loading || !newCompanyName.trim()}
+                                className="w-full bg-primary hover:bg-blue-600 py-3 rounded-xl text-white font-black uppercase text-[10px] tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
                             >
-                                <span className="material-symbols-outlined">add</span>
+                                {loading ? (
+                                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                ) : (
+                                    <>
+                                        Cadastrar Empresa
+                                        <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
+                                    </>
+                                )}
                             </button>
                         </form>
                     </div>
@@ -121,33 +140,49 @@ const AuthPage: React.FC = () => {
     }
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0b1218] overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0b1218] overflow-hidden transition-colors duration-500">
             {/* Background elements */}
-            <div className="absolute top-[-10%] left-[-10%] size-[40%] bg-primary/20 blur-[120px] rounded-full"></div>
-            <div className="absolute bottom-[-10%] right-[-10%] size-[40%] bg-blue-600/10 blur-[120px] rounded-full"></div>
+            <div className={`absolute top-[-10%] left-[-10%] size-[60%] blur-[120px] rounded-full transition-all duration-700 ${isBusinessLogin ? 'bg-indigo-600/30' : 'bg-primary/20'}`}></div>
+            <div className={`absolute bottom-[-10%] right-[-10%] size-[50%] blur-[130px] rounded-full transition-all duration-700 ${isBusinessLogin ? 'bg-purple-600/10' : 'bg-blue-600/10'}`}></div>
 
-            <div className="w-full max-w-md p-8 bg-[#1a2632]/80 backdrop-blur-xl border border-[#324d67]/50 rounded-2xl shadow-2xl relative z-10">
-                <div className="flex flex-col items-center mb-10">
-                    <div className="size-32 rounded-3xl bg-[#1c2a38] flex items-center justify-center overflow-hidden border border-[#324d67] shadow-lg shadow-black/20 mb-6">
-                        <img
-                            src={logo}
-                            alt="Black Belt Financ Logo"
-                            className="size-full object-cover"
-                        />
+            {/* Grid Pattern */}
+            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
+
+            <div className="w-full max-w-md p-8 bg-[#1a2632]/80 backdrop-blur-2xl border border-[#324d67]/50 rounded-3xl shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-500">
+                <div className="flex flex-col items-center mb-8">
+                    <div className={`size-32 rounded-[2rem] bg-gradient-to-br p-px mb-6 shadow-2xl transition-all duration-500 ${isBusinessLogin ? 'from-indigo-400 to-purple-600' : 'from-primary to-blue-600'}`}>
+                        <div className="size-full rounded-[1.95rem] bg-[#1c2a38] flex items-center justify-center overflow-hidden">
+                            <img
+                                src={logo}
+                                alt="Black Belt Financ Logo"
+                                className="size-20 object-contain drop-shadow-2xl"
+                            />
+                        </div>
                     </div>
-                    <h1 className="text-2xl font-black text-white tracking-tight uppercase">Black Belt Financ</h1>
 
-                    <div className="flex w-full mt-6 bg-[#111a22] p-1 rounded-xl border border-[#324d67]">
+                    <div className="text-center space-y-1">
+                        <h1 className="text-2xl font-black text-white tracking-tighter uppercase flex items-center gap-2">
+                            Black Belt Financ
+                            {isBusinessLogin && <span className="text-[10px] bg-indigo-500 text-white px-2 py-0.5 rounded-full font-black tracking-widest">PRO</span>}
+                        </h1>
+                        <p className="text-[#92adc9] text-xs font-medium uppercase tracking-widest opacity-60">
+                            {isBusinessLogin ? 'Business Intelligence System' : 'Personal Finance Control'}
+                        </p>
+                    </div>
+
+                    <div className="flex w-full mt-8 bg-[#111a22] p-1.5 rounded-2xl border border-[#324d67] shadow-inner">
                         <button
                             onClick={() => setIsBusinessLogin(false)}
-                            className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${!isBusinessLogin ? 'bg-primary text-white shadow-lg' : 'text-[#92adc9] hover:text-white'}`}
+                            className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${!isBusinessLogin ? 'bg-primary text-white shadow-xl scale-[1.02]' : 'text-[#92adc9] hover:text-white'}`}
                         >
+                            <span className="material-symbols-outlined text-[18px]">person</span>
                             Pessoal
                         </button>
                         <button
                             onClick={() => setIsBusinessLogin(true)}
-                            className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${isBusinessLogin ? 'bg-primary text-white shadow-lg' : 'text-[#92adc9] hover:text-white'}`}
+                            className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${isBusinessLogin ? 'bg-indigo-600 text-white shadow-xl scale-[1.02]' : 'text-[#92adc9] hover:text-white'}`}
                         >
+                            <span className="material-symbols-outlined text-[18px]">business_center</span>
                             Empresarial
                         </button>
                     </div>
@@ -194,7 +229,7 @@ const AuthPage: React.FC = () => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`w-full text-white font-black uppercase tracking-widest text-[11px] py-4 rounded-xl shadow-2xl transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed group active:scale-95 ${isBusinessLogin ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/20' : 'bg-primary hover:bg-blue-600 shadow-primary/20'}`}
                     >
                         {loading ? (
                             <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

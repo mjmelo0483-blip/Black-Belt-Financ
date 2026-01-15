@@ -4,6 +4,7 @@ import { supabase, withRetry } from '../supabase';
 export interface Company {
     id: string;
     name: string;
+    cnpj?: string; // Novo campo
     owner_id: string;
     created_at: string;
 }
@@ -22,7 +23,7 @@ interface CompanyContextType {
     setActiveCompany: (company: Company | null) => void;
     loading: boolean;
     refreshCompanies: () => Promise<void>;
-    createCompany: (name: string) => Promise<Company | undefined>;
+    createCompany: (name: string, cnpj?: string) => Promise<Company | undefined>;
     addMember: (email: string, role?: 'admin' | 'member') => Promise<void>;
     removeMember: (memberId: string) => Promise<void>;
     members: CompanyMember[];
@@ -102,7 +103,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fetchMembers();
     }, [fetchMembers]);
 
-    const createCompany = async (name: string) => {
+    const createCompany = async (name: string, cnpj?: string) => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return;
@@ -110,7 +111,11 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
             // 1. Create company
             const { data: company, error } = await supabase
                 .from('companies')
-                .insert({ name, owner_id: session.user.id })
+                .insert({
+                    name,
+                    cnpj, // Salvar o CNPJ
+                    owner_id: session.user.id
+                })
                 .select()
                 .single();
 
