@@ -20,6 +20,7 @@ import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
 import { ProfileProvider } from './contexts/ProfileContext';
 import { ViewProvider } from './contexts/ViewContext';
+import { CompanyProvider } from './contexts/CompanyContext';
 
 const AppContent: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -91,11 +92,13 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <HashRouter>
-      <ViewProvider>
-        <ProfileProvider>
-          <AppContent />
-        </ProfileProvider>
-      </ViewProvider>
+      <ProfileProvider>
+        <CompanyProvider>
+          <ViewProvider>
+            <AppContent />
+          </ViewProvider>
+        </CompanyProvider>
+      </ProfileProvider>
     </HashRouter>
   );
 };

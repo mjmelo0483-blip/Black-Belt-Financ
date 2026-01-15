@@ -1,24 +1,33 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 
 export const useCategories = () => {
     const { isBusiness } = useView();
+    const { activeCompany } = useCompany();
     const [categories, setCategories] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchCategories = useCallback(async () => {
         setLoading(true);
-        const { data } = await withRetry(async () =>
-            await supabase
+        const { data } = await withRetry(async () => {
+            let query = supabase
                 .from('categories')
                 .select('*')
-                .eq('is_business', isBusiness)
-                .order('name')
-        );
+                .eq('is_business', isBusiness);
+
+            if (isBusiness && activeCompany) {
+                query = query.eq('company_id', activeCompany.id);
+            } else if (!isBusiness) {
+                query = query.is('company_id', null);
+            }
+
+            return await query.order('name');
+        });
         setCategories(data || []);
         setLoading(false);
-    }, [isBusiness]);
+    }, [isBusiness, activeCompany]);
 
     useEffect(() => {
         fetchCategories();
@@ -37,8 +46,9 @@ export const useCategories = () => {
             const { data, error } = await withRetry(async () =>
                 await supabase
                     .from('categories')
-                    .insert([{ ...category, user_id: user.id, is_business: isBusiness }])
+                    .insert([{ ...category, user_id: user.id, is_business: isBusiness, company_id: isBusiness ? activeCompany?.id : null }])
                     .select()
+                    .single()
             );
 
             if (error) {

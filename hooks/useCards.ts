@@ -1,22 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 
 export const useCards = () => {
     const { isBusiness } = useView();
+    const { activeCompany } = useCompany();
     const [cards, setCards] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchCards = useCallback(async () => {
         setLoading(true);
         try {
-            const { data, error } = await withRetry(async () =>
-                await supabase
+            const { data, error } = await withRetry(async () => {
+                let query = supabase
                     .from('cards')
                     .select('*')
-                    .eq('is_business', isBusiness)
-                    .order('created_at', { ascending: false })
-            );
+                    .eq('is_business', isBusiness);
+
+                if (isBusiness && activeCompany) {
+                    query = query.eq('company_id', activeCompany.id);
+                } else if (!isBusiness) {
+                    query = query.is('company_id', null);
+                }
+
+                return await query.order('created_at', { ascending: false });
+            });
             if (error) {
                 console.error('Error fetching cards:', error);
             } else {
@@ -27,7 +36,7 @@ export const useCards = () => {
         } finally {
             setLoading(false);
         }
-    }, [isBusiness]);
+    }, [isBusiness, activeCompany]);
 
     useEffect(() => {
         fetchCards();
@@ -46,8 +55,9 @@ export const useCards = () => {
             const { data, error } = await withRetry(async () =>
                 await supabase
                     .from('cards')
-                    .insert([{ ...card, user_id: user.id, is_business: isBusiness }])
+                    .insert([{ ...card, user_id: user.id, is_business: isBusiness, company_id: isBusiness ? activeCompany?.id : null }])
                     .select()
+                    .single()
             );
 
             if (error) {
@@ -60,7 +70,7 @@ export const useCards = () => {
             console.error('Unexpected error in addCard:', err);
             return { error: { message: formatError(err, 'Erro ao adicionar cartão') } };
         }
-    }, [fetchCards, isBusiness]);
+    }, [fetchCards, isBusiness, activeCompany]);
 
     const updateCard = useCallback(async (id: string, updates: any) => {
         try {
@@ -94,6 +104,12 @@ export const useCards = () => {
             .eq('card_id', cardId)
             .eq('is_business', isBusiness)
             .eq('payment_method', 'credito');
+
+        if (isBusiness && activeCompany) {
+            query = query.eq('company_id', activeCompany.id);
+        } else if (!isBusiness) {
+            query = query.is('company_id', null);
+        }
 
         // Se mês e ano foram fornecidos, filtrar por due_date no período
         if (month !== undefined && year !== undefined) {

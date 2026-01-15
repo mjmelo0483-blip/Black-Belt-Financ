@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 
 export const useTransactions = () => {
     const { isBusiness } = useView();
+    const { activeCompany } = useCompany();
     const [accounts, setAccounts] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
     const [cards, setCards] = useState<any[]>([]);
@@ -13,11 +15,23 @@ export const useTransactions = () => {
 
     const fetchMetadata = useCallback(async () => {
         try {
-            const results = await withRetry(async () => await Promise.all([
-                supabase.from('accounts').select('*').eq('is_business', isBusiness),
-                supabase.from('categories').select('*').eq('is_business', isBusiness).order('name'),
-                supabase.from('cards').select('*').eq('is_business', isBusiness),
-            ]));
+            const results = await withRetry(async () => {
+                let accQuery = supabase.from('accounts').select('*').eq('is_business', isBusiness);
+                let catQuery = supabase.from('categories').select('*').eq('is_business', isBusiness).order('name');
+                let cardQuery = supabase.from('cards').select('*').eq('is_business', isBusiness);
+
+                if (isBusiness && activeCompany) {
+                    accQuery = accQuery.eq('company_id', activeCompany.id);
+                    catQuery = catQuery.eq('company_id', activeCompany.id);
+                    cardQuery = cardQuery.eq('company_id', activeCompany.id);
+                } else if (!isBusiness) {
+                    accQuery = accQuery.is('company_id', null);
+                    catQuery = catQuery.is('company_id', null);
+                    cardQuery = cardQuery.is('company_id', null);
+                }
+
+                return await Promise.all([accQuery, catQuery, cardQuery]);
+            });
 
             const [accRes, catRes, cardRes] = results as any[];
             setAccounts(accRes.data || []);
@@ -26,7 +40,7 @@ export const useTransactions = () => {
         } catch (err) {
             console.error('Error fetching metadata:', err);
         }
-    }, [isBusiness]);
+    }, [isBusiness, activeCompany]);
 
     const fetchTransactions = useCallback(async (filters?: {
         incStartDate?: string;
@@ -61,6 +75,12 @@ export const useTransactions = () => {
                 `)
                 .eq('is_business', isBusiness)
                 .order('date', { ascending: false });
+
+            if (isBusiness && activeCompany) {
+                query = query.eq('company_id', activeCompany.id);
+            } else if (!isBusiness) {
+                query = query.is('company_id', null);
+            }
 
             if (activeFilters?.description) {
                 query = query.ilike('description', `%${activeFilters.description}%`);
@@ -102,12 +122,19 @@ export const useTransactions = () => {
             if (activeFilters?.subcategoryId) {
                 query = query.eq('category_id', activeFilters.subcategoryId);
             } else if (activeFilters?.categoryId) {
-                const { data: subcats } = await withRetry(async () =>
-                    await supabase
+                const { data: subcats } = await withRetry(async () => {
+                    let scQuery = supabase
                         .from('categories')
                         .select('id')
-                        .eq('parent_id', activeFilters.categoryId)
-                );
+                        .eq('parent_id', activeFilters.categoryId);
+
+                    if (isBusiness && activeCompany) {
+                        scQuery = scQuery.eq('company_id', activeCompany.id);
+                    } else if (!isBusiness) {
+                        scQuery = scQuery.is('company_id', null);
+                    }
+                    return await scQuery;
+                });
 
                 const categoryIds = [activeFilters.categoryId, ...(subcats?.map(s => s.id) || [])];
                 query = query.in('category_id', categoryIds);
@@ -126,7 +153,7 @@ export const useTransactions = () => {
         } finally {
             setLoading(false);
         }
-    }, [currentFilters, isBusiness]);
+    }, [currentFilters, isBusiness, activeCompany]);
 
     useEffect(() => {
         fetchTransactions();
@@ -144,7 +171,8 @@ export const useTransactions = () => {
             const transactionsList = (Array.isArray(transaction) ? transaction : [transaction]).map(t => ({
                 ...t,
                 user_id: user.id,
-                is_business: isBusiness
+                is_business: isBusiness,
+                company_id: isBusiness ? activeCompany?.id : null
             }));
 
             const { data, error } = await withRetry(async () =>
@@ -163,7 +191,7 @@ export const useTransactions = () => {
         } finally {
             setLoading(false);
         }
-    }, [fetchTransactions]);
+    }, [fetchTransactions, isBusiness, activeCompany]);
 
     const updateTransaction = useCallback(async (id: string, updates: any) => {
         setLoading(true);
@@ -348,7 +376,8 @@ export const useTransactions = () => {
                 payment_method: 'investimento',
                 status: transaction.status,
                 investment_id: transaction.investmentId,
-                is_business: isBusiness
+                is_business: isBusiness,
+                company_id: isBusiness ? activeCompany?.id : null
             };
 
             const { data: txData, error: txError } = await withRetry(async () =>
@@ -374,7 +403,7 @@ export const useTransactions = () => {
         } finally {
             setLoading(false);
         }
-    }, [fetchTransactions]);
+    }, [fetchTransactions, isBusiness, activeCompany]);
 
     const saveTransfer = useCallback(async (transfer: any) => {
         setLoading(true);
@@ -400,7 +429,8 @@ export const useTransactions = () => {
                     user_id: user.id,
                     transfer_id: transferId,
                     transfer_account_id: transfer.toAccountId,
-                    is_business: isBusiness
+                    is_business: isBusiness,
+                    company_id: isBusiness ? activeCompany?.id : null
                 },
                 {
                     description: `${transfer.description}`,
@@ -415,7 +445,8 @@ export const useTransactions = () => {
                     user_id: user.id,
                     transfer_id: transferId,
                     transfer_account_id: transfer.fromAccountId,
-                    is_business: isBusiness
+                    is_business: isBusiness,
+                    company_id: isBusiness ? activeCompany?.id : null
                 }
             ];
 
@@ -533,13 +564,15 @@ export const useTransactions = () => {
                 .from('accounts')
                 .select('id, name')
                 .eq('user_id', user.id)
-                .eq('is_business', isBusiness);
+                .eq('is_business', isBusiness)
+                .filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null);
 
             const { data: existingCategories } = await supabase
                 .from('categories')
                 .select('id, name')
                 .eq('user_id', user.id)
-                .eq('is_business', isBusiness);
+                .eq('is_business', isBusiness)
+                .filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null);
 
             const accountsMap = new Map((existingAccounts || []).map(a => [a.name.toLowerCase().trim(), a.id]));
             const categoriesMap = new Map((existingCategories || []).map(c => [c.name.toLowerCase().trim(), c.id]));
@@ -550,7 +583,14 @@ export const useTransactions = () => {
                 if (!accountsMap.has(normalizedAccName)) {
                     const { data: newAcc } = await supabase
                         .from('accounts')
-                        .insert({ user_id: user.id, name: accName, type: 'checking', balance: 0, is_business: isBusiness })
+                        .insert({
+                            user_id: user.id,
+                            name: accName,
+                            type: 'checking',
+                            balance: 0,
+                            is_business: isBusiness,
+                            company_id: isBusiness ? activeCompany?.id : null
+                        })
                         .select()
                         .single();
                     if (newAcc) accountsMap.set(normalizedAccName, newAcc.id);
@@ -561,7 +601,13 @@ export const useTransactions = () => {
                 if (!categoriesMap.has(catName.toLowerCase().trim())) {
                     const { data: newCat } = await supabase
                         .from('categories')
-                        .insert({ user_id: user.id, name: catName, type: 'expense', is_business: isBusiness })
+                        .insert({
+                            user_id: user.id,
+                            name: catName,
+                            type: 'expense',
+                            is_business: isBusiness,
+                            company_id: isBusiness ? activeCompany?.id : null
+                        })
                         .select()
                         .single();
                     if (newCat) categoriesMap.set(catName.toLowerCase().trim(), newCat.id);
@@ -631,7 +677,8 @@ export const useTransactions = () => {
                     account_id: accountsMap.get(accName.toLowerCase().trim()),
                     category_id: categoriesMap.get(catName.toLowerCase().trim()),
                     payment_method: paymentMethod,
-                    is_business: isBusiness
+                    is_business: isBusiness,
+                    company_id: isBusiness ? activeCompany?.id : null
                 };
             }).filter(t => t.amount > 0 && t.account_id);
 
@@ -648,7 +695,7 @@ export const useTransactions = () => {
         } finally {
             setLoading(false);
         }
-    }, [isBusiness, fetchTransactions]);
+    }, [isBusiness, activeCompany, fetchTransactions]);
 
     function formatDate(dateValue: any) {
         if (!dateValue) return null;

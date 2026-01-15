@@ -5,6 +5,7 @@ import { supabase, withRetry, formatError } from '../supabase';
 import { useProfile } from '../hooks/useProfile';
 import { useNotifications } from '../hooks/useNotifications';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -14,10 +15,12 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const navigate = useNavigate();
   const { profile } = useProfile();
   const { notifications, markAsRead, clearAll } = useNotifications();
-  const { isBusiness, toggleView } = useView();
+  const { isBusiness, toggleView, isBusinessOnly } = useView();
+  const { activeCompany, companies, setActiveCompany } = useCompany();
   const [search, setSearch] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showCompanies, setShowCompanies] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
@@ -99,16 +102,62 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           <span className="text-[9px] text-white/20 ml-1">v1.0.4</span>
         </div>
 
-        <button
-          onClick={handleViewToggle}
-          className={`hidden sm:flex items-center justify-center h-9 px-3 rounded-lg transition-all border font-bold text-xs ${isBusiness
-            ? 'bg-primary/20 border-primary text-primary'
-            : 'bg-[#233648] hover:bg-[#2d445a] text-white border-transparent hover:border-[#324d67]'
-            }`}
-        >
-          <span className="mr-2 uppercase tracking-tighter">{isBusiness ? 'Empresarial' : 'Pessoal'}</span>
-          <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
-        </button>
+        {isBusiness && activeCompany && (
+          <div className="relative">
+            <button
+              onClick={() => setShowCompanies(!showCompanies)}
+              className="flex items-center gap-2 px-3 h-9 rounded-lg bg-[#233648] border border-[#324d67] hover:bg-[#2d445a] transition-all"
+            >
+              <span className="text-xs font-bold text-white uppercase truncate max-w-[120px]">
+                {activeCompany.name}
+              </span>
+              <span className="material-symbols-outlined text-[16px] text-[#92adc9]">corporate_fare</span>
+            </button>
+
+            {showCompanies && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowCompanies(false)}></div>
+                <div className="absolute left-0 mt-2 w-56 bg-[#233648] border border-[#324d67] rounded-xl shadow-2xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                  <div className="p-3 border-b border-[#324d67] bg-[#1a2b3a]">
+                    <p className="text-[#92adc9] font-black text-[10px] uppercase tracking-widest">Suas Empresas</p>
+                  </div>
+                  <div className="py-1 max-h-64 overflow-y-auto">
+                    {companies.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          setActiveCompany(c);
+                          setShowCompanies(false);
+                        }}
+                        className={`w-full text-left px-4 py-3 hover:bg-[#2d445a] transition-colors border-b border-[#324d67]/30 last:border-0 flex items-center justify-between group ${activeCompany.id === c.id ? 'bg-[#2d445a]' : ''}`}
+                      >
+                        <span className={`text-xs font-bold ${activeCompany.id === c.id ? 'text-primary' : 'text-[#92adc9] group-hover:text-white'}`}>
+                          {c.name}
+                        </span>
+                        {activeCompany.id === c.id && (
+                          <span className="material-symbols-outlined text-[16px] text-primary">check_circle</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {!isBusinessOnly && (
+          <button
+            onClick={handleViewToggle}
+            className={`hidden sm:flex items-center justify-center h-9 px-3 rounded-lg transition-all border font-bold text-xs ${isBusiness
+              ? 'bg-primary/20 border-primary text-primary'
+              : 'bg-[#233648] hover:bg-[#2d445a] text-white border-transparent hover:border-[#324d67]'
+              }`}
+          >
+            <span className="mr-2 uppercase tracking-tighter">{isBusiness ? 'Empresarial' : 'Pessoal'}</span>
+            <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
+          </button>
+        )}
 
         <div className="relative">
           <button

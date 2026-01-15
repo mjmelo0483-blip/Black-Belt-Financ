@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 
 export const useDashboardData = () => {
     const { isBusiness } = useView();
+    const { activeCompany } = useCompany();
     const [stats, setStats] = useState<{
         totalBalance: number;
         dueToday: number;
@@ -66,18 +68,18 @@ export const useDashboardData = () => {
                 recentsRes,
                 budgetLimitsRes
             ] = await withRetry(async () => await Promise.all([
-                supabase.from('accounts').select('*').eq('is_business', isBusiness),
-                supabase.from('investments').select('*').eq('is_business', isBusiness),
-                supabase.from('transactions').select('amount').eq('type', 'expense').eq('is_business', isBusiness).is('transfer_id', null).is('investment_id', null).gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)),
-                supabase.from('transactions').select('amount, category_id, categories(id, name, color, parent_id)').eq('type', 'expense').eq('is_business', isBusiness).is('transfer_id', null).is('investment_id', null).gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)),
-                supabase.from('categories').select('id, name, color, parent_id').eq('is_business', isBusiness),
-                supabase.from('transactions').select('amount').eq('type', 'income').eq('is_business', isBusiness).is('transfer_id', null).is('investment_id', null).gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)),
-                supabase.from('transactions').select('amount').eq('type', 'expense').eq('is_business', isBusiness).eq('status', 'open').is('transfer_id', null).is('investment_id', null).eq('due_date', todayStr),
-                supabase.from('cards').select('credit_limit').eq('is_business', isBusiness),
-                supabase.from('transactions').select('amount').eq('payment_method', 'credito').eq('is_business', isBusiness).eq('status', 'open'),
-                supabase.from('transactions').select('amount').eq('payment_method', 'credito').eq('is_business', isBusiness).eq('status', 'open').gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)),
-                supabase.from('transactions').select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)').eq('is_business', isBusiness).order('date', { ascending: false }).limit(5),
-                supabase.from('budgets').select('*, categories(name, color, icon)').eq('is_business', isBusiness).eq('month', formatDate(startOfMonth))
+                supabase.from('accounts').select('*').eq('is_business', isBusiness).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('investments').select('*').eq('is_business', isBusiness).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('transactions').select('amount').eq('type', 'expense').eq('is_business', isBusiness).is('transfer_id', null).is('investment_id', null).gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('transactions').select('amount, category_id, categories(id, name, color, parent_id)').eq('type', 'expense').eq('is_business', isBusiness).is('transfer_id', null).is('investment_id', null).gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('categories').select('id, name, color, parent_id').eq('is_business', isBusiness).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('transactions').select('amount').eq('type', 'income').eq('is_business', isBusiness).is('transfer_id', null).is('investment_id', null).gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('transactions').select('amount').eq('type', 'expense').eq('is_business', isBusiness).eq('status', 'open').is('transfer_id', null).is('investment_id', null).eq('due_date', todayStr).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('cards').select('credit_limit').eq('is_business', isBusiness).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('transactions').select('amount').eq('payment_method', 'credito').eq('is_business', isBusiness).eq('status', 'open').filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('transactions').select('amount').eq('payment_method', 'credito').eq('is_business', isBusiness).eq('status', 'open').gte('due_date', formatDate(startOfMonth)).lte('due_date', formatDate(endOfMonth)).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('transactions').select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)').eq('is_business', isBusiness).order('date', { ascending: false }).limit(5).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
+                supabase.from('budgets').select('*, categories(name, color, icon)').eq('is_business', isBusiness).eq('month', formatDate(startOfMonth)).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null)
             ]));
 
             // 2. Process data
@@ -211,7 +213,7 @@ export const useDashboardData = () => {
         } finally {
             setLoading(false);
         }
-    }, [isBusiness]);
+    }, [isBusiness, activeCompany]);
 
     useEffect(() => {
         fetchData();

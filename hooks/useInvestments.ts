@@ -1,22 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 
 export const useInvestments = () => {
     const { isBusiness } = useView();
+    const { activeCompany } = useCompany();
     const [investments, setInvestments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchInvestments = useCallback(async () => {
         setLoading(true);
         try {
-            const { data, error } = await withRetry(async () =>
-                await supabase
+            const { data, error } = await withRetry(async () => {
+                let query = supabase
                     .from('investments')
                     .select('*')
-                    .eq('is_business', isBusiness)
-                    .order('name', { ascending: true })
-            );
+                    .eq('is_business', isBusiness);
+
+                if (isBusiness && activeCompany) {
+                    query = query.eq('company_id', activeCompany.id);
+                } else if (!isBusiness) {
+                    query = query.is('company_id', null);
+                }
+
+                return await query.order('name', { ascending: true });
+            });
             if (error) {
                 console.error('Error fetching investments:', error);
             } else {
@@ -27,7 +36,7 @@ export const useInvestments = () => {
         } finally {
             setLoading(false);
         }
-    }, [isBusiness]);
+    }, [isBusiness, activeCompany]);
 
     useEffect(() => {
         fetchInvestments();
@@ -43,8 +52,9 @@ export const useInvestments = () => {
             const { data, error } = await withRetry(async () =>
                 await supabase
                     .from('investments')
-                    .insert([{ ...investment, user_id: user.id, is_business: isBusiness }])
+                    .insert([{ ...investment, user_id: user.id, is_business: isBusiness, company_id: isBusiness ? activeCompany?.id : null }])
                     .select()
+                    .single()
             );
 
             if (!error) {
@@ -54,7 +64,7 @@ export const useInvestments = () => {
         } catch (err: any) {
             return { error: { message: formatError(err, 'Erro ao adicionar investimento') } };
         }
-    }, [fetchInvestments, isBusiness]);
+    }, [fetchInvestments, isBusiness, activeCompany]);
 
     const updateInvestment = useCallback(async (id: string, updates: any) => {
         try {

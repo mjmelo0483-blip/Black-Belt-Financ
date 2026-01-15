@@ -6,6 +6,8 @@ export interface Profile {
     full_name: string | null;
     avatar_url: string | null;
     updated_at: string;
+    is_business_only: boolean | null;
+    email?: string | null;
 }
 
 interface ProfileContextType {
@@ -14,6 +16,8 @@ interface ProfileContextType {
     updateProfile: (updates: Partial<Profile>) => Promise<Profile | undefined>;
     uploadAvatar: (file: File) => Promise<string | undefined>;
     refreshProfile: () => Promise<void>;
+    listProfiles: () => Promise<Profile[]>;
+    updateRemoteProfile: (id: string, updates: Partial<Profile>) => Promise<void>;
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
@@ -43,11 +47,16 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             if (data) {
                 setProfile(data);
+                // Sync email if it's missing in DB but present in session
+                if (!data.email && session.user.email) {
+                    supabase.from('profiles').update({ email: session.user.email }).eq('id', session.user.id).then();
+                }
             } else {
                 const newProfile = {
                     id: session.user.id,
                     full_name: session.user.user_metadata?.full_name || '',
                     avatar_url: session.user.user_metadata?.avatar_url || '',
+                    email: session.user.email,
                 };
                 const { data: createdProfile, error: createError } = await withRetry(async () =>
                     await supabase
@@ -122,6 +131,36 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
+    const listProfiles = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('full_name');
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error listing profiles:', error);
+            return [];
+        }
+    };
+
+    const updateRemoteProfile = async (id: string, updates: Partial<Profile>) => {
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    ...updates,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', id);
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error updating remote profile:', error);
+            throw error;
+        }
+    };
+
     useEffect(() => {
         fetchProfile();
 
@@ -134,7 +173,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }, [fetchProfile]);
 
     return (
-        <ProfileContext.Provider value={{ profile, loading, updateProfile, uploadAvatar, refreshProfile: fetchProfile }}>
+        <ProfileContext.Provider value={{ profile, loading, updateProfile, uploadAvatar, refreshProfile: fetchProfile, listProfiles, updateRemoteProfile }}>
             {children}
         </ProfileContext.Provider>
     );

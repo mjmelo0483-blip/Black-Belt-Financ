@@ -1,11 +1,12 @@
-
 import { useState, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 import { Sale, Product, Customer } from '../types';
 
 export const useSales = () => {
     const { isBusiness } = useView();
+    const { activeCompany } = useCompany();
     const [loading, setLoading] = useState(false);
 
     const fetchSales = useCallback(async (filters?: any) => {
@@ -30,7 +31,15 @@ export const useSales = () => {
                         products (name, code, category, cost)
                     )
                 `)
-                    .eq('user_id', session.user.id)
+                    .eq('user_id', session.user.id);
+
+                if (activeCompany) {
+                    query = query.eq('company_id', activeCompany.id);
+                } else {
+                    query = query.is('company_id', null);
+                }
+
+                query = query
                     .order('date', { ascending: false })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -68,7 +77,7 @@ export const useSales = () => {
         } finally {
             setLoading(false);
         }
-    }, [isBusiness]);
+    }, [isBusiness, activeCompany]);
 
     const importSalesFromExcel = useCallback(async (rows: any[], fileName: string) => {
         if (!isBusiness) return { error: { message: 'Importação permitida apenas no modo Business' } };
@@ -133,7 +142,8 @@ export const useSales = () => {
                     customersToUpsert.push({
                         user_id: user.id,
                         name: String(customerName).trim(),
-                        cpf: customerCpf ? String(customerCpf).trim() : null
+                        cpf: customerCpf ? String(customerCpf).trim() : null,
+                        company_id: activeCompany?.id || null
                     });
                     uniqueCustomerKeys.add(customerCpf || customerName);
                 }
@@ -144,7 +154,8 @@ export const useSales = () => {
                         code: productCode,
                         name: productName ? String(productName).trim() : 'Produto sem nome',
                         category: category ? String(category).trim() : 'Geral',
-                        cost: cost || 0
+                        cost: cost || 0,
+                        company_id: activeCompany?.id || null
                     });
                     uniqueProductCodes.add(productCode);
                 }
@@ -155,7 +166,7 @@ export const useSales = () => {
             if (customersToUpsert.length > 0) {
                 const { data: custData, error: custError } = await supabase
                     .from('customers')
-                    .upsert(customersToUpsert, { onConflict: 'user_id, cpf' })
+                    .upsert(customersToUpsert, { onConflict: 'user_id, cpf, company_id' })
                     .select();
 
                 if (custError) throw custError;
@@ -167,7 +178,7 @@ export const useSales = () => {
             if (productsToUpsert.length > 0) {
                 const { data: prodData, error: prodError } = await supabase
                     .from('products')
-                    .upsert(productsToUpsert, { onConflict: 'user_id, code' })
+                    .upsert(productsToUpsert, { onConflict: 'user_id, code, company_id' })
                     .select();
 
                 if (prodError) throw prodError;
@@ -214,6 +225,7 @@ export const useSales = () => {
                         store_name: store,
                         device: getVal(row, ['Dispositivo', 'Origem', 'Canal']),
                         import_filename: fileName,
+                        company_id: activeCompany?.id || null,
                         total_amount: 0,
                         // Store the spreadsheet's stated total for this order to use as fallback
                         spreadsheet_order_total: parseNumber(getVal(row, ['Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda', 'Total', 'Valor Total'])),
@@ -275,7 +287,7 @@ export const useSales = () => {
 
                 const { data: upsertedSales, error: upsertError } = await supabase
                     .from('sales')
-                    .upsert(salesToUpsert, { onConflict: 'user_id, external_code' })
+                    .upsert(salesToUpsert, { onConflict: 'user_id, external_code, company_id' })
                     .select('id, external_code');
 
                 if (upsertError) throw upsertError;
@@ -314,7 +326,7 @@ export const useSales = () => {
         } finally {
             setLoading(false);
         }
-    }, [isBusiness]);
+    }, [isBusiness, activeCompany]);
 
     const clearSales = useCallback(async () => {
         setLoading(true);
@@ -323,14 +335,18 @@ export const useSales = () => {
             const user = session?.user;
             if (!user) throw new Error('Usuário não autenticado');
 
-            await supabase.from('sales').delete().eq('user_id', user.id);
+            if (activeCompany) {
+                await supabase.from('sales').delete().eq('user_id', user.id).eq('company_id', activeCompany.id);
+            } else {
+                await supabase.from('sales').delete().eq('user_id', user.id).is('company_id', null);
+            }
             return { success: true };
         } catch (err: any) {
             return { error: formatError(err) };
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [activeCompany]);
 
     const deleteSalesByFilename = useCallback(async (fileName: string | null) => {
         setLoading(true);
@@ -355,6 +371,12 @@ export const useSales = () => {
                     query = query.is('import_filename', null);
                 } else {
                     query = query.eq('import_filename', fileName);
+                }
+
+                if (activeCompany) {
+                    query = query.eq('company_id', activeCompany.id);
+                } else {
+                    query = query.is('company_id', null);
                 }
 
                 const { data, error } = await query.range(page * 1000, (page + 1) * 1000 - 1);
@@ -388,7 +410,7 @@ export const useSales = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [activeCompany]);
 
     const fetchImports = useCallback(async () => {
         try {
@@ -404,8 +426,15 @@ export const useSales = () => {
                 const { data, error } = await supabase
                     .from('sales')
                     .select('import_filename, created_at, date')
-                    .eq('user_id', session.user.id)
-                    .range(page * 1000, (page + 1) * 1000 - 1);
+                    .eq('user_id', session.user.id);
+
+                if (activeCompany) {
+                    query = query.eq('company_id', activeCompany.id);
+                } else {
+                    query = query.is('company_id', null);
+                }
+
+                const { data, error } = await query.range(page * 1000, (page + 1) * 1000 - 1);
 
                 if (error) throw error;
                 if (!data || data.length === 0) {
@@ -443,7 +472,7 @@ export const useSales = () => {
         } catch (err: any) {
             return { error: err };
         }
-    }, []);
+    }, [activeCompany]);
 
     return { loading, fetchSales, importSalesFromExcel, clearSales, deleteSalesByFilename, fetchImports };
 };

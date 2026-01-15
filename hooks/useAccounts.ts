@@ -1,21 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 
 export const useAccounts = () => {
     const { isBusiness } = useView();
+    const { activeCompany } = useCompany();
     const [accounts, setAccounts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchAccounts = useCallback(async () => {
         setLoading(true);
         try {
-            const { data, error } = await withRetry(async () =>
-                await supabase.from('accounts')
+            const { data, error } = await withRetry(async () => {
+                let query = supabase.from('accounts')
                     .select('*')
-                    .eq('is_business', isBusiness)
-                    .order('name')
-            );
+                    .eq('is_business', isBusiness);
+
+                if (isBusiness && activeCompany) {
+                    query = query.eq('company_id', activeCompany.id);
+                } else if (!isBusiness) {
+                    query = query.is('company_id', null);
+                }
+
+                return await query.order('name');
+            });
             if (error) {
                 console.error('Error fetching accounts:', error);
             } else {
@@ -26,7 +35,7 @@ export const useAccounts = () => {
         } finally {
             setLoading(false);
         }
-    }, [isBusiness]);
+    }, [isBusiness, activeCompany]);
 
     useEffect(() => {
         fetchAccounts();
@@ -45,8 +54,9 @@ export const useAccounts = () => {
             const { data, error } = await withRetry(async () =>
                 await supabase
                     .from('accounts')
-                    .insert([{ ...account, user_id: user.id, is_business: isBusiness }])
+                    .insert([{ ...account, user_id: user.id, is_business: isBusiness, company_id: isBusiness ? activeCompany?.id : null }])
                     .select()
+                    .single()
             );
 
             if (error) {
@@ -62,16 +72,24 @@ export const useAccounts = () => {
     };
 
     const getAccountTransactions = async (accountId: string) => {
-        return await withRetry(async () =>
-            await supabase
+        return await withRetry(async () => {
+            let query = supabase
                 .from('transactions')
                 .select('*, categories(name, icon, color), accounts:accounts!transactions_account_id_fkey(name)')
                 .eq('account_id', accountId)
-                .eq('is_business', isBusiness)
+                .eq('is_business', isBusiness);
+
+            if (isBusiness && activeCompany) {
+                query = query.eq('company_id', activeCompany.id);
+            } else if (!isBusiness) {
+                query = query.is('company_id', null);
+            }
+
+            return await query
                 .order('date', { ascending: false })
                 .order('created_at', { ascending: false })
-                .limit(2000)
-        );
+                .limit(2000);
+        });
     };
 
     const getAccountStatement = async (accountId: string) => {

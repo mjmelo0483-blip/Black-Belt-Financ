@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry } from '../supabase';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 
 export const useCashFlow = () => {
     const { isBusiness } = useView();
+    const { activeCompany } = useCompany();
     const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'custom'>('daily');
     const getTodayStr = () => {
         const d = new Date();
@@ -55,16 +57,23 @@ export const useCashFlow = () => {
 
     const fetchMetadata = useCallback(async () => {
         try {
-            const { data } = await withRetry(async () =>
-                await supabase.from('accounts')
+            const { data } = await withRetry(async () => {
+                let query = supabase.from('accounts')
                     .select('*')
-                    .eq('is_business', isBusiness)
-            );
+                    .eq('is_business', isBusiness);
+
+                if (isBusiness && activeCompany) {
+                    query = query.eq('company_id', activeCompany.id);
+                } else if (!isBusiness) {
+                    query = query.is('company_id', null);
+                }
+                return await query;
+            });
             setAccounts(data || []);
         } catch (err) {
             console.error('Error fetching metadata in useCashFlow:', err);
         }
-    }, [isBusiness]);
+    }, [isBusiness, activeCompany]);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -99,11 +108,23 @@ export const useCashFlow = () => {
                     .gte('due_date', startDate)
                     .lt('due_date', nextDay);
 
+                if (isBusiness && activeCompany) {
+                    transQuery = transQuery.eq('company_id', activeCompany.id);
+                } else if (!isBusiness) {
+                    transQuery = transQuery.is('company_id', null);
+                }
+
                 if (accountId) {
                     transQuery = transQuery.eq('account_id', accountId);
                 }
 
                 let accountsQuery = supabase.from('accounts').select('balance').eq('is_business', isBusiness);
+
+                if (isBusiness && activeCompany) {
+                    accountsQuery = accountsQuery.eq('company_id', activeCompany.id);
+                } else if (!isBusiness) {
+                    accountsQuery = accountsQuery.is('company_id', null);
+                }
                 if (accountId) {
                     accountsQuery = accountsQuery.eq('id', accountId);
                 }
@@ -130,6 +151,12 @@ export const useCashFlow = () => {
                         .gte('due_date', todayStr)
                         .lt('due_date', startDate);
 
+                    if (isBusiness && activeCompany) {
+                        gapQuery = gapQuery.eq('company_id', activeCompany.id);
+                    } else if (!isBusiness) {
+                        gapQuery = gapQuery.is('company_id', null);
+                    }
+
                     if (accountId) {
                         gapQuery = gapQuery.eq('account_id', accountId);
                     }
@@ -149,6 +176,12 @@ export const useCashFlow = () => {
                         .eq('status', 'completed')
                         .gte('due_date', startDate)
                         .lt('due_date', nextToday);
+
+                    if (isBusiness && activeCompany) {
+                        gapQuery = gapQuery.eq('company_id', activeCompany.id);
+                    } else if (!isBusiness) {
+                        gapQuery = gapQuery.is('company_id', null);
+                    }
 
                     if (accountId) {
                         gapQuery = gapQuery.eq('account_id', accountId);
@@ -185,7 +218,7 @@ export const useCashFlow = () => {
         } finally {
             setLoading(false);
         }
-    }, [startDate, endDate, accountId, isBusiness]);
+    }, [startDate, endDate, accountId, isBusiness, activeCompany]);
 
     useEffect(() => {
         fetchMetadata();

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 
 export interface BudgetLimit {
     id: string;
@@ -30,6 +31,7 @@ export interface ParentCategorySpending extends CategorySpending {
 
 export const useBudgets = () => {
     const { isBusiness } = useView();
+    const { activeCompany } = useCompany();
     const [budgets, setBudgets] = useState<BudgetLimit[]>([]);
     const [spending, setSpending] = useState<ParentCategorySpending[]>([]);
     const [loading, setLoading] = useState(true);
@@ -52,13 +54,20 @@ export const useBudgets = () => {
             }
 
             // 1. Fetch Categories with parent_id
-            const { data: categories } = await withRetry(async () =>
-                await supabase
+            const { data: categories } = await withRetry(async () => {
+                let catQuery = supabase
                     .from('categories')
                     .select('*')
                     .eq('type', 'expense')
-                    .eq('is_business', isBusiness)
-            );
+                    .eq('is_business', isBusiness);
+
+                if (isBusiness && activeCompany) {
+                    catQuery = catQuery.eq('company_id', activeCompany.id);
+                } else if (!isBusiness) {
+                    catQuery = catQuery.is('company_id', null);
+                }
+                return await catQuery;
+            });
 
             // 2. Fetch Budget Limits
             let budgetLimitsQuery = supabase
@@ -68,6 +77,12 @@ export const useBudgets = () => {
                     categories (name, color, icon, parent_id)
                 `)
                 .eq('is_business', isBusiness);
+
+            if (isBusiness && activeCompany) {
+                budgetLimitsQuery = budgetLimitsQuery.eq('company_id', activeCompany.id);
+            } else if (!isBusiness) {
+                budgetLimitsQuery = budgetLimitsQuery.is('company_id', null);
+            }
 
             if (isAllYear) {
                 budgetLimitsQuery = budgetLimitsQuery
@@ -82,8 +97,8 @@ export const useBudgets = () => {
             // 3. Fetch Actual Transactions
             const activeDateColumn = viewMode === 'competencia' ? 'date' : 'due_date';
 
-            const { data: transactions } = await withRetry(async () =>
-                await supabase
+            const { data: transactions } = await withRetry(async () => {
+                let txQuery = supabase
                     .from('transactions')
                     .select('amount, category_id')
                     .eq('type', 'expense')
@@ -91,8 +106,15 @@ export const useBudgets = () => {
                     .is('transfer_id', null)
                     .is('investment_id', null)
                     .gte(activeDateColumn, startDate)
-                    .lte(activeDateColumn, endDate)
-            );
+                    .lte(activeDateColumn, endDate);
+
+                if (isBusiness && activeCompany) {
+                    txQuery = txQuery.eq('company_id', activeCompany.id);
+                } else if (!isBusiness) {
+                    txQuery = txQuery.is('company_id', null);
+                }
+                return await txQuery;
+            });
 
             // 4. Build category map
             const categoriesMap = new Map(categories?.map(c => [c.id, c]) || []);
@@ -176,7 +198,7 @@ export const useBudgets = () => {
         } finally {
             setLoading(false);
         }
-    }, [viewMode, selectedMonth, selectedYear, isBusiness]);
+    }, [viewMode, selectedMonth, selectedYear, isBusiness, activeCompany]);
 
     const setBudgetLimit = useCallback(async (categoryId: string, amount: number, customMonth?: string) => {
         try {
@@ -201,9 +223,10 @@ export const useBudgets = () => {
                         category_id: categoryId,
                         amount: amount,
                         month: startOfMonth,
-                        is_business: isBusiness
+                        is_business: isBusiness,
+                        company_id: isBusiness ? activeCompany?.id : null
                     }, {
-                        onConflict: 'user_id, category_id, month, is_business'
+                        onConflict: 'user_id, category_id, month, is_business, company_id'
                     })
                     .select()
             );
@@ -213,7 +236,7 @@ export const useBudgets = () => {
         } catch (err: any) {
             return { error: err };
         }
-    }, [fetchData, selectedMonth, selectedYear, isBusiness]);
+    }, [fetchData, selectedMonth, selectedYear, isBusiness, activeCompany]);
 
     useEffect(() => {
         fetchData();

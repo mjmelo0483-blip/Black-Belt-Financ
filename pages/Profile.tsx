@@ -175,6 +175,99 @@ const Profile: React.FC = () => {
                     </form>
                 </div>
             </div>
+            {/* User Management Section - Only for Admin/Non-restricted users */}
+            {!profile?.is_business_only && (
+                <div className="bg-[#1c2a38]/80 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-[#324d67]/50 mt-8">
+                    <div className="flex items-center gap-3 mb-6">
+                        <span className="material-symbols-outlined text-primary text-[28px]">group</span>
+                        <div>
+                            <h2 className="text-white text-xl font-black">Controle de Acesso</h2>
+                            <p className="text-[#92adc9] text-xs">Defina quais usuários têm acesso restrito apenas ao modo empresarial.</p>
+                        </div>
+                    </div>
+
+                    <UserManagementList />
+                </div>
+            )}
+        </div>
+    );
+};
+
+const UserManagementList: React.FC = () => {
+    const { listProfiles, updateRemoteProfile, profile: currentProfile } = useProfile();
+    const [profiles, setProfiles] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const loadProfiles = async () => {
+        setLoading(true);
+        const data = await listProfiles();
+        setProfiles(data);
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        loadProfiles();
+    }, []);
+
+    const handleToggleBusinessOnly = async (id: string, currentStatus: boolean) => {
+        try {
+            await updateRemoteProfile(id, { is_business_only: !currentStatus });
+            setProfiles(prev => prev.map(p => p.id === id ? { ...p, is_business_only: !currentStatus } : p));
+        } catch (error) {
+            console.error('Error toggling status:', error);
+        }
+    };
+
+    if (loading) return <div className="text-center py-4 text-[#92adc9]">Carregando usuários...</div>;
+
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-left">
+                <thead>
+                    <tr className="border-b border-[#324d67]/30">
+                        <th className="pb-3 text-[#92adc9] text-[10px] font-black uppercase tracking-widest pl-2">Usuário</th>
+                        <th className="pb-3 text-[#92adc9] text-[10px] font-black uppercase tracking-widest text-center">Status</th>
+                        <th className="pb-3 text-[#92adc9] text-[10px] font-black uppercase tracking-widest text-right pr-2">Acesso Restrito</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-[#324d67]/20">
+                    {profiles.map(p => (
+                        <tr key={p.id} className="group hover:bg-white/5 transition-colors">
+                            <td className="py-4 pl-2">
+                                <div className="flex items-center gap-3">
+                                    <div
+                                        className="size-8 rounded-full bg-cover bg-center border border-[#324d67]"
+                                        style={{ backgroundImage: `url(${p.avatar_url || 'https://picsum.photos/id/64/50/50'})` }}
+                                    />
+                                    <div>
+                                        <div className="text-white text-sm font-bold">{p.full_name || 'Usuário'}</div>
+                                        <div className="text-[#92adc9] text-[10px] truncate max-w-[150px]">{p.email || p.id}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td className="py-4 text-center">
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter ${p.is_business_only ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-green-500/20 text-green-400 border border-green-500/30'}`}>
+                                    {p.is_business_only ? 'Somente Empresarial' : 'Acesso Total'}
+                                </span>
+                            </td>
+                            <td className="py-4 text-right pr-2">
+                                {p.id !== currentProfile?.id ? (
+                                    <button
+                                        onClick={() => handleToggleBusinessOnly(p.id, !!p.is_business_only)}
+                                        className={`size-10 rounded-xl flex items-center justify-center transition-all ${p.is_business_only ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'bg-[#111a22] text-[#4a6b8a] hover:text-white border border-[#324d67]'}`}
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">
+                                            {p.is_business_only ? 'lock' : 'lock_open'}
+                                        </span>
+                                    </button>
+                                ) : (
+                                    <span className="text-[#324d67] italic text-[10px] pr-2">Você</span>
+                                )}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 };

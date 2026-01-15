@@ -1,12 +1,13 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, withRetry } from '../supabase';
 import { useSales } from '../hooks/useSales';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 
 const DRE: React.FC = () => {
     const { fetchSales, loading: salesLoading } = useSales();
     const { isBusiness } = useView();
+    const { activeCompany } = useCompany();
     const [salesData, setSalesData] = useState<any[]>([]);
     const [expensesData, setExpensesData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
@@ -65,10 +66,18 @@ const DRE: React.FC = () => {
             let hasMore = true;
 
             while (hasMore) {
-                const { data, error } = await supabase
+                let query = supabase
                     .from('sales')
                     .select('date')
-                    .eq('user_id', session.user.id)
+                    .eq('user_id', session.user.id);
+
+                if (activeCompany) {
+                    query = query.eq('company_id', activeCompany.id);
+                } else {
+                    query = query.is('company_id', null);
+                }
+
+                const { data, error } = await query
                     .order('date', { ascending: false })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -108,10 +117,18 @@ const DRE: React.FC = () => {
                 'Associação dos Proprietarios em loteamento village costa Sul'
             ];
 
-            const { data: storeData } = await supabase
+            let storeQuery = supabase
                 .from('sales')
                 .select('store_name')
                 .not('store_name', 'is', null);
+
+            if (activeCompany) {
+                storeQuery = storeQuery.eq('company_id', activeCompany.id);
+            } else {
+                storeQuery = storeQuery.is('company_id', null);
+            }
+
+            const { data: storeData } = await storeQuery;
 
             const dbStores = storeData ? storeData.map(s => s.store_name) : [];
 
@@ -137,15 +154,23 @@ const DRE: React.FC = () => {
             setAllKnownStores(uniqueStores);
 
             // Fetch categories for mapping
-            const { data: catData } = await supabase
+            let catQuery = supabase
                 .from('categories')
                 .select('*')
-                .eq('is_business', true)
+                .eq('is_business', true);
+
+            if (activeCompany) {
+                catQuery = catQuery.eq('company_id', activeCompany.id);
+            } else {
+                catQuery = catQuery.is('company_id', null);
+            }
+
+            const { data: catData } = await catQuery
                 .order('name');
             setCategories(catData || []);
         };
         loadInitialData();
-    }, []);
+    }, [activeCompany]);
 
     useEffect(() => {
         const load = async () => {
@@ -154,13 +179,20 @@ const DRE: React.FC = () => {
             // Fetch Parameters
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
-                const { data: pData } = await supabase
+                let paramQuery = supabase
                     .from('dre_parameters')
                     .select('*')
                     .eq('user_id', session.user.id)
                     .eq('month', selectedMonth)
-                    .eq('year', selectedYear)
-                    .maybeSingle();
+                    .eq('year', selectedYear);
+
+                if (activeCompany) {
+                    paramQuery = paramQuery.eq('company_id', activeCompany.id);
+                } else {
+                    paramQuery = paramQuery.is('company_id', null);
+                }
+
+                const { data: pData } = await paramQuery.maybeSingle();
 
                 if (pData) {
                     setParams({
@@ -190,7 +222,7 @@ const DRE: React.FC = () => {
             const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
             const endDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-            const { data: expData } = await supabase
+            let expQuery = supabase
                 .from('transactions')
                 .select('amount, type, description, date, due_date, category_id, store_name, categories(name, parent_id, dre_group)')
                 .eq('is_business', true)
@@ -198,11 +230,19 @@ const DRE: React.FC = () => {
                 .gte('date', startDate)
                 .lte('date', endDate);
 
+            if (activeCompany) {
+                expQuery = expQuery.eq('company_id', activeCompany.id);
+            } else {
+                expQuery = expQuery.is('company_id', null);
+            }
+
+            const { data: expData } = await expQuery;
+
             if (expData) setExpensesData(expData);
             setLoading(false);
         };
         load();
-    }, [fetchSales, selectedMonth, selectedYear]);
+    }, [fetchSales, selectedMonth, selectedYear, activeCompany]);
 
     const stores = useMemo(() => {
         const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -240,8 +280,9 @@ const DRE: React.FC = () => {
                 month: selectedMonth,
                 year: selectedYear,
                 ...params,
-                is_business: true
-            }, { onConflict: 'user_id, month, year, is_business' });
+                is_business: true,
+                company_id: activeCompany?.id || null
+            }, { onConflict: 'user_id, month, year, is_business, company_id' });
 
         if (error) {
             alert('Erro ao salvar configurações.');
