@@ -3,6 +3,18 @@ import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
 import { useCompany } from '../contexts/CompanyContext';
 
+export interface Investment {
+    id: string;
+    user_id: string;
+    name: string;
+    type: 'renda_fixa' | 'acoes' | 'fiis' | 'cripto' | 'outros';
+    value: number;
+    quantity: number;
+    created_at: string;
+    is_business: boolean;
+    company_id?: string | null;
+}
+
 export const useInvestments = () => {
     const { isBusiness } = useView();
     const { activeCompany } = useCompany();
@@ -15,14 +27,7 @@ export const useInvestments = () => {
             const { data, error } = await withRetry(async () => {
                 let query = supabase
                     .from('investments')
-                    .select('*')
-                    .eq('is_business', isBusiness);
-
-                if (isBusiness && activeCompany) {
-                    query = query.eq('company_id', activeCompany.id);
-                } else if (!isBusiness) {
-                    query = query.is('company_id', null);
-                }
+                    .select('*');
 
                 return await query.order('name', { ascending: true });
             });
