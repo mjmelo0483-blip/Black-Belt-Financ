@@ -24,6 +24,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       { label: 'Vendas', icon: 'shopping_cart', path: '/sales' },
       { label: 'Análise de Vendas', icon: 'analytics', path: '/sales-dashboard' },
       { label: 'DRE', icon: 'list_alt', path: '/dre' },
+      { label: 'Empresas', icon: 'corporate_fare', path: '/companies' },
     ] : []),
     { label: 'Fluxo de Caixa', icon: 'payments', path: '/cashflow' },
     { label: 'Lançamentos', icon: 'swap_horiz', path: '/transactions' },

@@ -167,7 +167,7 @@ const AuthPage: React.FC = () => {
                         </h1>
                         <p className="text-[#92adc9] text-xs font-medium uppercase tracking-widest opacity-60">
                             {isBusinessLogin ? 'Business Intelligence System' : 'Personal Finance Control'}
-                            <span className="ml-2 px-1 bg-white/10 rounded text-[8px]">v1.0.8</span>
+                            <span className="ml-2 px-1 bg-white/10 rounded text-[8px]">v1.0.9</span>
                         </p>
                     </div>
 
