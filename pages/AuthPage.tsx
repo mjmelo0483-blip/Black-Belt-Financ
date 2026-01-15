@@ -10,7 +10,7 @@ const AuthPage: React.FC = () => {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [isSignUp, setIsSignUp] = useState(false);
-    const [isBusinessLogin, setIsBusinessLogin] = useState(false);
+    const [isBusinessLogin, setIsBusinessLogin] = useState(true);
     const [showCompanySelection, setShowCompanySelection] = useState(false);
     const [showCompanyManager, setShowCompanyManager] = useState(false); // To force manager if needed
     const [error, setError] = useState<string | null>(null);
@@ -167,6 +167,7 @@ const AuthPage: React.FC = () => {
                         </h1>
                         <p className="text-[#92adc9] text-xs font-medium uppercase tracking-widest opacity-60">
                             {isBusinessLogin ? 'Business Intelligence System' : 'Personal Finance Control'}
+                            <span className="ml-2 px-1 bg-white/10 rounded text-[8px]">v1.0.6</span>
                         </p>
                     </div>
 

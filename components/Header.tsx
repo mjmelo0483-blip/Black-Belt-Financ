@@ -99,7 +99,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           <span className="text-[10px] font-black uppercase tracking-widest text-[#92adc9]">
             {isOnline ? 'Conectado' : 'Sem Conexão'}
           </span>
-          <span className="text-[9px] text-white/20 ml-1">v1.0.4</span>
+          <span className="text-[9px] text-white/20 ml-1">v1.0.6</span>
         </div>
 
         {isBusiness && (
