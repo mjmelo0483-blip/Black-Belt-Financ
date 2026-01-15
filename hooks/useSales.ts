@@ -423,7 +423,7 @@ export const useSales = () => {
             let hasMore = true;
 
             while (hasMore) {
-                const { data, error } = await supabase
+                let query = supabase
                     .from('sales')
                     .select('import_filename, created_at, date')
                     .eq('user_id', session.user.id);
