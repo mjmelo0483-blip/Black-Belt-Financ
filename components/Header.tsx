@@ -109,7 +109,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           <span className="text-[10px] font-black uppercase tracking-widest text-[#92adc9]">
             {isOnline ? 'Conectado' : 'Sem Conexão'}
           </span>
-          <span className="text-[9px] text-white/20 ml-1">v1.0.9</span>
+          <span className="text-[9px] text-white/20 ml-1">v1.1.0</span>
         </div>
 
         {isBusiness && (
@@ -159,6 +159,18 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                         )}
                       </button>
                     ))}
+                  </div>
+                  <div className="p-2 bg-[#1a2b3a] border-t border-[#324d67]">
+                    <button
+                      onClick={() => {
+                        navigate('/companies');
+                        setShowCompanies(false);
+                      }}
+                      className="w-full py-2 bg-primary/20 hover:bg-primary text-primary hover:text-white rounded-lg text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-sm">settings</span>
+                      Gerenciar Equipe
+                    </button>
                   </div>
                 </div>
               </>

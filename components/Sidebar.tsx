@@ -66,7 +66,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             </div>
           </div>
 
-          <nav className="flex-1 flex flex-col gap-1">
+          <nav className="flex-1 flex flex-col gap-1 overflow-y-auto pr-1 custom-scrollbar">
             {navItems.map((item) => (
               <NavLink
                 key={item.path}

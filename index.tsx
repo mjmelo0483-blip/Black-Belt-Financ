@@ -3,7 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-console.log('--- Black Belt Financ Dev v1.0.9 ---');
+console.log('--- Black Belt Financ Dev v1.1.0 ---');
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
