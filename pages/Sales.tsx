@@ -51,7 +51,10 @@ const Sales: React.FC = () => {
                     // Clear input
                     e.target.value = '';
                 } else {
-                    setImportStatus('Erro: ' + (result.error?.message || 'Erro ao processar dados. Verifique o formato das colunas.'));
+                    const errorMsg = typeof result.error === 'string'
+                        ? result.error
+                        : (result.error?.message || 'Erro ao processar dados. Verifique o formato das colunas.');
+                    setImportStatus('Erro: ' + errorMsg);
                 }
             } catch (err) {
                 console.error(err);
