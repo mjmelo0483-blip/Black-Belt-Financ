@@ -156,8 +156,11 @@ const CompanyManagement: React.FC = () => {
                                     disabled={loading}
                                     className="w-full bg-primary/10 hover:bg-primary text-primary hover:text-white border border-primary/30 font-black uppercase text-[10px] tracking-widest py-3 rounded-xl transition-all active:scale-[0.98]"
                                 >
-                                    Enviar Convite
+                                    Adicionar à Equipe
                                 </button>
+                                <p className="text-[9px] text-[#4a6b8a] mt-2 text-center">
+                                    * O colaborador deve se cadastrar no sistema usando o mesmo e-mail para acessar os dados.
+                                </p>
                             </form>
                         </div>
 
