@@ -175,7 +175,7 @@ const Dashboard: React.FC = () => {
               <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Taxa de Economia</span>
               <span className="material-symbols-outlined text-emerald-400 text-[20px]">savings</span>
             </div>
-            <p className={`text-2xl font-black ${stats.monthlyIncome > 0 ? ((stats.monthlyIncome - stats.monthlyExpenses) / stats.monthlyIncome * 100) >= 0 ? 'text-emerald-400' : 'text-red-400' : 'text-white'}`}>
+            <p className={`text-xl font-black whitespace-nowrap ${stats.monthlyIncome > 0 ? ((stats.monthlyIncome - stats.monthlyExpenses) / stats.monthlyIncome * 100) >= 0 ? 'text-emerald-400' : 'text-red-400' : 'text-white'}`}>
               {stats.monthlyIncome > 0 ? Math.round((stats.monthlyIncome - stats.monthlyExpenses) / stats.monthlyIncome * 100) : 0}%
             </p>
             <p className="text-[#6384a3] text-xs mt-1">da renda mensal</p>
@@ -187,7 +187,7 @@ const Dashboard: React.FC = () => {
               <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Saldo Disponível</span>
               <span className="material-symbols-outlined text-primary text-[20px]">account_balance_wallet</span>
             </div>
-            <p className="text-2xl font-black text-white">{formatCurrency(stats.totalBalance)}</p>
+            <p className="text-xl font-black text-white whitespace-nowrap">{formatCurrency(stats.totalBalance)}</p>
             <p className="text-[#6384a3] text-xs mt-1">em todas as contas</p>
           </div>
 
@@ -197,7 +197,7 @@ const Dashboard: React.FC = () => {
               <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Fatura Cartões</span>
               <span className="material-symbols-outlined text-orange-400 text-[20px]">credit_card</span>
             </div>
-            <p className="text-2xl font-black text-orange-400">{formatCurrency(stats.cardBalance || 0)}</p>
+            <p className="text-xl font-black text-orange-400 whitespace-nowrap">{formatCurrency(stats.cardBalance || 0)}</p>
             <p className="text-[#6384a3] text-xs mt-1">em aberto</p>
           </div>
 
@@ -207,7 +207,7 @@ const Dashboard: React.FC = () => {
               <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Investimentos</span>
               <span className="material-symbols-outlined text-purple-400 text-[20px]">trending_up</span>
             </div>
-            <p className="text-2xl font-black text-purple-400">{formatCurrency(stats.investments)}</p>
+            <p className="text-xl font-black text-purple-400 whitespace-nowrap">{formatCurrency(stats.investments)}</p>
             <p className="text-[#6384a3] text-xs mt-1">patrimônio investido</p>
           </div>
         </div>

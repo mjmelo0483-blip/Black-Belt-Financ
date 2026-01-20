@@ -28,14 +28,14 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon, trend, trendTyp
               <span className="material-symbols-outlined text-[16px] mr-0.5">
                 {trendType === 'up' ? 'trending_up' : 'trending_down'}
               </span>
-            )} 
+            )}
             {trend}
           </span>
         )}
       </div>
       <div>
         <p className="text-[#92adc9] text-sm font-medium mb-1">{label}</p>
-        <h3 className="text-white text-2xl font-bold tracking-tight group-hover:text-primary transition-colors">
+        <h3 className="text-white text-xl font-bold tracking-tight whitespace-nowrap group-hover:text-primary transition-colors">
           {value}
         </h3>
       </div>

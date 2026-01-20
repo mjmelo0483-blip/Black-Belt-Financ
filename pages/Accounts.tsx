@@ -234,7 +234,7 @@ const Accounts: React.FC = () => {
             {loadingSimulation ? (
               <div className="h-6 w-24 bg-[#324d67]/50 rounded animate-pulse"></div>
             ) : (
-              <p className="text-white font-black text-xl tracking-tight">
+              <p className="text-xl font-black text-white tracking-tight whitespace-nowrap">
                 {simulatedBalance !== null ? formatCurrency(simulatedBalance) : '---'}
               </p>
             )}
@@ -266,7 +266,7 @@ const Accounts: React.FC = () => {
             <div className="relative z-10 mt-auto pt-4 border-t border-[#324d67]/30 flex items-end justify-between">
               <div className="flex flex-col">
                 <span className="text-xs text-[#92adc9] mb-0.5 uppercase tracking-wider font-semibold">Saldo Atual</span>
-                <span className="text-white font-bold text-xl tracking-tight">{formatCurrency(acc.balance)}</span>
+                <span className="text-white font-bold text-xl tracking-tight whitespace-nowrap">{formatCurrency(acc.balance)}</span>
               </div>
             </div>
           </div>
@@ -323,7 +323,7 @@ const Accounts: React.FC = () => {
                 <div className="grid grid-cols-2 gap-8 mb-10">
                   <div className="p-6 rounded-2xl bg-[#111a22] border border-[#324d67]/30">
                     <p className="text-[#92adc9] text-xs font-bold uppercase tracking-wider mb-2">Saldo Total</p>
-                    <p className="text-white text-3xl font-black tracking-tight">{formatCurrency(selectedAccount.balance)}</p>
+                    <p className="text-white text-2xl font-black tracking-tight whitespace-nowrap">{formatCurrency(selectedAccount.balance)}</p>
                   </div>
                   <div className="p-6 rounded-2xl bg-[#111a22] border border-[#324d67]/30">
                     <p className="text-[#92adc9] text-xs font-bold uppercase tracking-wider mb-2">Última Movimentação</p>

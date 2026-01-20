@@ -285,7 +285,7 @@ const CashFlow: React.FC = () => {
         ].map((card, i) => (
           <div
             key={i}
-            className={`relative p-6 rounded-2xl border transition-all ${card.isHighlighted
+            className={`relative px-4 py-6 rounded-2xl border transition-all ${card.isHighlighted
               ? 'bg-gradient-to-br from-primary to-[#094b8e] border-white/20 shadow-2xl shadow-primary/30 scale-[1.02]'
               : 'bg-[#1c2a38]/60 backdrop-blur-xl border-[#324d67]/50 hover:border-white/20 shadow-lg'
               }`}
@@ -298,7 +298,7 @@ const CashFlow: React.FC = () => {
                 {card.icon}
               </span>
             </div>
-            <p className={`text-2xl font-black tracking-tight ${card.isHighlighted ? 'text-white' : 'text-white'}`}>
+            <p className={`text-xl font-black tracking-tight whitespace-nowrap ${card.isHighlighted ? 'text-white' : 'text-white'}`}>
               {formatCurrency(card.value)}
             </p>
           </div>

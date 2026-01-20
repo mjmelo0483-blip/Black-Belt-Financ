@@ -446,7 +446,7 @@ const SalesDashboard: React.FC = () => {
                         <div className="size-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4">
                             <span className="material-symbols-outlined text-indigo-400 text-3xl">api</span>
                         </div>
-                        <p className="text-3xl font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <p className="text-xl font-black text-white whitespace-nowrap">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Total Faturado</p>
                     </div>
 
