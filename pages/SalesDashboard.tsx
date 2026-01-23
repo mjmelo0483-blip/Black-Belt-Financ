@@ -345,11 +345,19 @@ const SalesDashboard: React.FC = () => {
             avgCashbackRate = activeStoreMap.size > 0 ? cbTotal / activeStoreMap.size : 0;
         }
 
+        // 1. Índice de Margem de Contribuição (IMC = MC / Faturamento)
+        // Representa quanto de cada real vendido sobra após os custos variáveis (Impostos, Comissões, CMV, etc)
         const cmvRate = totalRev > 0 ? cmv / totalRev : 0.45;
-        const mcRatio = 1 - taxRate - royaltyRate - lossRate - bankFeeRate - avgCashbackRate - cmvRate;
-        const breakEven = (totalFix + manualVariable) / Math.max(0.01, mcRatio);
+        const IMC = 1 - taxRate - royaltyRate - lossRate - bankFeeRate - avgCashbackRate - cmvRate;
 
-        return { breakEven, totalRev, totalFix, manualVariable, mcRatio };
+        // 2. Custos Fixos Totais (Numerador)
+        // Inclui despesas operacionais fixas e investimentos mensais fixos (Marketing, etc)
+        const totalFixedCosts = totalFix + manualVariable;
+
+        // 3. Ponto de Equilíbrio de Faturamento
+        const breakEven = totalFixedCosts / Math.max(0.01, IMC);
+
+        return { breakEven, totalRev, totalFix, manualVariable, IMC };
     }, [salesData, expensesData, params, selectedStore]);
 
     const targetRevenue = dreMetrics.breakEven;

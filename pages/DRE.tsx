@@ -645,6 +645,14 @@ const DRE: React.FC = () => {
         const marginAfterLoss = grossMargin - perdaEstoque;
         const netProfit = marginAfterLoss - totalVar - totalFix;
 
+        // IMC = Margem de Contribuição / Faturamento
+        // Margem de Contribuição = Faturamento - (Impostos + CMV + Perda + Desp. Variáveis)
+        const margemContribuicao = totalRev - impostos - cmv - perdaEstoque - totalVar;
+        const IMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
+
+        // Ponto de Equilíbrio de Faturamento = Custos Fixos Totais / IMC
+        const breakEven = totalFix / Math.max(0.01, IMC);
+
         return {
             revByMethod,
             totalRev,
@@ -658,7 +666,10 @@ const DRE: React.FC = () => {
             totalVar,
             fixGroups,
             totalFix,
-            netProfit
+            netProfit,
+            margemContribuicao,
+            IMC,
+            breakEven
         };
     }, [salesData, expensesData, params, selectedStore]);
 
@@ -1039,6 +1050,24 @@ const DRE: React.FC = () => {
                         percentage={metrics.totalRev > 0 ? (metrics.netProfit / metrics.totalRev) * 100 : 0}
                         isFinal
                     />
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-[#334155] grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-[#1e293b] p-4 rounded-xl border border-[#334155] flex justify-between items-center group hover:border-amber-500/50 transition-all">
+                        <div className="flex flex-col">
+                            <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Índice de Margem (IMC)</span>
+                            <span className="text-xl font-black text-amber-500">{(metrics.IMC * 100).toFixed(2)}%</span>
+                        </div>
+                        <span className="material-symbols-outlined text-amber-500/30 group-hover:text-amber-500 transition-colors">percent</span>
+                    </div>
+
+                    <div className="bg-[#1e293b] p-4 rounded-xl border border-[#334155] flex justify-between items-center group hover:border-indigo-500/50 transition-all">
+                        <div className="flex flex-col">
+                            <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Ponto de Equilíbrio (Faturamento)</span>
+                            <span className="text-xl font-black text-indigo-400">R$ {metrics.breakEven.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <span className="material-symbols-outlined text-indigo-400/30 group-hover:text-indigo-400 transition-colors">calculate</span>
+                    </div>
                 </div>
             </div>
 
