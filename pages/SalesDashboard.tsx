@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useSales } from '../hooks/useSales';
+import { useCompany } from '../contexts/CompanyContext';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     BarChart, Bar, Cell, PieChart, Pie
@@ -8,6 +9,7 @@ import { supabase } from '../supabase';
 
 const SalesDashboard: React.FC = () => {
     const { fetchSales } = useSales();
+    const { activeCompany } = useCompany();
     const [salesData, setSalesData] = useState<any[]>([]);
 
     const now = new Date();
@@ -30,17 +32,25 @@ const SalesDashboard: React.FC = () => {
 
     useEffect(() => {
         const load = async () => {
-            const cacheKey = `${selectedMonth}-${selectedYear}`;
+            setSalesData([]);
+            setExpensesData([]);
 
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
-                const { data: pData } = await supabase
+                let pQuery = supabase
                     .from('dre_parameters')
                     .select('*')
                     .eq('user_id', session.user.id)
                     .eq('month', selectedMonth)
-                    .eq('year', selectedYear)
-                    .maybeSingle();
+                    .eq('year', selectedYear);
+
+                if (activeCompany) {
+                    pQuery = pQuery.eq('company_id', activeCompany.id);
+                } else {
+                    pQuery = pQuery.is('company_id', null);
+                }
+
+                const { data: pData } = await pQuery.maybeSingle();
 
                 if (pData) {
                     setParams({
@@ -51,35 +61,44 @@ const SalesDashboard: React.FC = () => {
                         card_fee_rate: Number(pData.card_fee_rate || 1.110284),
                         cashback_rates: pData.cashback_rates || {}
                     });
+                } else {
+                    setParams({
+                        tax_rate: 3.24,
+                        royalty_rate: 6.00,
+                        pix_fee_rate: 0.80,
+                        loss_rate: 2.00,
+                        card_fee_rate: 1.110284,
+                        cashback_rates: {}
+                    });
                 }
             }
 
-            if (cache[cacheKey]) {
-                setSalesData(cache[cacheKey]);
-            } else {
-                const { data } = await fetchSales({ month: selectedMonth, year: selectedYear });
-                if (data) {
-                    setSalesData(data);
-                    setCache(prev => ({ ...prev, [cacheKey]: data }));
-                }
-            }
+            const { data: sData } = await fetchSales({ month: selectedMonth, year: selectedYear });
+            if (sData) setSalesData(sData);
 
             const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
             const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
             const endDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-            const { data: expData } = await supabase
+            let expQuery = supabase
                 .from('transactions')
-                .select('amount, type, description, date, category_id, store_name, categories(name, parent_id, dre_group)')
+                .select('amount, type, description, date, due_date, category_id, store_name, categories(name, parent_id, dre_group)')
                 .eq('is_business', true)
                 .eq('type', 'expense')
                 .gte('date', startDate)
                 .lte('date', endDate);
 
+            if (activeCompany) {
+                expQuery = expQuery.eq('company_id', activeCompany.id);
+            } else {
+                expQuery = expQuery.is('company_id', null);
+            }
+
+            const { data: expData } = await expQuery;
             if (expData) setExpensesData(expData);
         };
         load();
-    }, [fetchSales, selectedMonth, selectedYear]);
+    }, [fetchSales, selectedMonth, selectedYear, activeCompany]);
 
     const [allPeriods, setAllPeriods] = useState<string[]>([]);
     useEffect(() => {
@@ -448,11 +467,22 @@ const SalesDashboard: React.FC = () => {
         const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
 
-        const realVariableCosts = impostos + cmv + perdaEstoque + varGroups.royalties.amount + varGroups.tarifaPix.amount + varGroups.tarifaCartao.amount + varGroups.cashback.amount;
+        // 1. Custos Variáveis Reais (O que varia estritamente com a venda)
+        const realVariableCosts = impostos + cmv + perdaEstoque +
+            varGroups.royalties.amount +
+            varGroups.tarifaPix.amount +
+            varGroups.tarifaCartao.amount +
+            varGroups.cashback.amount;
+
+        // 2. Custos Fixos Operacionais (Numerador do PE)
+        // Marketing e Diversas são tratados como fixos para o cálculo do Ponto de Equilíbrio
         const fixedOperationalCosts = totalFix + varGroups.marketing.amount + varGroups.diversas.amount;
 
+        // 3. IMC = (Faturamento - Custos Variáveis Reais) / Faturamento
         const margemContribuicao = totalRev - realVariableCosts;
         const IMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
+
+        // 4. Ponto de Equilíbrio = Custos Fixos / IMC
         const breakEven = fixedOperationalCosts / Math.max(0.01, IMC);
 
         return { breakEven, totalRev, totalFix, IMC };
