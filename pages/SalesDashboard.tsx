@@ -246,124 +246,216 @@ const SalesDashboard: React.FC = () => {
     }, [filteredItems]);
 
     const dreMetrics = useMemo(() => {
-        let totalRev = 0;
-        let cmv = 0;
         const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Outros': 0 };
-        const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const sNorm = selectedStore === 'Todas' ? null : normalize(selectedStore);
-        const sales = selectedStore === 'Todas' ? salesData : salesData.filter(s => s.store_name && normalize(s.store_name) === sNorm);
+        let totalRev = 0;
+        let cmvCents = 0;
 
-        sales.forEach(sale => {
+        const normalizeStore = (name: string) => (name || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const sNorm = selectedStore === 'Todas' ? null : normalizeStore(selectedStore);
+
+        const filteredSales = selectedStore === 'Todas' ? salesData : salesData.filter(s => {
+            if (!s.store_name) return false;
+            return normalizeStore(s.store_name) === sNorm;
+        });
+
+        filteredSales.forEach(sale => {
             let method = sale.payment_method || 'Outros';
-            const mNorm = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            if (mNorm.includes('credito')) method = 'Crédito';
-            else if (mNorm.includes('debito')) method = 'Débito';
-            else if (mNorm.includes('pix')) method = 'PIX';
+            const normMethod = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+            if (normMethod.includes('credito')) method = 'Crédito';
+            else if (normMethod.includes('debito')) method = 'Débito';
+            else if (normMethod.includes('pix')) method = 'PIX';
             else method = 'Outros';
 
             let saleTotal = 0;
-            if (sale.sale_items?.length > 0) {
+            if (sale.sale_items && sale.sale_items.length > 0) {
                 sale.sale_items.forEach((item: any) => {
-                    const price = Number(item.total_price || 0);
-                    const qty = Number(item.quantity || 0);
-                    const cost = Number(item.unit_cost !== undefined && item.unit_cost !== null ? item.unit_cost : (item.products?.cost || 0));
-                    saleTotal += price;
-                    cmv += (cost * qty);
+                    saleTotal += Number(item.total_price || 0);
+                    const itemQty = Number(item.quantity || 0);
+                    const itemCost = Number(item.unit_cost !== undefined && item.unit_cost !== null ? item.unit_cost : (item.products?.cost || 0));
+                    cmvCents += Math.round(itemCost * itemQty * 100);
                 });
             } else {
                 saleTotal = Number(sale.total_amount || 0);
             }
+
             revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
             totalRev += saleTotal;
         });
 
-        let totalFix = 0;
-        let marketingAndDiversas = 0;
-        const activeStoreMap = new Set();
-        salesData.forEach(s => { if (s.store_name) activeStoreMap.add(normalize(s.store_name)); });
-        const activeStoresCount = activeStoreMap.size || 1;
-        const prorationFactor = selectedStore !== 'Todas' ? (1 / activeStoresCount) : 1;
-
-        expensesData.forEach(exp => {
-            const dreGroup = exp.categories?.dre_group;
-            const catName = (exp.categories?.name || '').toLowerCase();
-            const desc = (exp.description || '').toLowerCase();
-            let amount = Number(exp.amount || 0);
-
-            if (selectedStore !== 'Todas') {
-                if (exp.store_name && normalize(exp.store_name) === sNorm) {
-                } else if (!exp.store_name) {
-                    amount = amount * prorationFactor;
-                } else {
-                    return;
+        const activeStoreMap = new Map<string, string>();
+        salesData.forEach(s => {
+            if (s.store_name) {
+                const norm = normalizeStore(s.store_name);
+                if (norm !== 'geral' && norm !== 'administrativo') {
+                    if (!activeStoreMap.has(norm)) activeStoreMap.set(norm, s.store_name);
                 }
             }
+        });
+        const activeStores = Array.from(activeStoreMap.values());
 
+        const storeRevMapTotal: Record<string, number> = {};
+        salesData.forEach(sale => {
+            if (sale.store_name) {
+                const norm = normalizeStore(sale.store_name);
+                if (norm === 'geral' || norm === 'administrativo') return;
+                let saleTotal = 0;
+                if (sale.sale_items && sale.sale_items.length > 0) {
+                    sale.sale_items.forEach((item: any) => { saleTotal += Number(item.total_price || 0); });
+                } else {
+                    saleTotal = Number(sale.total_amount || 0);
+                }
+                storeRevMapTotal[norm] = (storeRevMapTotal[norm] || 0) + saleTotal;
+            }
+        });
+
+        const storesWithRevenue = activeStores.filter(s => (storeRevMapTotal[normalizeStore(s)] || 0) > 0);
+        const storesWithRevenueCount = storesWithRevenue.length || 1;
+        const isCurrentStoreInRevenueList = selectedStore !== 'Todas' && storesWithRevenue.some(s => normalizeStore(s) === sNorm);
+        const prorationFactor = selectedStore === 'Todas' ? 1 : (isCurrentStoreInRevenueList ? (1 / storesWithRevenueCount) : 0);
+
+        const cmv = cmvCents / 100;
+        let impostos = 0;
+        let perdaEstoque = 0;
+
+        const storeRevMap: Record<string, number> = {};
+        const storeManualCashback: Record<string, { amount: number; items: any[] }> = {};
+        activeStores.forEach(s => {
+            storeRevMap[s] = 0;
+            storeManualCashback[s] = { amount: 0, items: [] };
+        });
+
+        salesData.forEach(sale => {
+            const sName = sale.store_name;
+            if (!sName) return;
+            let saleTotal = 0;
+            if (sale.sale_items && sale.sale_items.length > 0) {
+                sale.sale_items.forEach((item: any) => { saleTotal += Number(item.total_price || 0); });
+            } else {
+                saleTotal = Number(sale.total_amount || 0);
+            }
+            if (!storeRevMap[sName]) storeRevMap[sName] = 0;
+            storeRevMap[sName] += saleTotal;
+        });
+
+        const varGroups: Record<string, { label: string; amount: number; items: any[] }> = {
+            cashback: { label: 'Comissão paga ao condominio (cashback)', amount: 0, items: [] },
+            royalties: { label: 'Royalties', amount: 0, items: [] },
+            tarifaCartao: { label: 'Tarifa de cartão', amount: 0, items: [] },
+            tarifaPix: { label: 'Tarifa de Pix', amount: 0, items: [] },
+            marketing: { label: 'Investimento Marketing da loja', amount: 0, items: [] },
+            diversas: { label: 'Despesas diversas da loja', amount: 0, items: [] },
+        };
+
+        const fixGroups: Record<string, { label: string; amount: number; items: any[] }> = {
+            funcionarios: { label: 'Funcionários', amount: 0, items: [] },
+            manutencaoVeiculo: { label: 'Manutenção de veículo', amount: 0, items: [] },
+            taxaSistema: { label: 'Taxa de uso do sistema', amount: 0, items: [] },
+            aluguelContainer: { label: 'Aluguel de container', amount: 0, items: [] },
+            combustivel: { label: 'Despesa com combustível', amount: 0, items: [] },
+            aluguelEscritorio: { label: 'Aluguel de Escritório', amount: 0, items: [] },
+            tef: { label: 'Elgin+TEF+LgoPass', amount: 0, items: [] },
+            despesasFinanceiras: { label: 'Despesas financeiras', amount: 0, items: [] },
+            contabilidade: { label: 'Despesa com contabilidade', amount: 0, items: [] },
+            internet: { label: 'Despesa com internet', amount: 0, items: [] },
+            energia: { label: 'Despesa com energia elétrica', amount: 0, items: [] },
+            outros: { label: 'Outros', amount: 0, items: [] },
+        };
+
+        expensesData.forEach(exp => {
+            const catName = (exp.categories?.name || 'Geral').toLowerCase();
+            const dreGroup = exp.categories?.dre_group;
+            const desc = (exp.description || '').toLowerCase();
+            let amount = Number(exp.amount || 0);
+            const expNorm = normalizeStore(exp.store_name);
+            const isGeralItem = !exp.store_name || expNorm === 'geral' || expNorm === 'administrativo';
+
+            if (selectedStore !== 'Todas') {
+                if (expNorm === sNorm) {
+                } else if (isGeralItem) {
+                    amount = amount * prorationFactor;
+                } else { return; }
+            }
+
+            const pushToGroup = (group: any) => { group.amount += amount; };
             if (catName.includes('fornecedor')) return;
             const isCalculated = desc.includes('royalties') || desc.includes('imposto') || desc.includes('tarifa') || desc.includes('perda');
             if (isCalculated && !dreGroup) return;
 
             if (dreGroup) {
-                if (['funcionarios', 'manutencaoVeiculo', 'taxaSistema', 'aluguelContainer', 'combustivel', 'aluguelEscritorio', 'tef', 'despesasFinanceiras', 'contabilidade', 'internet', 'energia', 'outros'].includes(dreGroup)) {
-                    totalFix += amount;
-                } else if (['marketing', 'diversas'].includes(dreGroup)) {
-                    marketingAndDiversas += amount;
-                } else if (['cashback', 'perda'].includes(dreGroup)) {
-                    // Itens de cashback e perda lançados manualmente entram no cálculo do IMC da DRE, 
-                    // mas no Dashboard simplificado usamos a taxa paramétrica para o PE.
-                    // Para bater com a DRE, o ideal seria tratar aqui também, mas se usarmos a taxa paramétrica no Dashboard, 
-                    // o PE se torna uma "meta teórica" baseada no modelo de negócio. 
-                }
-            } else {
-                if (catName.includes('internet') || catName.includes('celular') || catName.includes('energia') || catName.includes('luz') || catName.includes('funcionario') || catName.includes('salario') || catName.includes('contabil') || catName.includes('escritorio') || catName.includes('container')) {
-                    totalFix += amount;
-                } else if (catName.includes('marketing') || catName.includes('propaganda')) {
-                    marketingAndDiversas += amount;
-                } else if (catName.includes('comissao') || desc.includes('cashback')) {
-                    // Ignorado aqui para evitar duplicidade com a taxa paramétrica no IMC
-                } else {
-                    totalFix += amount;
-                }
+                if (dreGroup === 'cashback') {
+                    const cashbackKey = activeStores.find(as => normalizeStore(as) === expNorm);
+                    if (cashbackKey && storeManualCashback[cashbackKey]) {
+                        storeManualCashback[cashbackKey].amount += amount;
+                    } else { varGroups.cashback.amount += amount; }
+                } else if (varGroups[dreGroup]) { varGroups[dreGroup].amount += amount; }
+                else if (fixGroups[dreGroup]) { fixGroups[dreGroup].amount += amount; }
+                else if (dreGroup === 'perda') { perdaEstoque += amount; }
+                return;
             }
+
+            if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) { pushToGroup(fixGroups.internet); }
+            else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial') || desc.includes('enel') || desc.includes('celpa')) { pushToGroup(fixGroups.energia); }
+            else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel') || desc.includes('etanol') || (desc.includes('posto ') && !desc.includes('imposto'))) { pushToGroup(fixGroups.combustivel); }
+            else if (catName.includes('funcionario') || catName.includes('salario') || catName.includes('pro-labore') || desc.includes('salario') || desc.includes('folha pgto')) { pushToGroup(fixGroups.funcionarios); }
+            else if (catName.includes('contabil') || desc.includes('contador') || desc.includes('contabilidade')) { pushToGroup(fixGroups.contabilidade); }
+            else if (catName.includes('escritorio') && (catName.includes('aluguel') || desc.includes('aluguel'))) { pushToGroup(fixGroups.aluguelEscritorio); }
+            else if (catName.includes('container')) { pushToGroup(fixGroups.aluguelContainer); }
+            else if (catName.includes('comissão') || desc.includes('cashback')) {
+                const cashbackKey = activeStores.find(as => normalizeStore(as) === expNorm);
+                if (cashbackKey && storeManualCashback[cashbackKey]) { storeManualCashback[cashbackKey].amount += amount; }
+                else { pushToGroup(varGroups.cashback); }
+            }
+            else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda')) { pushToGroup(varGroups.marketing); }
+            else if (catName.includes('veiculo') || desc.includes('oficina') || desc.includes('pneu')) { pushToGroup(fixGroups.manutencaoVeiculo); }
+            else if (catName.includes('taxa de uso do sistema') || (catName.includes('sistema') && (desc.includes('taxa') || desc.includes('mensalidade')))) { pushToGroup(fixGroups.taxaSistema); }
+            else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass')) { pushToGroup(fixGroups.tef); }
+            else if (catName.includes('despesas financeiras') || desc.includes('aluguel da loja')) { pushToGroup(fixGroups.despesasFinanceiras); }
+            else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) { if (!isCalculated) pushToGroup(varGroups.diversas); }
+            else if (!isCalculated) { pushToGroup(fixGroups.outros); }
         });
 
-        const taxRate = params.tax_rate / 100;
-        const royaltyRate = params.royalty_rate / 100;
-        const lossRate = params.loss_rate / 100;
-        const pixRate = params.pix_fee_rate / 100;
-        const cardRate = params.card_fee_rate / 100;
+        impostos = (totalRev * (params.tax_rate / 100));
+        perdaEstoque = (totalRev * (params.loss_rate / 100));
+        varGroups.royalties.amount = (totalRev * (params.royalty_rate / 100));
+        varGroups.tarifaPix.amount = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
+        varGroups.tarifaCartao.amount = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
 
-        const totalBankFees = (revByMethod['PIX'] * pixRate) + ((revByMethod['Crédito'] + revByMethod['Débito']) * cardRate);
-        const bankFeeRate = totalRev > 0 ? totalBankFees / totalRev : ((pixRate + cardRate) / 2);
-
-        let avgCashbackRate = 0;
         if (selectedStore !== 'Todas') {
-            const rates = params.cashback_rates as Record<string, number>;
-            const rateKey = Object.keys(rates).find(rk => normalize(rk) === sNorm);
-            avgCashbackRate = (rateKey ? rates[rateKey] : 0) / 100;
+            const key = Object.keys(storeManualCashback).find(k => normalizeStore(k) === sNorm);
+            const manual = key ? storeManualCashback[key] : null;
+            if (manual && manual.amount > 0) { varGroups.cashback.amount += manual.amount; }
+            else {
+                const rates = params.cashback_rates as Record<string, number>;
+                const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === sNorm);
+                const rate = rateKey ? rates[rateKey] : 0;
+                varGroups.cashback.amount += (totalRev * (rate / 100));
+            }
         } else {
-            let cbTotal = 0;
-            const rates = params.cashback_rates as Record<string, number>;
-            activeStoreMap.forEach((storeNorm: any) => {
-                const rateKey = Object.keys(rates).find(rk => normalize(rk) === storeNorm);
-                const r = (rateKey ? rates[rateKey] : 0) / 100;
-                cbTotal += r;
+            activeStores.forEach(s => {
+                const manual = storeManualCashback[s];
+                if (manual && manual.amount > 0) { varGroups.cashback.amount += manual.amount; }
+                else {
+                    const rates = params.cashback_rates as Record<string, number>;
+                    const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === normalizeStore(s));
+                    const rate = rateKey ? rates[rateKey] : 0;
+                    const sRev = storeRevMap[s] || 0;
+                    varGroups.cashback.amount += (sRev * (rate / 100));
+                }
             });
-            avgCashbackRate = activeStoreMap.size > 0 ? cbTotal / activeStoreMap.size : 0;
         }
 
-        // 1. Índice de Margem de Contribuição (IMC = MC / Faturamento)
-        const cmvRate = totalRev > 0 ? cmv / totalRev : 0.45;
-        const IMC = 1 - taxRate - royaltyRate - lossRate - bankFeeRate - avgCashbackRate - cmvRate;
+        const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
+        const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
 
-        // 2. Custos Fixos Totais (Numerador)
-        // Somamos Despesas Fixas + Marketing + Diversas para igualar à lógica da DRE
-        const totalFixedCosts = totalFix + marketingAndDiversas;
+        const realVariableCosts = impostos + cmv + perdaEstoque + varGroups.royalties.amount + varGroups.tarifaPix.amount + varGroups.tarifaCartao.amount + varGroups.cashback.amount;
+        const fixedOperationalCosts = totalFix + varGroups.marketing.amount + varGroups.diversas.amount;
 
-        // 3. Ponto de Equilíbrio de Faturamento
-        const breakEven = totalFixedCosts / Math.max(0.01, IMC);
+        const margemContribuicao = totalRev - realVariableCosts;
+        const IMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
+        const breakEven = fixedOperationalCosts / Math.max(0.01, IMC);
 
-        return { breakEven, totalRev, totalFix, marketingAndDiversas, IMC };
+        return { breakEven, totalRev, totalFix, IMC };
     }, [salesData, expensesData, params, selectedStore]);
 
     const targetRevenue = dreMetrics.breakEven;
