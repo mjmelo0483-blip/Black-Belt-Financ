@@ -640,18 +640,29 @@ const DRE: React.FC = () => {
         const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
 
+        // Para o cálculo do Ponto de Equilíbrio:
+        // 1. Custos Variáveis Reais (O que varia com a venda)
+        const realVariableCosts = impostos + cmv + perdaEstoque +
+            varGroups.royalties.amount +
+            varGroups.tarifaPix.amount +
+            varGroups.tarifaCartao.amount +
+            varGroups.cashback.amount;
+
+        // 2. Custos Fixos Operacionais (Numerador do PE)
+        // Incluímos Marketing e Diversas como custos fixos periódicos
+        const fixedOperationalCosts = totalFix + varGroups.marketing.amount + varGroups.diversas.amount;
+
         const rl = totalRev - impostos;
         const grossMargin = rl - cmv;
         const marginAfterLoss = grossMargin - perdaEstoque;
         const netProfit = marginAfterLoss - totalVar - totalFix;
 
-        // IMC = Margem de Contribuição / Faturamento
-        // Margem de Contribuição = Faturamento - (Impostos + CMV + Perda + Desp. Variáveis)
-        const margemContribuicao = totalRev - impostos - cmv - perdaEstoque - totalVar;
+        // IMC = (Faturamento - Custos Variáveis Reais) / Faturamento
+        const margemContribuicao = totalRev - realVariableCosts;
         const IMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
 
-        // Ponto de Equilíbrio de Faturamento = Custos Fixos Totais / IMC
-        const breakEven = totalFix / Math.max(0.01, IMC);
+        // Ponto de Equilíbrio de Faturamento = Custos Fixos Operacionais / IMC
+        const breakEven = fixedOperationalCosts / Math.max(0.01, IMC);
 
         return {
             revByMethod,

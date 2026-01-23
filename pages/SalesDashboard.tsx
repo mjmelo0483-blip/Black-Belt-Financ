@@ -278,7 +278,7 @@ const SalesDashboard: React.FC = () => {
         });
 
         let totalFix = 0;
-        let manualVariable = 0;
+        let marketingAndDiversas = 0;
         const activeStoreMap = new Set();
         salesData.forEach(s => { if (s.store_name) activeStoreMap.add(normalize(s.store_name)); });
         const activeStoresCount = activeStoreMap.size || 1;
@@ -306,14 +306,21 @@ const SalesDashboard: React.FC = () => {
             if (dreGroup) {
                 if (['funcionarios', 'manutencaoVeiculo', 'taxaSistema', 'aluguelContainer', 'combustivel', 'aluguelEscritorio', 'tef', 'despesasFinanceiras', 'contabilidade', 'internet', 'energia', 'outros'].includes(dreGroup)) {
                     totalFix += amount;
-                } else if (['cashback', 'marketing', 'diversas', 'perda'].includes(dreGroup)) {
-                    manualVariable += amount;
+                } else if (['marketing', 'diversas'].includes(dreGroup)) {
+                    marketingAndDiversas += amount;
+                } else if (['cashback', 'perda'].includes(dreGroup)) {
+                    // Itens de cashback e perda lançados manualmente entram no cálculo do IMC da DRE, 
+                    // mas no Dashboard simplificado usamos a taxa paramétrica para o PE.
+                    // Para bater com a DRE, o ideal seria tratar aqui também, mas se usarmos a taxa paramétrica no Dashboard, 
+                    // o PE se torna uma "meta teórica" baseada no modelo de negócio. 
                 }
             } else {
                 if (catName.includes('internet') || catName.includes('celular') || catName.includes('energia') || catName.includes('luz') || catName.includes('funcionario') || catName.includes('salario') || catName.includes('contabil') || catName.includes('escritorio') || catName.includes('container')) {
                     totalFix += amount;
-                } else if (catName.includes('marketing') || catName.includes('propaganda') || catName.includes('comissao') || desc.includes('cashback')) {
-                    manualVariable += amount;
+                } else if (catName.includes('marketing') || catName.includes('propaganda')) {
+                    marketingAndDiversas += amount;
+                } else if (catName.includes('comissao') || desc.includes('cashback')) {
+                    // Ignorado aqui para evitar duplicidade com a taxa paramétrica no IMC
                 } else {
                     totalFix += amount;
                 }
@@ -346,18 +353,17 @@ const SalesDashboard: React.FC = () => {
         }
 
         // 1. Índice de Margem de Contribuição (IMC = MC / Faturamento)
-        // Representa quanto de cada real vendido sobra após os custos variáveis (Impostos, Comissões, CMV, etc)
         const cmvRate = totalRev > 0 ? cmv / totalRev : 0.45;
         const IMC = 1 - taxRate - royaltyRate - lossRate - bankFeeRate - avgCashbackRate - cmvRate;
 
         // 2. Custos Fixos Totais (Numerador)
-        // Inclui despesas operacionais fixas e investimentos mensais fixos (Marketing, etc)
-        const totalFixedCosts = totalFix + manualVariable;
+        // Somamos Despesas Fixas + Marketing + Diversas para igualar à lógica da DRE
+        const totalFixedCosts = totalFix + marketingAndDiversas;
 
         // 3. Ponto de Equilíbrio de Faturamento
         const breakEven = totalFixedCosts / Math.max(0.01, IMC);
 
-        return { breakEven, totalRev, totalFix, manualVariable, IMC };
+        return { breakEven, totalRev, totalFix, marketingAndDiversas, IMC };
     }, [salesData, expensesData, params, selectedStore]);
 
     const targetRevenue = dreMetrics.breakEven;
