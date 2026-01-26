@@ -397,7 +397,7 @@ const SalesDashboard: React.FC = () => {
             }
 
             const pushToGroup = (group: any) => { group.amount += amount; };
-            if (catName.includes('fornecedor')) return;
+            if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
             const isCalculated = desc.includes('royalties') || desc.includes('imposto') || desc.includes('tarifa') || desc.includes('perda');
             if (isCalculated && !dreGroup) return;
 

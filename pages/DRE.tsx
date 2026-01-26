@@ -475,7 +475,7 @@ const DRE: React.FC = () => {
                 group.items.push(expToPush);
             };
 
-            if (catName.includes('fornecedor')) return;
+            if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
 
             const isCalculated =
                 desc.includes('royalties') ||
