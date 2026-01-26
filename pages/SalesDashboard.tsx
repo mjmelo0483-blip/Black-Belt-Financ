@@ -485,7 +485,7 @@ const SalesDashboard: React.FC = () => {
         // 4. Ponto de Equilíbrio = Custos Fixos / IMC
         const breakEven = fixedOperationalCosts / Math.max(0.01, IMC);
 
-        return { breakEven, totalRev, totalFix, IMC };
+        return { breakEven, totalRev, totalFix, IMC, fixedCosts: fixedOperationalCosts };
     }, [salesData, expensesData, params, selectedStore]);
 
     const targetRevenue = dreMetrics.breakEven;
@@ -534,6 +534,10 @@ const SalesDashboard: React.FC = () => {
             daysInMonth
         };
     }, [totalRevenue, selectedMonth, selectedYear, filteredItems]);
+
+    const projectedRevenue = projection.projectedTotal;
+    const projectedResult = (projectedRevenue * dreMetrics.IMC) - dreMetrics.fixedCosts;
+    const currentResult = (totalRevenue * dreMetrics.IMC) - dreMetrics.fixedCosts;
 
     return (
         <div className="p-6 space-y-6 bg-[#0f172a] min-h-screen text-white">
@@ -728,24 +732,53 @@ const SalesDashboard: React.FC = () => {
                                 </div>
 
                                 <div className="p-6">
-                                    <div className="flex items-baseline gap-2 mb-1">
-                                        <p className="text-4xl font-black text-white">
-                                            R$ {projection.projectedTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </p>
-                                        <span className="text-slate-500 text-xs font-bold uppercase">Previsto</span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">Total estimado para o final do mês</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div>
+                                            <div className="flex items-baseline gap-2 mb-1">
+                                                <p className="text-4xl font-black text-white">
+                                                    R$ {projectedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </p>
+                                                <span className="text-slate-500 text-xs font-bold uppercase">Previsto</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">Faturamento total estimado</p>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-[#0f172a]/50 p-3 rounded-xl border border-[#334155]/50">
-                                            <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Faturamento Atual</p>
-                                            <p className="text-sm font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                            <p className="text-[9px] text-slate-600 font-bold mt-0.5">{projection.daysElapsed} dias decorridos</p>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="bg-[#0f172a]/50 p-3 rounded-xl border border-[#334155]/50">
+                                                    <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Faturamento Atual</p>
+                                                    <p className="text-sm font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                </div>
+                                                <div className="bg-[#0f172a]/50 p-3 rounded-xl border border-[#334155]/50">
+                                                    <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Média Diária</p>
+                                                    <p className="text-sm font-black text-white">R$ {projection.dailyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="bg-[#0f172a]/50 p-3 rounded-xl border border-[#334155]/50">
-                                            <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Média Diária (Calendário)</p>
-                                            <p className="text-sm font-black text-white">R$ {projection.dailyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                            <p className="text-[9px] text-slate-600 font-bold mt-0.5">Baseado em dias corridos</p>
+
+                                        <div className="flex flex-col justify-center border-l border-[#334155]/30 pl-8">
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Projeção de Lucro Líquido</p>
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg ${projectedResult >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-500'}`}>
+                                                    <span className="material-symbols-outlined">{projectedResult >= 0 ? 'payments' : 'poker_chip'}</span>
+                                                </div>
+                                                <div>
+                                                    <p className={`text-3xl font-black ${projectedResult >= 0 ? 'text-emerald-400' : 'text-red-500'}`}>
+                                                        R$ {projectedResult.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </p>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${projectedResult >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                                            {projectedRevenue > 0 ? ((projectedResult / projectedRevenue) * 100).toFixed(1) : 0}%
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Margem Final Est.</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase text-slate-500">
+                                                <span>Resultado em tempo real:</span>
+                                                <span className={currentResult >= 0 ? 'text-emerald-500' : 'text-red-500'}>
+                                                    R$ {currentResult.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
 
