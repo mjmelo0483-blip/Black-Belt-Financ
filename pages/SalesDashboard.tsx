@@ -690,125 +690,129 @@ const SalesDashboard: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-6">
-                            <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Top 10 Produtos Mais Vendidos</h3>
-                                <div className="h-[450px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart layout="vertical" data={productSales.slice(0, 10)}>
-                                            <XAxis type="number" hide />
-                                            <YAxis
-                                                type="category"
-                                                dataKey="name"
-                                                stroke="#94a3b8"
-                                                fontSize={10}
-                                                width={180}
-                                                tick={{ fill: '#94a3b8' }}
-                                                axisLine={false}
-                                                tickLine={false}
-                                                tickFormatter={(value) => value.length > 25 ? `${value.substring(0, 25)}...` : value}
-                                            />
-                                            <Tooltip
-                                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
-                                                formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Total Vendido']}
-                                            />
-                                            <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
+                    {/* Bloco de Projeção Full Width */}
+                    <div className="bg-[#1e293b] overflow-hidden rounded-2xl border border-[#334155] shadow-xl">
+                        <div className="bg-indigo-600/10 px-6 py-4 border-b border-[#334155] flex justify-between items-center">
+                            <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">trending_up</span> Projeção de Resultado e Faturamento
+                            </h3>
+                            {projection.isCurrent && (
+                                <span className="bg-indigo-500/20 text-indigo-400 text-[10px] px-2 py-0.5 rounded-full font-black uppercase">
+                                    {projection.daysRemaining} DIAS CORRIDOS RESTANTES
+                                </span>
+                            )}
+                        </div>
 
-                            <div className="bg-[#1e293b] overflow-hidden rounded-2xl border border-[#334155] shadow-xl">
-                                <div className="bg-indigo-600/10 px-6 py-4 border-b border-[#334155] flex justify-between items-center">
-                                    <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-sm">trending_up</span> Projeção de Faturamento
-                                    </h3>
-                                    {projection.isCurrent && (
-                                        <span className="bg-indigo-500/20 text-indigo-400 text-[10px] px-2 py-0.5 rounded-full font-black uppercase">
-                                            {projection.daysRemaining} DIAS CORRIDOS RESTANTES
-                                        </span>
-                                    )}
-                                </div>
+                        <div className="p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div>
+                                    <div className="flex items-baseline gap-2 mb-1">
+                                        <p className="text-4xl font-black text-white">
+                                            R$ {projectedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
+                                        <span className="text-slate-500 text-xs font-bold uppercase">Previsto</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">Faturamento total estimado para o fechamento do mês</p>
 
-                                <div className="p-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div>
-                                            <div className="flex items-baseline gap-2 mb-1">
-                                                <p className="text-4xl font-black text-white">
-                                                    R$ {projectedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </p>
-                                                <span className="text-slate-500 text-xs font-bold uppercase">Previsto</span>
-                                            </div>
-                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">Faturamento total estimado</p>
-
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <div className="bg-[#0f172a]/50 p-3 rounded-xl border border-[#334155]/50">
-                                                    <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Faturamento Atual</p>
-                                                    <p className="text-sm font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                                </div>
-                                                <div className="bg-[#0f172a]/50 p-3 rounded-xl border border-[#334155]/50">
-                                                    <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Média Diária</p>
-                                                    <p className="text-sm font-black text-white">R$ {projection.dailyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                                </div>
-                                            </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-[#0f172a]/50 p-4 rounded-xl border border-[#334155]/50">
+                                            <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Faturamento Atual</p>
+                                            <p className="text-lg font-black text-white">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                         </div>
+                                        <div className="bg-[#0f172a]/50 p-4 rounded-xl border border-[#334155]/50">
+                                            <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Média Diária</p>
+                                            <p className="text-lg font-black text-white">R$ {projection.dailyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                        </div>
+                                    </div>
+                                </div>
 
-                                        <div className="flex flex-col justify-center border-l border-[#334155]/30 pl-8">
-                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Projeção de Lucro Líquido</p>
-                                            <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg ${projectedResult >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-500'}`}>
-                                                    <span className="material-symbols-outlined">{projectedResult >= 0 ? 'payments' : 'poker_chip'}</span>
-                                                </div>
-                                                <div>
-                                                    <p className={`text-3xl font-black ${projectedResult >= 0 ? 'text-emerald-400' : 'text-red-500'}`}>
-                                                        R$ {projectedResult.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                    </p>
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${projectedResult >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                                            {projectedRevenue > 0 ? ((projectedResult / projectedRevenue) * 100).toFixed(1) : 0}%
-                                                        </span>
-                                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Margem Final Est.</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase text-slate-500">
-                                                <span>Resultado em tempo real:</span>
-                                                <span className={currentResult >= 0 ? 'text-emerald-500' : 'text-red-500'}>
-                                                    R$ {currentResult.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <div className="flex flex-col justify-center border-l border-[#334155]/30 pl-8">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-3">Estimativa de Lucro Líquido</p>
+                                    <div className="flex items-center gap-4">
+                                        <div className={`p-3 rounded-xl ${projectedResult >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-500'}`}>
+                                            <span className="material-symbols-outlined text-3xl">{projectedResult >= 0 ? 'payments' : 'poker_chip'}</span>
+                                        </div>
+                                        <div>
+                                            <p className={`text-4xl font-black ${projectedResult >= 0 ? 'text-emerald-400' : 'text-red-500'}`}>
+                                                R$ {projectedResult.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`text-[11px] font-black px-2 py-0.5 rounded ${projectedResult >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                                    {projectedRevenue > 0 ? ((projectedResult / projectedRevenue) * 100).toFixed(1) : 0}%
                                                 </span>
+                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Margem Final Projetada</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {projection.isCurrent && (
-                                        <div className="mt-6 pt-6 border-t border-[#334155]/50">
-                                            <div className="flex justify-between text-[10px] font-black uppercase text-slate-500 mb-2">
-                                                <span>Progresso do Mês</span>
-                                                <span>{projection.daysElapsed} / {projection.daysInMonth} DIAS CORRIDOS</span>
-                                            </div>
-                                            <div className="h-2 bg-[#0f172a] rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-1000"
-                                                    style={{ width: `${(projection.daysElapsed / projection.daysInMonth) * 100}%` }}
-                                                ></div>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <div className="mt-6 flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 text-[10px] font-bold uppercase overflow-hidden">
+                                        <span className="text-slate-400">Resultado Operacional em Tempo Real:</span>
+                                        <span className={currentResult >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                                            R$ {currentResult.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
                                 </div>
+                            </div>
+
+                            {projection.isCurrent && (
+                                <div className="mt-8 pt-6 border-t border-[#334155]/50">
+                                    <div className="flex justify-between text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">
+                                        <span>Progresso do Período</span>
+                                        <span>{projection.daysElapsed} / {projection.daysInMonth} DIAS CORRIDOS</span>
+                                    </div>
+                                    <div className="h-2.5 bg-[#0f172a] rounded-full overflow-hidden p-0.5 border border-[#334155]/50">
+                                        <div
+                                            className="h-full bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.6)] transition-all duration-1000"
+                                            style={{ width: `${(projection.daysElapsed / projection.daysInMonth) * 100}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Gráficos Lado a Lado */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">inventory_2</span> Top 10 Produtos Mais Vendidos
+                            </h3>
+                            <div className="h-[450px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart layout="vertical" data={productSales.slice(0, 10)}>
+                                        <XAxis type="number" hide />
+                                        <YAxis
+                                            type="category"
+                                            dataKey="name"
+                                            stroke="#94a3b8"
+                                            fontSize={10}
+                                            width={150}
+                                            tick={{ fill: '#94a3b8', fontWeight: 700 }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tickFormatter={(value) => value.length > 20 ? `${value.substring(0, 20)}...` : value}
+                                        />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Total Vendido']}
+                                        />
+                                        <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
                             </div>
                         </div>
 
                         <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Quantidade Vendida por Dia</h3>
-                            <div className="h-[350px] w-full">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">show_chart</span> Quantidade Vendida por Dia
+                            </h3>
+                            <div className="h-[450px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={dailyData}>
                                         <defs>
                                             <linearGradient id="colorUnits" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
+                                                <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
@@ -830,7 +834,7 @@ const SalesDashboard: React.FC = () => {
                                                 return `${d}/${m}/${y}`;
                                             }}
                                         />
-                                        <Area type="monotone" dataKey="units" stroke="#94a3b8" fillOpacity={1} fill="url(#colorUnits)" strokeWidth={2} />
+                                        <Area type="monotone" dataKey="units" stroke="#818cf8" fillOpacity={1} fill="url(#colorUnits)" strokeWidth={3} />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
