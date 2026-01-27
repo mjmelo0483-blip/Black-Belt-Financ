@@ -712,8 +712,25 @@ const SalesDashboard: React.FC = () => {
                                             tickFormatter={(value) => value.length > 20 ? `${value.substring(0, 20)}...` : value}
                                         />
                                         <Tooltip
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
-                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Total Vendido']}
+                                            content={({ active, payload }) => {
+                                                if (active && payload && payload.length) {
+                                                    const data = payload[0].payload;
+                                                    return (
+                                                        <div className="bg-[#1e293b] p-3 border border-[#334155] rounded-xl shadow-xl">
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">{data.name}</p>
+                                                            <div className="space-y-1">
+                                                                <p className="text-sm font-black text-white">
+                                                                    Total: R$ {data.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </p>
+                                                                <p className="text-xs font-bold text-indigo-400">
+                                                                    Quantidade: {data.count} un.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
                                         />
                                         <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
                                     </BarChart>
