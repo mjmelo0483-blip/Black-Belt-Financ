@@ -68,13 +68,12 @@ const DRE: React.FC = () => {
             while (hasMore) {
                 let query = supabase
                     .from('sales')
-                    .select('date')
-                    .eq('user_id', session.user.id);
+                    .select('date');
 
                 if (activeCompany) {
                     query = query.eq('company_id', activeCompany.id);
                 } else {
-                    query = query.is('company_id', null);
+                    query = query.eq('user_id', session.user.id).is('company_id', null);
                 }
 
                 const { data, error } = await query
@@ -182,14 +181,13 @@ const DRE: React.FC = () => {
                 let paramQuery = supabase
                     .from('dre_parameters')
                     .select('*')
-                    .eq('user_id', session.user.id)
                     .eq('month', selectedMonth)
                     .eq('year', selectedYear);
 
                 if (activeCompany) {
                     paramQuery = paramQuery.eq('company_id', activeCompany.id);
                 } else {
-                    paramQuery = paramQuery.is('company_id', null);
+                    paramQuery = paramQuery.eq('user_id', session.user.id).is('company_id', null);
                 }
 
                 const { data: pData } = await paramQuery.maybeSingle();
@@ -280,9 +278,11 @@ const DRE: React.FC = () => {
                 month: selectedMonth,
                 year: selectedYear,
                 ...params,
-                is_business: true,
+                is_business: !!activeCompany,
                 company_id: activeCompany?.id || null
-            }, { onConflict: 'user_id, month, year, is_business, company_id' });
+            }, {
+                onConflict: activeCompany ? 'company_id, month, year' : 'user_id, month, year'
+            });
 
         if (error) {
             alert('Erro ao salvar configurações.');

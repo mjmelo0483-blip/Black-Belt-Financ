@@ -40,14 +40,13 @@ const SalesDashboard: React.FC = () => {
                 let pQuery = supabase
                     .from('dre_parameters')
                     .select('*')
-                    .eq('user_id', session.user.id)
                     .eq('month', selectedMonth)
                     .eq('year', selectedYear);
 
                 if (activeCompany) {
                     pQuery = pQuery.eq('company_id', activeCompany.id);
                 } else {
-                    pQuery = pQuery.is('company_id', null);
+                    pQuery = pQuery.eq('user_id', session.user.id).is('company_id', null);
                 }
 
                 const { data: pData } = await pQuery.maybeSingle();
@@ -112,10 +111,17 @@ const SalesDashboard: React.FC = () => {
             let hasMore = true;
 
             while (hasMore) {
-                const { data, error } = await supabase
+                let q = supabase
                     .from('sales')
-                    .select('date')
-                    .eq('user_id', session.user.id)
+                    .select('date');
+
+                if (activeCompany) {
+                    q = q.eq('company_id', activeCompany.id);
+                } else {
+                    q = q.eq('user_id', session.user.id).is('company_id', null);
+                }
+
+                const { data, error } = await q
                     .order('date', { ascending: false })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 

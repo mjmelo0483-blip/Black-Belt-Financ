@@ -30,13 +30,12 @@ export const useSales = () => {
                         total_price, quantity, unit_cost,
                         products (name, code, category, cost)
                     )
-                `)
-                    .eq('user_id', session.user.id);
+                `);
 
                 if (activeCompany) {
                     query = query.eq('company_id', activeCompany.id);
                 } else {
-                    query = query.is('company_id', null);
+                    query = query.eq('user_id', session.user.id).is('company_id', null);
                 }
 
                 query = query
@@ -336,7 +335,7 @@ export const useSales = () => {
             if (!user) throw new Error('Usuário não autenticado');
 
             if (activeCompany) {
-                await supabase.from('sales').delete().eq('user_id', user.id).eq('company_id', activeCompany.id);
+                await supabase.from('sales').delete().eq('company_id', activeCompany.id);
             } else {
                 await supabase.from('sales').delete().eq('user_id', user.id).is('company_id', null);
             }
@@ -364,19 +363,18 @@ export const useSales = () => {
             while (hasMore) {
                 let query = supabase
                     .from('sales')
-                    .select('id')
-                    .eq('user_id', user.id);
+                    .select('id');
+
+                if (activeCompany) {
+                    query = query.eq('company_id', activeCompany.id);
+                } else {
+                    query = query.eq('user_id', user.id).is('company_id', null);
+                }
 
                 if (fileName === null) {
                     query = query.is('import_filename', null);
                 } else {
                     query = query.eq('import_filename', fileName);
-                }
-
-                if (activeCompany) {
-                    query = query.eq('company_id', activeCompany.id);
-                } else {
-                    query = query.is('company_id', null);
                 }
 
                 const { data, error } = await query.range(page * 1000, (page + 1) * 1000 - 1);
@@ -425,13 +423,12 @@ export const useSales = () => {
             while (hasMore) {
                 let query = supabase
                     .from('sales')
-                    .select('import_filename, created_at, date')
-                    .eq('user_id', session.user.id);
+                    .select('import_filename, created_at, date');
 
                 if (activeCompany) {
                     query = query.eq('company_id', activeCompany.id);
                 } else {
-                    query = query.is('company_id', null);
+                    query = query.eq('user_id', session.user.id).is('company_id', null);
                 }
 
                 const { data, error } = await query.range(page * 1000, (page + 1) * 1000 - 1);
