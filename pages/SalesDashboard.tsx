@@ -690,6 +690,76 @@ const SalesDashboard: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Gráficos Lado a Lado */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">inventory_2</span> Top 10 Produtos Mais Vendidos
+                            </h3>
+                            <div className="h-[450px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart layout="vertical" data={productSales.slice(0, 10)}>
+                                        <XAxis type="number" hide />
+                                        <YAxis
+                                            type="category"
+                                            dataKey="name"
+                                            stroke="#94a3b8"
+                                            fontSize={10}
+                                            width={150}
+                                            tick={{ fill: '#94a3b8', fontWeight: 700 }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tickFormatter={(value) => value.length > 20 ? `${value.substring(0, 20)}...` : value}
+                                        />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Total Vendido']}
+                                        />
+                                        <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">show_chart</span> Quantidade Vendida por Dia
+                            </h3>
+                            <div className="h-[450px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={dailyData}>
+                                        <defs>
+                                            <linearGradient id="colorUnits" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                                        <XAxis
+                                            dataKey="date"
+                                            tickFormatter={(val) => parseInt(val.split('-')[2]).toString()}
+                                            stroke="#64748b"
+                                            fontSize={10}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            interval={0}
+                                        />
+                                        <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                            labelFormatter={(val) => {
+                                                if (!val) return '';
+                                                const [y, m, d] = val.split('-');
+                                                return `${d}/${m}/${y}`;
+                                            }}
+                                        />
+                                        <Area type="monotone" dataKey="units" stroke="#818cf8" fillOpacity={1} fill="url(#colorUnits)" strokeWidth={3} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Bloco de Projeção Full Width */}
                     <div className="bg-[#1e293b] overflow-hidden rounded-2xl border border-[#334155] shadow-xl">
                         <div className="bg-indigo-600/10 px-6 py-4 border-b border-[#334155] flex justify-between items-center">
@@ -768,76 +838,6 @@ const SalesDashboard: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-                        </div>
-                    </div>
-
-                    {/* Gráficos Lado a Lado */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-sm">inventory_2</span> Top 10 Produtos Mais Vendidos
-                            </h3>
-                            <div className="h-[450px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart layout="vertical" data={productSales.slice(0, 10)}>
-                                        <XAxis type="number" hide />
-                                        <YAxis
-                                            type="category"
-                                            dataKey="name"
-                                            stroke="#94a3b8"
-                                            fontSize={10}
-                                            width={150}
-                                            tick={{ fill: '#94a3b8', fontWeight: 700 }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                            tickFormatter={(value) => value.length > 20 ? `${value.substring(0, 20)}...` : value}
-                                        />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
-                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Total Vendido']}
-                                        />
-                                        <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-sm">show_chart</span> Quantidade Vendida por Dia
-                            </h3>
-                            <div className="h-[450px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={dailyData}>
-                                        <defs>
-                                            <linearGradient id="colorUnits" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                                        <XAxis
-                                            dataKey="date"
-                                            tickFormatter={(val) => parseInt(val.split('-')[2]).toString()}
-                                            stroke="#64748b"
-                                            fontSize={10}
-                                            axisLine={false}
-                                            tickLine={false}
-                                            interval={0}
-                                        />
-                                        <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
-                                            labelFormatter={(val) => {
-                                                if (!val) return '';
-                                                const [y, m, d] = val.split('-');
-                                                return `${d}/${m}/${y}`;
-                                            }}
-                                        />
-                                        <Area type="monotone" dataKey="units" stroke="#818cf8" fillOpacity={1} fill="url(#colorUnits)" strokeWidth={3} />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
                         </div>
                     </div>
                 </div>
