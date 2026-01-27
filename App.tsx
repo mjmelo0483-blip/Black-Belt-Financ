@@ -17,6 +17,7 @@ import SalesDashboard from './pages/SalesDashboard';
 import DRE from './pages/DRE';
 import Profile from './pages/Profile';
 import CompanyManagement from './pages/CompanyManagement';
+import ResetPassword from './pages/ResetPassword';
 import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
 import { ProfileProvider } from './contexts/ProfileContext';
@@ -56,6 +57,7 @@ const AppContent: React.FC = () => {
       {!session ? (
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<Navigate to="/auth" replace />} />
         </Routes>
       ) : (
@@ -81,6 +83,7 @@ const AppContent: React.FC = () => {
                 <Route path="/dre" element={<DRE />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/companies" element={<CompanyManagement />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </main>

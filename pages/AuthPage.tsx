@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
@@ -12,7 +12,8 @@ const AuthPage: React.FC = () => {
     const [isSignUp, setIsSignUp] = useState(false);
     const [isBusinessLogin, setIsBusinessLogin] = useState(true);
     const [showCompanySelection, setShowCompanySelection] = useState(false);
-    const [showCompanyManager, setShowCompanyManager] = useState(false); // To force manager if needed
+    const [isForgotPassword, setIsForgotPassword] = useState(false);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [newCompanyName, setNewCompanyName] = useState('');
     const [newCompanyCNPJ, setNewCompanyCNPJ] = useState('');
@@ -25,6 +26,7 @@ const AuthPage: React.FC = () => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+        setSuccessMessage(null);
 
         try {
             if (isSignUp) {
@@ -33,9 +35,15 @@ const AuthPage: React.FC = () => {
                     password,
                 });
                 if (error) throw error;
-                alert('Verifique seu e-mail para confirmar o cadastro!');
+                setSuccessMessage('Verifique seu e-mail para confirmar o cadastro!');
+            } else if (isForgotPassword) {
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                    redirectTo: `${window.location.origin}/#/reset-password`,
+                });
+                if (error) throw error;
+                setSuccessMessage('Um link de recuperação foi enviado para seu e-mail!');
             } else {
-                const { data, error } = await supabase.auth.signInWithPassword({
+                const { error } = await supabase.auth.signInWithPassword({
                     email,
                     password,
                 });
@@ -141,22 +149,15 @@ const AuthPage: React.FC = () => {
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0b1218] overflow-hidden transition-colors duration-500">
-            {/* Background elements */}
             <div className={`absolute top-[-10%] left-[-10%] size-[60%] blur-[120px] rounded-full transition-all duration-700 ${isBusinessLogin ? 'bg-indigo-600/30' : 'bg-primary/20'}`}></div>
             <div className={`absolute bottom-[-10%] right-[-10%] size-[50%] blur-[130px] rounded-full transition-all duration-700 ${isBusinessLogin ? 'bg-purple-600/10' : 'bg-blue-600/10'}`}></div>
-
-            {/* Grid Pattern */}
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
 
             <div className="w-full max-w-md p-8 bg-[#1a2632]/80 backdrop-blur-2xl border border-[#324d67]/50 rounded-3xl shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-500">
                 <div className="flex flex-col items-center mb-8">
                     <div className={`size-32 rounded-[2rem] bg-gradient-to-br p-px mb-6 shadow-2xl transition-all duration-500 ${isBusinessLogin ? 'from-indigo-400 to-purple-600' : 'from-primary to-blue-600'}`}>
                         <div className="size-full rounded-[1.95rem] bg-[#1c2a38] flex items-center justify-center overflow-hidden">
-                            <img
-                                src={logo}
-                                alt="Black Belt Financ Logo"
-                                className="size-20 object-contain drop-shadow-2xl"
-                            />
+                            <img src={logo} alt="Logo" className="size-20 object-contain drop-shadow-2xl" />
                         </div>
                     </div>
 
@@ -167,26 +168,31 @@ const AuthPage: React.FC = () => {
                         </h1>
                         <p className="text-[#92adc9] text-xs font-medium uppercase tracking-widest opacity-60">
                             {isBusinessLogin ? 'Business Intelligence System' : 'Personal Finance Control'}
-                            <span className="ml-2 px-1 bg-white/10 rounded text-[8px]">v1.1.0</span>
                         </p>
                     </div>
 
-                    <div className="flex w-full mt-8 bg-[#111a22] p-1.5 rounded-2xl border border-[#324d67] shadow-inner">
-                        <button
-                            onClick={() => setIsBusinessLogin(false)}
-                            className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${!isBusinessLogin ? 'bg-primary text-white shadow-xl scale-[1.02]' : 'text-[#92adc9] hover:text-white'}`}
-                        >
-                            <span className="material-symbols-outlined text-[18px]">person</span>
-                            Pessoal
-                        </button>
-                        <button
-                            onClick={() => setIsBusinessLogin(true)}
-                            className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${isBusinessLogin ? 'bg-indigo-600 text-white shadow-xl scale-[1.02]' : 'text-[#92adc9] hover:text-white'}`}
-                        >
-                            <span className="material-symbols-outlined text-[18px]">business_center</span>
-                            Empresarial
-                        </button>
-                    </div>
+                    {!isForgotPassword && (
+                        <div className="flex w-full mt-8 bg-[#111a22] p-1.5 rounded-2xl border border-[#324d67] shadow-inner">
+                            <button
+                                onClick={() => setIsBusinessLogin(false)}
+                                className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${!isBusinessLogin ? 'bg-primary text-white shadow-xl scale-[1.02]' : 'text-[#92adc9] hover:text-white'}`}
+                            >
+                                <span className="material-symbols-outlined text-[18px]">person</span>
+                                Pessoal
+                            </button>
+                            <button
+                                onClick={() => setIsBusinessLogin(true)}
+                                className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${isBusinessLogin ? 'bg-indigo-600 text-white shadow-xl scale-[1.02]' : 'text-[#92adc9] hover:text-white'}`}
+                            >
+                                <span className="material-symbols-outlined text-[18px]">business_center</span>
+                                Empresarial
+                            </button>
+                        </div>
+                    )}
+
+                    {isForgotPassword && (
+                        <h2 className="text-lg font-black text-white uppercase tracking-tight mt-8">Recuperar Senha</h2>
+                    )}
                 </div>
 
                 <form onSubmit={handleAuth} className="space-y-6">
@@ -198,32 +204,50 @@ const AuthPage: React.FC = () => {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 pl-10 pr-4 text-white placeholder-[#4a6b8a] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                                className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 pl-10 pr-4 text-white placeholder-[#4a6b8a] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all underline-none"
                                 placeholder="seu@email.com"
                                 required
                             />
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-[#92adc9] mb-2">Senha</label>
-                        <div className="relative">
-                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#92adc9] text-[20px]">lock</span>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 pl-10 pr-4 text-white placeholder-[#4a6b8a] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-                                placeholder="••••••••"
-                                required
-                            />
+                    {!isForgotPassword && (
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className="block text-sm font-medium text-[#92adc9]">Senha</label>
+                                <button
+                                    type="button"
+                                    onClick={() => { setIsForgotPassword(true); setError(null); setSuccessMessage(null); }}
+                                    className="text-[10px] font-black uppercase text-primary hover:underline"
+                                >
+                                    Esqueceu a senha?
+                                </button>
+                            </div>
+                            <div className="relative">
+                                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#92adc9] text-[20px]">lock</span>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 pl-10 pr-4 text-white placeholder-[#4a6b8a] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                                    placeholder="••••••••"
+                                    required={!isForgotPassword}
+                                />
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {error && (
                         <div className="bg-red-500/10 border border-red-500/50 text-red-500 text-sm p-3 rounded-lg flex items-center gap-2">
                             <span className="material-symbols-outlined text-[18px]">error</span>
                             {error}
+                        </div>
+                    )}
+
+                    {successMessage && (
+                        <div className="bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 text-sm p-3 rounded-lg flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                            {successMessage}
                         </div>
                     )}
 
@@ -236,18 +260,28 @@ const AuthPage: React.FC = () => {
                             <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                         ) : (
                             <>
-                                {isSignUp ? 'Cadastrar' : 'Entrar'}
+                                {isForgotPassword ? 'Enviar Link' : isSignUp ? 'Cadastrar' : 'Entrar'}
                                 <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
                             </>
                         )}
                     </button>
+
+                    {isForgotPassword && (
+                        <button
+                            type="button"
+                            onClick={() => { setIsForgotPassword(false); setError(null); setSuccessMessage(null); }}
+                            className="w-full text-[10px] font-black uppercase text-[#92adc9] hover:text-white transition-colors"
+                        >
+                            Voltar para o login
+                        </button>
+                    )}
                 </form>
 
                 <div className="mt-8 text-center pt-6 border-t border-[#324d67]/30">
                     <p className="text-[#92adc9]">
                         {isSignUp ? 'Já tem uma conta?' : 'Não tem uma conta?'}
                         <button
-                            onClick={() => setIsSignUp(!isSignUp)}
+                            onClick={() => { setIsSignUp(!isSignUp); setIsForgotPassword(false); setError(null); setSuccessMessage(null); }}
                             className="ml-2 text-primary font-bold hover:underline"
                         >
                             {isSignUp ? 'Fazer login' : 'Criar conta'}
