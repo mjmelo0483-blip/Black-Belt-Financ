@@ -226,6 +226,9 @@ const DRE: React.FC = () => {
                 .eq('is_business', true)
                 .is('transfer_id', null)
                 .is('investment_id', null)
+                .or('payment_method.neq.transferencia,payment_method.is.null')
+                .neq('type', 'transfer')
+                .neq('type', 'investment')
                 .eq('type', 'expense')
                 .gte('date', startDate)
                 .lte('date', endDate);
@@ -630,7 +633,6 @@ const DRE: React.FC = () => {
                     varGroups.cashback.items.push(...manual.items);
                 } else {
                     const rates = params.cashback_rates as Record<string, number>;
-                    // Find rate using normalized key
                     const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === normalizeStore(s));
                     const rate = rateKey ? rates[rateKey] : 0;
                     const sRev = storeRevMap[s] || 0;
@@ -642,6 +644,11 @@ const DRE: React.FC = () => {
         const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
 
+        const rl = totalRev - impostos;
+        const grossMargin = rl - cmv;
+        const marginAfterLoss = grossMargin - perdaEstoque;
+        const netProfit = marginAfterLoss - totalVar - totalFix;
+
         // Para o cálculo do Ponto de Equilíbrio:
         // 1. Custos Variáveis Reais (O que varia com a venda)
         const realVariableCosts = impostos + cmv + perdaEstoque +
@@ -651,13 +658,7 @@ const DRE: React.FC = () => {
             varGroups.cashback.amount;
 
         // 2. Custos Fixos Operacionais (Numerador do PE)
-        // Incluímos Marketing e Diversas como custos fixos periódicos
         const fixedOperationalCosts = totalFix + varGroups.marketing.amount + varGroups.diversas.amount;
-
-        const rl = totalRev - impostos;
-        const grossMargin = rl - cmv;
-        const marginAfterLoss = grossMargin - perdaEstoque;
-        const netProfit = marginAfterLoss - totalVar - totalFix;
 
         // IMC = (Faturamento - Custos Variáveis Reais) / Faturamento
         const margemContribuicao = totalRev - realVariableCosts;

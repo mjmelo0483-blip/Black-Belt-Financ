@@ -119,20 +119,20 @@ export const useTransactions = () => {
                 const orParts: string[] = [];
 
                 if (activeFilters.types.includes('income')) {
-                    // Real income: income type AND no transfer/investment IDs AND not transferencia payment method
-                    orParts.push('and(type.eq.income,transfer_id.is.null,investment_id.is.null,payment_method.neq.transferencia)');
+                    // Real income: (type is income AND no ids AND (payment_method is NULL or NOT transferencia))
+                    orParts.push('and(type.eq.income,transfer_id.is.null,investment_id.is.null,or(payment_method.neq.transferencia,payment_method.is.null))');
                 }
                 if (activeFilters.types.includes('expense')) {
-                    // Real expense: expense type AND no transfer/investment IDs AND not transferencia payment method
-                    orParts.push('and(type.eq.expense,transfer_id.is.null,investment_id.is.null,payment_method.neq.transferencia)');
+                    // Real expense: (type is expense AND no ids AND (payment_method is NULL or NOT transferencia))
+                    orParts.push('and(type.eq.expense,transfer_id.is.null,investment_id.is.null,or(payment_method.neq.transferencia,payment_method.is.null))');
                 }
                 if (activeFilters.types.includes('transfer')) {
-                    // Any transfer: has transfer_id OR payment_method is transferencia
-                    orParts.push('transfer_id.not.is.null', 'payment_method.eq.transferencia');
+                    // Any transfer: literal type OR has transfer_id OR payment_method is transferencia
+                    orParts.push('type.eq.transfer', 'transfer_id.not.is.null', 'payment_method.eq.transferencia');
                 }
                 if (activeFilters.types.includes('investment')) {
-                    // Any investment: has investment_id
-                    orParts.push('investment_id.not.is.null');
+                    // Any investment: literal type OR has investment_id
+                    orParts.push('type.eq.investment', 'investment_id.not.is.null');
                 }
 
                 if (orParts.length > 0) {
@@ -140,7 +140,8 @@ export const useTransactions = () => {
                 }
             } else {
                 // Default: only real income and expenses (exclude transfers and investments)
-                query = query.is('transfer_id', null).is('investment_id', null).neq('payment_method', 'transferencia');
+                // MUST specify both null checks AND payment_method to be NULL-safe
+                query = query.is('transfer_id', null).is('investment_id', null).or('payment_method.neq.transferencia,payment_method.is.null');
             }
 
             if (activeFilters?.subcategoryId) {

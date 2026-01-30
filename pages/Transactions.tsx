@@ -154,8 +154,8 @@ const Transactions: React.FC = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
-  const totalIncome = transactions.filter(t => t.type === 'income' && !t.transfer_id && !t.investment_id && t.payment_method !== 'transferencia').reduce((acc, t) => acc + Number(t.amount), 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense' && !t.transfer_id && !t.investment_id && t.payment_method !== 'transferencia').reduce((acc, t) => acc + Number(t.amount), 0);
+  const totalIncome = transactions.filter(t => t.type === 'income' && !t.transfer_id && !t.investment_id && t.payment_method !== 'transferencia' && t.type !== 'transfer' && t.type !== 'investment').reduce((acc, t) => acc + Number(t.amount), 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense' && !t.transfer_id && !t.investment_id && t.payment_method !== 'transferencia' && t.type !== 'transfer' && t.type !== 'investment').reduce((acc, t) => acc + Number(t.amount), 0);
 
   const exportToCSV = () => {
     if (transactions.length === 0) return;
