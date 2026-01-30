@@ -58,7 +58,7 @@ const Transactions: React.FC = () => {
     const query = params.get('q');
     if (query) {
       setFilterDescription(query);
-      fetchTransactions({ description: query });
+      fetchTransactions({ description: query, types: ['income', 'expense'] });
     }
   }, [location.search]);
 
@@ -94,7 +94,7 @@ const Transactions: React.FC = () => {
     setFilterSubcategoryId('');
     setFilterPaymentMethod('');
     setFilterTypes([]);
-    fetchTransactions({});
+    fetchTransactions({ types: ['income', 'expense'] });
   };
 
   const handleEdit = (t: any) => {
@@ -152,8 +152,8 @@ const Transactions: React.FC = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0);
+  const totalIncome = transactions.filter(t => t.type === 'income' && !t.transfer_id && !t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense' && !t.transfer_id && !t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0);
 
   const exportToCSV = () => {
     if (transactions.length === 0) return;

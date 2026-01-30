@@ -156,7 +156,7 @@ export const useTransactions = () => {
     }, [currentFilters, isBusiness, activeCompany]);
 
     useEffect(() => {
-        fetchTransactions();
+        fetchTransactions({ types: ['income', 'expense'] });
         fetchMetadata();
     }, [fetchTransactions, fetchMetadata]);
 
