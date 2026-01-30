@@ -118,7 +118,7 @@ export const useCashFlow = () => {
                     transQuery = transQuery.eq('account_id', accountId);
                 }
 
-                let accountsQuery = supabase.from('accounts').select('balance').eq('is_business', isBusiness);
+                let accountsQuery = supabase.from('accounts').select('id, balance, initial_balance_date, type').eq('is_business', isBusiness);
 
                 if (isBusiness && activeCompany) {
                     accountsQuery = accountsQuery.eq('company_id', activeCompany.id);
@@ -135,8 +135,15 @@ export const useCashFlow = () => {
                 ]);
             });
 
-            const trans = transRes.data || [];
+            const transRaw = transRes.data || [];
             const accountsData = accountsRes.data || [];
+
+            // Map accounts for easy lookup
+            const accountsMap = new Map();
+            accountsData.forEach(acc => {
+                accountsMap.set(acc.id, acc);
+            });
+
             const currentBalance = accountsData.reduce((acc: number, curr: any) => acc + Number(curr.balance), 0);
 
             let projectedBalance = currentBalance;
@@ -145,7 +152,7 @@ export const useCashFlow = () => {
                 const { data: gapTrans } = await withRetry(async () => {
                     let gapQuery = supabase
                         .from('transactions')
-                        .select('amount, type, transfer_id, investment_id, payment_method')
+                        .select('amount, type, transfer_id, investment_id, payment_method, account_id, due_date')
                         .eq('is_business', isBusiness)
                         .eq('status', 'open')
                         .gte('due_date', todayStr)
@@ -163,18 +170,34 @@ export const useCashFlow = () => {
                     return await gapQuery;
                 });
 
-                const gapIn = gapTrans?.filter(t => t.type === 'income' && !t.transfer_id && !t.investment_id && t.payment_method?.toLowerCase() !== 'credito' && t.payment_method?.toLowerCase() !== 'transferencia').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-                const gapOut = gapTrans?.filter(t => t.type === 'expense' && !t.transfer_id && !t.investment_id && t.payment_method?.toLowerCase() !== 'credito' && t.payment_method?.toLowerCase() !== 'transferencia').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+                // Projeção futura: Somar o que vai entrar e subtrair o que vai sair das contas bancárias
+                const gapIn = gapTrans?.filter(t => {
+                    const method = t.payment_method?.toLowerCase() || '';
+                    return t.type === 'income' &&
+                        !t.transfer_id &&
+                        !t.investment_id &&
+                        method !== 'transferencia' &&
+                        !method.includes('credit') &&
+                        !method.includes('crédit');
+                }).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+
+                const gapOut = gapTrans?.filter(t => {
+                    const method = t.payment_method?.toLowerCase() || '';
+                    return t.type === 'expense' &&
+                        !t.transfer_id &&
+                        !t.investment_id &&
+                        method !== 'transferencia' &&
+                        !method.includes('credit') &&
+                        !method.includes('crédit');
+                }).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+
                 projectedBalance = currentBalance + gapIn - gapOut;
 
             } else {
-                // Para calcular o saldo inicial de um período passado:
-                // Pegamos o saldo atual e revertemos todas as transações completed
-                // que ocorreram APÓS o início do período selecionado até hoje
                 const { data: gapTrans } = await withRetry(async () => {
                     let gapQuery = supabase
                         .from('transactions')
-                        .select('amount, type, transfer_id, investment_id, payment_method')
+                        .select('amount, type, transfer_id, investment_id, payment_method, account_id, due_date')
                         .eq('is_business', isBusiness)
                         .eq('status', 'completed')
                         .gte('due_date', startDate)
@@ -192,32 +215,58 @@ export const useCashFlow = () => {
                     return await gapQuery;
                 });
 
-                // Reverter: entradas que já ocorreram devem ser subtraídas
-                // e saídas que já ocorreram devem ser somadas.
-                // IMPORTANTE: 
-                // - Excluímos 'credito' (cartão) pois não afetam o saldo bancário até o pagamento da fatura.
-                // - Excluímos transferências INTERNAS (com transfer_id) pois o net total das contas não muda.
-                // - INCLUÍMOS investimentos e transferências externas pois eles movimentam dinheiro para fora/dentro do grupo de contas.
-                const gapIn = gapTrans?.filter(t => {
-                    const method = t.payment_method?.toLowerCase() || '';
-                    return t.type?.toLowerCase() === 'income' &&
-                        !t.transfer_id &&
-                        method !== 'transferencia' &&
-                        !method.includes('credit') &&
-                        !method.includes('crédit');
-                }).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+                // Para calcular o saldo inicial de um período passado (Retroativo):
+                // Precisamos reverter transações que aconteceram desde 'startDate' até hoje.
+                // IMPORTANTE: Só revertemos o que aconteceu APÓS a data do saldo inicial da conta.
+                // Se a startDate for anterior à criação da conta, paramos a reversão na data inicial.
 
-                const gapOut = gapTrans?.filter(t => {
-                    const method = t.payment_method?.toLowerCase() || '';
-                    return t.type?.toLowerCase() === 'expense' &&
-                        !t.transfer_id &&
-                        method !== 'transferencia' &&
-                        !method.includes('credit') &&
-                        !method.includes('crédit');
-                }).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+                let totalRevertedBalance = 0;
 
-                projectedBalance = currentBalance - gapIn + gapOut;
+                accountsData.forEach(acc => {
+                    let accBalance = Number(acc.balance);
+                    const initialDate = acc.initial_balance_date || '0000-00-00';
+                    const rollbackLimit = startDate > initialDate ? startDate : initialDate;
+
+                    // Reverter todas as transações desta conta ocorridas após 'rollbackLimit' até hoje
+                    const accTrans = gapTrans?.filter(t =>
+                        t.account_id === acc.id &&
+                        t.due_date >= rollbackLimit &&
+                        t.due_date < nextToday
+                    ) || [];
+
+                    const accGapIn = accTrans.filter(t => {
+                        const method = t.payment_method?.toLowerCase() || '';
+                        return t.type?.toLowerCase() === 'income' &&
+                            !t.transfer_id &&
+                            method !== 'transferencia' &&
+                            !method.includes('credit') &&
+                            !method.includes('crédit');
+                    }).reduce((accVal, t) => accVal + Number(t.amount), 0);
+
+                    const accGapOut = accTrans.filter(t => {
+                        const method = t.payment_method?.toLowerCase() || '';
+                        return t.type?.toLowerCase() === 'expense' &&
+                            !t.transfer_id &&
+                            method !== 'transferencia' &&
+                            !method.includes('credit') &&
+                            !method.includes('crédit');
+                    }).reduce((accVal, t) => accVal + Number(t.amount), 0);
+
+                    // Se voltamos até ANTES da data inicial, o saldo era o inicial informado.
+                    // A fórmula Revertido = Atual - Ganhos + Gastos nos traz de volta ao passado.
+                    totalRevertedBalance += (accBalance - accGapIn + accGapOut);
+                });
+
+                projectedBalance = totalRevertedBalance;
             }
+
+            // Filtrar transações do período para exibição e indicadores (stats)
+            // IMPORTANTE: Ignoramos lançamentos que ocorreram antes da data inicial da conta
+            const trans = transRaw.filter(t => {
+                const acc = accountsMap.get(t.account_id);
+                if (!acc) return true; // Keep transactions without a matching account (shouldn't happen if FK is enforced)
+                return t.due_date >= (acc.initial_balance_date || '0000-00-00');
+            });
 
             const dayInflow = trans.filter(t => {
                 const method = t.payment_method?.toLowerCase() || '';
@@ -226,9 +275,7 @@ export const useCashFlow = () => {
                     !t.transfer_id &&
                     method !== 'transferencia' &&
                     !method.includes('credit') &&
-                    !method.includes('crédit') &&
-                    t.type?.toLowerCase() !== 'transfer' &&
-                    t.type?.toLowerCase() !== 'investment';
+                    !method.includes('crédit');
             }).reduce((acc, t) => acc + Number(t.amount), 0);
 
             const dayOutflow = trans.filter(t => {
@@ -238,10 +285,9 @@ export const useCashFlow = () => {
                     !t.transfer_id &&
                     method !== 'transferencia' &&
                     !method.includes('credit') &&
-                    !method.includes('crédit') &&
-                    t.type?.toLowerCase() !== 'transfer' &&
-                    t.type?.toLowerCase() !== 'investment';
+                    !method.includes('crédit');
             }).reduce((acc, t) => acc + Number(t.amount), 0);
+
             const investmentIn = trans.filter(t => (t.type?.toLowerCase() === 'income' || t.type?.toLowerCase() === 'investment') && (t.investment_id || t.type?.toLowerCase() === 'investment')).reduce((acc, t) => acc + Number(t.amount), 0);
             const investmentOut = trans.filter(t => (t.type?.toLowerCase() === 'expense' || t.type?.toLowerCase() === 'investment') && (t.investment_id || t.type?.toLowerCase() === 'investment')).reduce((acc, t) => acc + Number(t.amount), 0);
 
@@ -268,7 +314,10 @@ export const useCashFlow = () => {
                     t.type?.toLowerCase() !== 'transfer' &&
                     t.type?.toLowerCase() !== 'investment';
             }).reduce((acc, t) => acc + Number(t.amount), 0);
-            const calculatedFinalBalance = projectedBalance + totalIn - totalOut;
+
+            // O saldo final projetado deve incluir o impacto dos investimentos no banco
+            const netInvestments = investmentIn - investmentOut;
+            const calculatedFinalBalance = projectedBalance + totalIn - totalOut + netInvestments;
 
             setTransactions(trans);
             setStats({
