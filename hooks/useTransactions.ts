@@ -116,27 +116,31 @@ export const useTransactions = () => {
                 query = query.lte('amount', activeFilters.maxAmount);
             }
             if (activeFilters?.types && activeFilters.types.length > 0) {
-                const parts: string[] = [];
+                const orParts: string[] = [];
 
                 if (activeFilters.types.includes('income')) {
-                    parts.push('and(type.eq.income,transfer_id.is.null,investment_id.is.null)');
+                    // Real income: income type AND no transfer/investment IDs AND not transferencia payment method
+                    orParts.push('and(type.eq.income,transfer_id.is.null,investment_id.is.null,payment_method.neq.transferencia)');
                 }
                 if (activeFilters.types.includes('expense')) {
-                    parts.push('and(type.eq.expense,transfer_id.is.null,investment_id.is.null)');
+                    // Real expense: expense type AND no transfer/investment IDs AND not transferencia payment method
+                    orParts.push('and(type.eq.expense,transfer_id.is.null,investment_id.is.null,payment_method.neq.transferencia)');
                 }
                 if (activeFilters.types.includes('transfer')) {
-                    parts.push('transfer_id.not.is.null');
+                    // Any transfer: has transfer_id OR payment_method is transferencia
+                    orParts.push('transfer_id.not.is.null', 'payment_method.eq.transferencia');
                 }
                 if (activeFilters.types.includes('investment')) {
-                    parts.push('investment_id.not.is.null');
+                    // Any investment: has investment_id
+                    orParts.push('investment_id.not.is.null');
                 }
 
-                if (parts.length > 0) {
-                    query = query.or(parts.join(','));
+                if (orParts.length > 0) {
+                    query = query.or(orParts.join(','));
                 }
             } else {
-                // Default: only real income and expenses
-                query = query.is('transfer_id', null).is('investment_id', null);
+                // Default: only real income and expenses (exclude transfers and investments)
+                query = query.is('transfer_id', null).is('investment_id', null).neq('payment_method', 'transferencia');
             }
 
             if (activeFilters?.subcategoryId) {

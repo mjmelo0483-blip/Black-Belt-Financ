@@ -145,7 +145,7 @@ export const useCashFlow = () => {
                 const { data: gapTrans } = await withRetry(async () => {
                     let gapQuery = supabase
                         .from('transactions')
-                        .select('amount, type')
+                        .select('amount, type, transfer_id, investment_id, payment_method')
                         .eq('is_business', isBusiness)
                         .eq('status', 'open')
                         .gte('due_date', todayStr)
@@ -163,15 +163,15 @@ export const useCashFlow = () => {
                     return await gapQuery;
                 });
 
-                const gapIn = gapTrans?.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-                const gapOut = gapTrans?.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+                const gapIn = gapTrans?.filter(t => t.type === 'income' && !t.transfer_id && !t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+                const gapOut = gapTrans?.filter(t => t.type === 'expense' && !t.transfer_id && !t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
                 projectedBalance = currentBalance + gapIn - gapOut;
 
             } else {
                 const { data: gapTrans } = await withRetry(async () => {
                     let gapQuery = supabase
                         .from('transactions')
-                        .select('amount, type')
+                        .select('amount, type, transfer_id, investment_id, payment_method')
                         .eq('is_business', isBusiness)
                         .eq('status', 'completed')
                         .gte('due_date', startDate)
@@ -189,18 +189,18 @@ export const useCashFlow = () => {
                     return await gapQuery;
                 });
 
-                const gapIn = gapTrans?.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-                const gapOut = gapTrans?.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+                const gapIn = gapTrans?.filter(t => t.type === 'income' && !t.transfer_id && !t.investment_id && t.payment_method !== 'transferencia').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+                const gapOut = gapTrans?.filter(t => t.type === 'expense' && !t.transfer_id && !t.investment_id && t.payment_method !== 'transferencia').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
                 projectedBalance = currentBalance - gapIn + gapOut;
             }
 
-            const dayInflow = trans.filter(t => t.type === 'income' && !t.investment_id && (accountId ? true : !t.transfer_id)).reduce((acc, t) => acc + Number(t.amount), 0);
-            const dayOutflow = trans.filter(t => t.type === 'expense' && !t.investment_id && (accountId ? true : !t.transfer_id)).reduce((acc, t) => acc + Number(t.amount), 0);
+            const dayInflow = trans.filter(t => t.type === 'income' && !t.investment_id && !t.transfer_id && t.payment_method !== 'transferencia').reduce((acc, t) => acc + Number(t.amount), 0);
+            const dayOutflow = trans.filter(t => t.type === 'expense' && !t.investment_id && !t.transfer_id && t.payment_method !== 'transferencia').reduce((acc, t) => acc + Number(t.amount), 0);
             const investmentIn = trans.filter(t => t.type === 'income' && t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0);
             const investmentOut = trans.filter(t => t.type === 'expense' && t.investment_id).reduce((acc, t) => acc + Number(t.amount), 0);
 
-            const totalIn = trans.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0);
-            const totalOut = trans.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0);
+            const totalIn = trans.filter(t => t.type === 'income' && !t.transfer_id && t.payment_method !== 'transferencia').reduce((acc, t) => acc + Number(t.amount), 0);
+            const totalOut = trans.filter(t => t.type === 'expense' && !t.transfer_id && t.payment_method !== 'transferencia').reduce((acc, t) => acc + Number(t.amount), 0);
             const calculatedFinalBalance = projectedBalance + totalIn - totalOut;
 
             setTransactions(trans);

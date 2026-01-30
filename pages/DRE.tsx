@@ -224,6 +224,8 @@ const DRE: React.FC = () => {
                 .from('transactions')
                 .select('amount, type, description, date, due_date, category_id, store_name, categories(name, parent_id, dre_group)')
                 .eq('is_business', true)
+                .is('transfer_id', null)
+                .is('investment_id', null)
                 .eq('type', 'expense')
                 .gte('date', startDate)
                 .lte('date', endDate);
