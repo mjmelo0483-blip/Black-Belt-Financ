@@ -176,9 +176,7 @@ export const useCashFlow = () => {
                     return t.type === 'income' &&
                         !t.transfer_id &&
                         !t.investment_id &&
-                        method !== 'transferencia' &&
-                        !method.includes('credit') &&
-                        !method.includes('crédit');
+                        method !== 'transferencia';
                 }).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
 
                 const gapOut = gapTrans?.filter(t => {
@@ -186,9 +184,7 @@ export const useCashFlow = () => {
                     return t.type === 'expense' &&
                         !t.transfer_id &&
                         !t.investment_id &&
-                        method !== 'transferencia' &&
-                        !method.includes('credit') &&
-                        !method.includes('crédit');
+                        method !== 'transferencia';
                 }).reduce((acc, t) => acc + Number(t.amount), 0) || 0;
 
                 projectedBalance = currentBalance + gapIn - gapOut;
@@ -238,18 +234,14 @@ export const useCashFlow = () => {
                         const method = t.payment_method?.toLowerCase() || '';
                         return t.type?.toLowerCase() === 'income' &&
                             !t.transfer_id &&
-                            method !== 'transferencia' &&
-                            !method.includes('credit') &&
-                            !method.includes('crédit');
+                            method !== 'transferencia';
                     }).reduce((accVal, t) => accVal + Number(t.amount), 0);
 
                     const accGapOut = accTrans.filter(t => {
                         const method = t.payment_method?.toLowerCase() || '';
                         return t.type?.toLowerCase() === 'expense' &&
                             !t.transfer_id &&
-                            method !== 'transferencia' &&
-                            !method.includes('credit') &&
-                            !method.includes('crédit');
+                            method !== 'transferencia';
                     }).reduce((accVal, t) => accVal + Number(t.amount), 0);
 
                     // Se voltamos até ANTES da data inicial, o saldo era o inicial informado.
@@ -273,9 +265,7 @@ export const useCashFlow = () => {
                 return t.type?.toLowerCase() === 'income' &&
                     !t.investment_id &&
                     !t.transfer_id &&
-                    method !== 'transferencia' &&
-                    !method.includes('credit') &&
-                    !method.includes('crédit');
+                    method !== 'transferencia';
             }).reduce((acc, t) => acc + Number(t.amount), 0);
 
             const dayOutflow = trans.filter(t => {
@@ -283,9 +273,7 @@ export const useCashFlow = () => {
                 return t.type?.toLowerCase() === 'expense' &&
                     !t.investment_id &&
                     !t.transfer_id &&
-                    method !== 'transferencia' &&
-                    !method.includes('credit') &&
-                    !method.includes('crédit');
+                    method !== 'transferencia';
             }).reduce((acc, t) => acc + Number(t.amount), 0);
 
             const investmentIn = trans.filter(t => (t.type?.toLowerCase() === 'income' || t.type?.toLowerCase() === 'investment') && (t.investment_id || t.type?.toLowerCase() === 'investment')).reduce((acc, t) => acc + Number(t.amount), 0);
@@ -297,8 +285,6 @@ export const useCashFlow = () => {
                     !t.transfer_id &&
                     !t.investment_id &&
                     method !== 'transferencia' &&
-                    !method.includes('credit') &&
-                    !method.includes('crédit') &&
                     t.type?.toLowerCase() !== 'transfer' &&
                     t.type?.toLowerCase() !== 'investment';
             }).reduce((acc, t) => acc + Number(t.amount), 0);
@@ -309,8 +295,6 @@ export const useCashFlow = () => {
                     !t.transfer_id &&
                     !t.investment_id &&
                     method !== 'transferencia' &&
-                    !method.includes('credit') &&
-                    !method.includes('crédit') &&
                     t.type?.toLowerCase() !== 'transfer' &&
                     t.type?.toLowerCase() !== 'investment';
             }).reduce((acc, t) => acc + Number(t.amount), 0);
