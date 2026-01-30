@@ -220,13 +220,11 @@ export const useCashFlow = () => {
 
                 accountsData.forEach(acc => {
                     let accBalance = Number(acc.balance);
-                    const initialDate = acc.initial_balance_date || '0000-00-00';
-                    const rollbackLimit = startDate > initialDate ? startDate : initialDate;
 
-                    // Reverter todas as transações desta conta ocorridas após 'rollbackLimit' até hoje
+                    // Reverter todas as transações desta conta ocorridas desde startDate até hoje
                     const accTrans = gapTrans?.filter(t =>
                         t.account_id === acc.id &&
-                        t.due_date >= rollbackLimit &&
+                        t.due_date >= startDate &&
                         t.due_date < nextToday
                     ) || [];
 
@@ -244,8 +242,7 @@ export const useCashFlow = () => {
                             method !== 'transferencia';
                     }).reduce((accVal, t) => accVal + Number(t.amount), 0);
 
-                    // Se voltamos até ANTES da data inicial, o saldo era o inicial informado.
-                    // A fórmula Revertido = Atual - Ganhos + Gastos nos traz de volta ao passado.
+                    // Revertido = Atual - Ganhos + Gastos nos traz de volta ao passado.
                     totalRevertedBalance += (accBalance - accGapIn + accGapOut);
                 });
 
@@ -253,12 +250,7 @@ export const useCashFlow = () => {
             }
 
             // Filtrar transações do período para exibição e indicadores (stats)
-            // IMPORTANTE: Ignoramos lançamentos que ocorreram antes da data inicial da conta
-            const trans = transRaw.filter(t => {
-                const acc = accountsMap.get(t.account_id);
-                if (!acc) return true; // Keep transactions without a matching account (shouldn't happen if FK is enforced)
-                return t.due_date >= (acc.initial_balance_date || '0000-00-00');
-            });
+            const trans = transRaw;
 
             const dayInflow = trans.filter(t => {
                 const method = t.payment_method?.toLowerCase() || '';
