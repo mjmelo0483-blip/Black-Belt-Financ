@@ -189,18 +189,18 @@ export const useCashFlow = () => {
                     return await gapQuery;
                 });
 
-                const gapIn = gapTrans?.filter(t => t.type === 'income' && !t.transfer_id && !t.investment_id && t.payment_method !== 'transferencia' && t.type !== 'transfer' && t.type !== 'investment').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-                const gapOut = gapTrans?.filter(t => t.type === 'expense' && !t.transfer_id && !t.investment_id && t.payment_method !== 'transferencia' && t.type !== 'transfer' && t.type !== 'investment').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+                const gapIn = gapTrans?.filter(t => t.type?.toLowerCase() === 'income' && !t.transfer_id && !t.investment_id && t.payment_method?.toLowerCase() !== 'transferencia' && t.type?.toLowerCase() !== 'transfer' && t.type?.toLowerCase() !== 'investment').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+                const gapOut = gapTrans?.filter(t => t.type?.toLowerCase() === 'expense' && !t.transfer_id && !t.investment_id && t.payment_method?.toLowerCase() !== 'transferencia' && t.type?.toLowerCase() !== 'transfer' && t.type?.toLowerCase() !== 'investment').reduce((acc, t) => acc + Number(t.amount), 0) || 0;
                 projectedBalance = currentBalance - gapIn + gapOut;
             }
 
-            const dayInflow = trans.filter(t => t.type === 'income' && !t.investment_id && !t.transfer_id && t.payment_method !== 'transferencia' && t.type !== 'transfer' && t.type !== 'investment').reduce((acc, t) => acc + Number(t.amount), 0);
-            const dayOutflow = trans.filter(t => t.type === 'expense' && !t.investment_id && !t.transfer_id && t.payment_method !== 'transferencia' && t.type !== 'transfer' && t.type !== 'investment').reduce((acc, t) => acc + Number(t.amount), 0);
-            const investmentIn = trans.filter(t => t.type === 'income' && (t.investment_id || t.type === 'investment')).reduce((acc, t) => acc + Number(t.amount), 0);
-            const investmentOut = trans.filter(t => t.type === 'expense' && (t.investment_id || t.type === 'investment')).reduce((acc, t) => acc + Number(t.amount), 0);
+            const dayInflow = trans.filter(t => t.type?.toLowerCase() === 'income' && !t.investment_id && !t.transfer_id && t.payment_method?.toLowerCase() !== 'transferencia' && t.type?.toLowerCase() !== 'transfer' && t.type?.toLowerCase() !== 'investment').reduce((acc, t) => acc + Number(t.amount), 0);
+            const dayOutflow = trans.filter(t => t.type?.toLowerCase() === 'expense' && !t.investment_id && !t.transfer_id && t.payment_method?.toLowerCase() !== 'transferencia' && t.type?.toLowerCase() !== 'transfer' && t.type?.toLowerCase() !== 'investment').reduce((acc, t) => acc + Number(t.amount), 0);
+            const investmentIn = trans.filter(t => (t.type?.toLowerCase() === 'income' || t.type?.toLowerCase() === 'investment') && (t.investment_id || t.type?.toLowerCase() === 'investment')).reduce((acc, t) => acc + Number(t.amount), 0);
+            const investmentOut = trans.filter(t => (t.type?.toLowerCase() === 'expense' || t.type?.toLowerCase() === 'investment') && (t.investment_id || t.type?.toLowerCase() === 'investment')).reduce((acc, t) => acc + Number(t.amount), 0);
 
-            const totalIn = trans.filter(t => t.type === 'income' && !t.transfer_id && t.payment_method !== 'transferencia' && t.type !== 'transfer').reduce((acc, t) => acc + Number(t.amount), 0);
-            const totalOut = trans.filter(t => t.type === 'expense' && !t.transfer_id && t.payment_method !== 'transferencia' && t.type !== 'transfer').reduce((acc, t) => acc + Number(t.amount), 0);
+            const totalIn = trans.filter(t => t.type?.toLowerCase() === 'income' && !t.transfer_id && t.payment_method?.toLowerCase() !== 'transferencia' && t.type?.toLowerCase() !== 'transfer').reduce((acc, t) => acc + Number(t.amount), 0);
+            const totalOut = trans.filter(t => t.type?.toLowerCase() === 'expense' && !t.transfer_id && !t.investment_id && t.payment_method?.toLowerCase() !== 'transferencia' && t.type?.toLowerCase() !== 'transfer').reduce((acc, t) => acc + Number(t.amount), 0);
             const calculatedFinalBalance = projectedBalance + totalIn - totalOut;
 
             setTransactions(trans);

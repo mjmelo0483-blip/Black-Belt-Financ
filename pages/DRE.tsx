@@ -226,10 +226,10 @@ const DRE: React.FC = () => {
                 .eq('is_business', true)
                 .is('transfer_id', null)
                 .is('investment_id', null)
-                .or('payment_method.neq.transferencia,payment_method.is.null')
-                .neq('type', 'transfer')
-                .neq('type', 'investment')
-                .eq('type', 'expense')
+                .or('payment_method.not.ilike.transferencia,payment_method.is.null')
+                .not('type', 'ilike', 'transfer')
+                .not('type', 'ilike', 'investment')
+                .ilike('type', 'expense')
                 .gte('date', startDate)
                 .lte('date', endDate);
 
