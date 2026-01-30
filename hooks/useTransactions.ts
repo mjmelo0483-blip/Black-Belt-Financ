@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
 import { useCompany } from '../contexts/CompanyContext';
@@ -11,7 +11,7 @@ export const useTransactions = () => {
     const [cards, setCards] = useState<any[]>([]);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
-    const [currentFilters, setCurrentFilters] = useState<any>(null);
+    const filtersRef = useRef<any>(null);
 
     const fetchMetadata = useCallback(async () => {
         try {
@@ -60,9 +60,9 @@ export const useTransactions = () => {
     }) => {
         setLoading(true);
 
-        const activeFilters = filters !== undefined ? filters : currentFilters;
+        const activeFilters = filters !== undefined ? filters : filtersRef.current;
         if (filters !== undefined) {
-            setCurrentFilters(filters);
+            filtersRef.current = filters;
         }
 
         try {
@@ -97,9 +97,6 @@ export const useTransactions = () => {
             if (activeFilters?.storeName) {
                 query = query.eq('store_name', activeFilters.storeName);
             }
-            if (activeFilters?.types && activeFilters.types.length > 0) {
-                query = query.in('type', activeFilters.types);
-            }
             if (activeFilters?.incStartDate) {
                 query = query.gte('date', activeFilters.incStartDate);
             }
@@ -117,6 +114,29 @@ export const useTransactions = () => {
             }
             if (activeFilters?.maxAmount !== undefined && activeFilters?.maxAmount !== null) {
                 query = query.lte('amount', activeFilters.maxAmount);
+            }
+            if (activeFilters?.types && activeFilters.types.length > 0) {
+                const parts: string[] = [];
+
+                if (activeFilters.types.includes('income')) {
+                    parts.push('and(type.eq.income,transfer_id.is.null,investment_id.is.null)');
+                }
+                if (activeFilters.types.includes('expense')) {
+                    parts.push('and(type.eq.expense,transfer_id.is.null,investment_id.is.null)');
+                }
+                if (activeFilters.types.includes('transfer')) {
+                    parts.push('transfer_id.not.is.null');
+                }
+                if (activeFilters.types.includes('investment')) {
+                    parts.push('investment_id.not.is.null');
+                }
+
+                if (parts.length > 0) {
+                    query = query.or(parts.join(','));
+                }
+            } else {
+                // Default: only real income and expenses
+                query = query.is('transfer_id', null).is('investment_id', null);
             }
 
             if (activeFilters?.subcategoryId) {
@@ -153,12 +173,11 @@ export const useTransactions = () => {
         } finally {
             setLoading(false);
         }
-    }, [currentFilters, isBusiness, activeCompany]);
+    }, [isBusiness, activeCompany]);
 
     useEffect(() => {
-        fetchTransactions({ types: ['income', 'expense'] });
         fetchMetadata();
-    }, [fetchTransactions, fetchMetadata]);
+    }, [fetchMetadata]);
 
     const saveTransaction = useCallback(async (transaction: any) => {
         setLoading(true);

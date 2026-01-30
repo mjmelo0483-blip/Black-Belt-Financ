@@ -52,15 +52,17 @@ const Transactions: React.FC = () => {
 
   const location = useLocation();
 
-  // Listen for search query from header
+  // Listen for search query from header or initial load
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const query = params.get('q');
     if (query) {
       setFilterDescription(query);
       fetchTransactions({ description: query, types: ['income', 'expense'] });
+    } else {
+      fetchTransactions({ types: ['income', 'expense'] });
     }
-  }, [location.search]);
+  }, [location.search, fetchTransactions]);
 
   const handleApplyFilters = () => {
     fetchTransactions({
