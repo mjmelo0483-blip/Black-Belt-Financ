@@ -3,7 +3,7 @@ import { supabase, withRetry, formatError } from '../supabase';
 import { useView } from '../contexts/ViewContext';
 import { useCompany } from '../contexts/CompanyContext';
 
-export const useDashboardData = () => {
+export const useDashboardData = (selectedMonth: number, selectedYear: number) => {
     const { isBusiness } = useView();
     const { activeCompany } = useCompany();
     const [stats, setStats] = useState<{
@@ -49,9 +49,8 @@ export const useDashboardData = () => {
                 return `${year}-${month}-${day}`;
             };
 
-            const now = new Date();
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            const startOfMonth = new Date(selectedYear, selectedMonth, 1);
+            const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0);
 
             // 1. Fetch data with retries
             const [
@@ -213,7 +212,7 @@ export const useDashboardData = () => {
         } finally {
             setLoading(false);
         }
-    }, [isBusiness, activeCompany]);
+    }, [isBusiness, activeCompany, selectedMonth, selectedYear]);
 
     useEffect(() => {
         fetchData();

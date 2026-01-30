@@ -8,9 +8,20 @@ import StatCard from '../components/StatCard';
 import { useDashboardData } from '../hooks/useDashboardData';
 
 const Dashboard: React.FC = () => {
-  const { stats, chartData, recentTransactions, assetAllocation, expensesByCategory, budgetProgress, loading, refreshData } = useDashboardData();
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+
+  const { stats, chartData, recentTransactions, assetAllocation, expensesByCategory, budgetProgress, loading, refreshData } = useDashboardData(selectedMonth, selectedYear);
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  const monthNames = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ];
+
+  const years = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
 
   if (loading) {
     return (
@@ -29,12 +40,35 @@ const Dashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-white text-3xl font-bold tracking-tight text-white/90">Painel Financeiro</h1>
-          <p className="text-[#92adc9] mt-1">Resumo atualizado em <span className="text-white font-medium">{new Date().toLocaleDateString('pt-BR')}</span></p>
+          <p className="text-[#92adc9] mt-1">
+            Resumo de <span className="text-white font-medium">{monthNames[selectedMonth]} de {selectedYear}</span>
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-[#233648] border border-[#324d67]/50 rounded-xl px-3 py-2">
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              className="bg-transparent text-white text-sm font-medium focus:outline-none cursor-pointer"
+            >
+              {monthNames.map((name, index) => (
+                <option key={index} value={index} className="bg-[#1c2a38]">{name}</option>
+              ))}
+            </select>
+            <div className="w-px h-4 bg-[#324d67]/50" />
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="bg-transparent text-white text-sm font-medium focus:outline-none cursor-pointer"
+            >
+              {years.map(year => (
+                <option key={year} value={year} className="bg-[#1c2a38]">{year}</option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={refreshData}
-            className="text-primary hover:text-blue-400 transition-colors flex items-center gap-1 group bg-primary/5 px-4 py-2 rounded-lg border border-primary/20"
+            className="text-primary hover:text-blue-400 transition-colors flex items-center gap-1 group bg-primary/5 px-4 py-2 rounded-xl border border-primary/20"
           >
             <span className="material-symbols-outlined text-[20px] group-hover:rotate-180 transition-transform duration-500">refresh</span>
             <span className="text-sm font-bold">Atualizar</span>
@@ -294,7 +328,7 @@ const Dashboard: React.FC = () => {
       <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-white text-lg font-bold text-white/90">
-            Despesas por Categoria ({new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })})
+            Despesas por Categoria ({monthNames[selectedMonth]} de {selectedYear})
           </h2>
           {selectedCategory && (
             <button
