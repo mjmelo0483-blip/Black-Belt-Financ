@@ -88,11 +88,13 @@ export const useSales = () => {
 
             // --- Robust Parsing Helpers ---
             const getVal = (row: any, possibleKeys: string[]) => {
-                const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
                 const keys = Object.keys(row);
                 const foundKey = keys.find(k => {
-                    const normalizedK = normalize(k);
-                    return possibleKeys.some(pk => normalize(pk) === normalizedK);
+                    const normalizedK = k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+                    return possibleKeys.some(pk => {
+                        const normalizedPK = pk.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+                        return normalizedK === normalizedPK;
+                    });
                 });
                 return foundKey ? row[foundKey] : undefined;
             };
@@ -114,6 +116,7 @@ export const useSales = () => {
                 } else if (hasComma) {
                     str = str.replace(',', '.');
                 } else if (hasDot) {
+                    // Check if dot is thousands separator or decimal
                     const parts = str.split('.');
                     if (parts[parts.length - 1].length === 3 && parts.length > 1) {
                         str = str.replace(/\./g, '');
@@ -129,13 +132,20 @@ export const useSales = () => {
             const uniqueCustomerKeys = new Set();
             const uniqueProductCodes = new Set();
 
+            const customerValueKeys = ['Cliente', 'Nome do Cliente', 'Nome Cliente', 'Destinatario', 'Nome', 'Customer'];
+            const customerCpfKeys = ['CPF do Cliente', 'CPF', 'CNPJ/CPF', 'CPF/CNPJ', 'Documento', 'Doc'];
+            const productCodeKeys = ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto', 'Cod. Produto', 'Cod Produto', 'Codigo', 'Cod', 'Item ID'];
+            const productNameKeys = ['Nome do Produto', 'Produto', 'Descricao', 'Description', 'Item', 'Nome Produto'];
+            const categoryKeys = ['Categoria', 'Grupo', 'Familia', 'Categoria do Produto', 'Departamento', 'Setor'];
+            const costKeys = ['Custo', 'Vlr. Custo', 'Preço de Custo', 'Custo Unitário', 'Markup Cost', 'Cost', 'P', 'Vlr Custo', 'Preco Custo', 'Preço Custo'];
+
             rows.forEach(row => {
-                const customerName = getVal(row, ['Cliente', 'Nome do Cliente', 'Nome Cliente', 'Destinatario']);
-                const customerCpf = getVal(row, ['CPF do Cliente', 'CPF', 'CNPJ/CPF', 'CPF/CNPJ']);
-                const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto']) || '');
-                const productName = getVal(row, ['Nome do Produto', 'Produto', 'Descricao', 'Description', 'Item']);
-                const category = getVal(row, ['Categoria', 'Grupo', 'Familia', 'Categoria do Produto', 'Departamento']) || 'Geral';
-                const cost = parseNumber(getVal(row, ['Custo', 'Vlr. Custo', 'Preço de Custo', 'Custo Unitário', 'Markup Cost', 'Cost', 'P', 'Vlr Custo']));
+                const customerName = getVal(row, customerValueKeys);
+                const customerCpf = getVal(row, customerCpfKeys);
+                const productCode = String(getVal(row, productCodeKeys) || '');
+                const productName = getVal(row, productNameKeys);
+                const category = getVal(row, categoryKeys) || 'Geral';
+                const cost = parseNumber(getVal(row, costKeys));
 
                 if (customerName && customerName !== '-' && !uniqueCustomerKeys.has(customerCpf || customerName)) {
                     customersToUpsert.push({
@@ -190,18 +200,26 @@ export const useSales = () => {
             let lastCode: string | null = null;
             let lastStore: string | null = null;
 
+            const codeKeys = ['Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº', 'Codigo', 'ID', 'Transacao', 'Venda ID'];
+            const dateKeys = ['Data da Compra', 'Data', 'Data Venda', 'Data Emissão', 'Data Movimento', 'Emissão', 'Data do Pedido', 'Dt. Venda', 'Data Transação', 'Data de Emissão', 'Data Vda', 'Dt Venda'];
+            const storeKeys = ['Loja', 'Unidade', 'Filial', 'Ponto de Venda', 'Estabelecimento', 'Nome da Loja', 'PDV', 'Checkout'];
+            const paymentKeys = ['Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'E', 'Tipo de Pagamento', 'Pagto', 'Forma Pagto', 'Meio Pagto'];
+            const deviceKeys = ['Dispositivo', 'Origem', 'Canal', 'Marketplace', 'Plataforma'];
+            const qtyKeys = ['Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume', 'O', 'Units', 'Quantity'];
+            const unitPriceKeys = ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.', 'Vlr. Liq.', 'Preço Venda Unitário', 'Vlr Unit'];
+            const itemTotalKeys = ['Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Total', 'Vlr. Total', 'Total', 'Vlr Total'];
+            const orderTotalKeys = ['Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda', 'Total', 'Valor Total'];
+
             rows.forEach((row, index) => {
                 // Try to find a unique Sale ID (Order Number, Ticket, etc)
-                const rawCode = String(getVal(row, ['Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº']) ||
-                    getVal(row, ['Codigo', 'ID']) || '');
-
-                const rawDate = getVal(row, ['Data da Compra', 'Data', 'Data Venda', 'Data Emissão', 'Data Movimento', 'Emissão']);
+                const rawCode = String(getVal(row, codeKeys) || '');
+                const rawDate = getVal(row, dateKeys);
                 const date = formatDate(rawDate) || lastDate;
 
                 if (!date) return; // Skip rows without date (and no previous date to carry over)
                 lastDate = date;
 
-                const store = getVal(row, ['Loja', 'Unidade', 'Filial', 'Ponto de Venda', 'Estabelecimento', 'Nome da Loja']) || lastStore || 'Unica';
+                const store = getVal(row, storeKeys) || lastStore || 'Unica';
                 lastStore = store;
 
                 // Carry over or generate code
@@ -216,27 +234,27 @@ export const useSales = () => {
                     salesGroups.set(groupKey, {
                         user_id: user.id,
                         external_code: groupKey,
-                        customer_id: customersMap.get(getVal(row, ['CPF do Cliente', 'CPF', 'CNPJ/CPF', 'CPF/CNPJ'])) ||
-                            customersMap.get(getVal(row, ['Cliente', 'Nome do Cliente', 'Nome Cliente'])) || null,
+                        customer_id: customersMap.get(getVal(row, customerCpfKeys)) ||
+                            customersMap.get(getVal(row, customerValueKeys)) || null,
                         date: date,
                         time: getVal(row, ['Hora da Compra', 'Hora', 'Horário']),
-                        payment_method: getVal(row, ['Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'E', 'Tipo de Pagamento', 'Pagto']),
+                        payment_method: getVal(row, paymentKeys),
                         store_name: store,
-                        device: getVal(row, ['Dispositivo', 'Origem', 'Canal']),
+                        device: getVal(row, deviceKeys),
                         import_filename: fileName,
                         company_id: activeCompany?.id || null,
                         total_amount: 0,
                         // Store the spreadsheet's stated total for this order to use as fallback
-                        spreadsheet_order_total: parseNumber(getVal(row, ['Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda', 'Total', 'Valor Total'])),
+                        spreadsheet_order_total: parseNumber(getVal(row, orderTotalKeys)),
                         items: []
                     });
                 }
 
-                const qty = parseNumber(getVal(row, ['Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume', 'O']));
-                const unitPrice = parseNumber(getVal(row, ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.', 'Vlr. Liq.', 'Preço Venda Unitário']));
+                const qty = parseNumber(getVal(row, qtyKeys));
+                const unitPrice = parseNumber(getVal(row, unitPriceKeys));
 
                 // Determine line total - PRIORITIZE calculation as requested by user
-                const lineTotalRaw = getVal(row, ['Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Total', 'Vlr. Total']);
+                const lineTotalRaw = getVal(row, itemTotalKeys);
                 const parsedLineTotal = parseNumber(lineTotalRaw);
 
                 let lineTotalPrice = 0;
@@ -250,8 +268,8 @@ export const useSales = () => {
                 }
 
                 const sale = salesGroups.get(groupKey);
-                const productCode = String(getVal(row, ['Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto']) || '');
-                const costPerUnit = parseNumber(getVal(row, ['Custo', 'Vlr. Custo', 'Preço de Custo', 'Custo Unitário', 'Markup Cost', 'Cost', 'P', 'Vlr Custo']));
+                const productCode = String(getVal(row, productCodeKeys) || '');
+                const costPerUnit = parseNumber(getVal(row, costKeys));
 
                 sale.items.push({
                     product_id: productsMap.get(productCode),
@@ -474,24 +492,23 @@ export const useSales = () => {
     return { loading, fetchSales, importSalesFromExcel, clearSales, deleteSalesByFilename, fetchImports };
 };
 
-// Helper to convert DD/MM/YYYY to YYYY-MM-DD
+// Robust Helper to convert various formats to YYYY-MM-DD
 function formatDate(dateValue: any) {
     if (!dateValue) return null;
 
-    // If it's already a JS Date (from XLSX)
+    // 1. Handle Date objects
     if (dateValue instanceof Date) {
-        // XLSX dates are usually midnight UTC. 
-        // Using getUTC... ensures we get the intended date regardless of local timezone.
+        if (isNaN(dateValue.getTime())) return null;
         const y = dateValue.getUTCFullYear();
         const m = String(dateValue.getUTCMonth() + 1).padStart(2, '0');
         const d = String(dateValue.getUTCDate()).padStart(2, '0');
         return `${y}-${m}-${d}`;
     }
 
-    // Handle Excel serial date numbers
+    // 2. Handle Excel serial numbers (numbers)
     if (typeof dateValue === 'number') {
         const date = new Date((dateValue - 25569) * 86400 * 1000);
-        // Excel numbers are usually UTC-based representations of local dates
+        if (isNaN(date.getTime())) return null;
         const y = date.getUTCFullYear();
         const m = String(date.getUTCMonth() + 1).padStart(2, '0');
         const d = String(date.getUTCDate()).padStart(2, '0');
@@ -501,26 +518,65 @@ function formatDate(dateValue: any) {
     const str = String(dateValue).trim();
     if (!str || str === '-') return null;
 
-    // Handle DD/MM/YYYY
-    if (str.includes('/')) {
-        const parts = str.split('/');
+    // 3. Handle strings with separators / or - or .
+    const separator = str.includes('/') ? '/' : (str.includes('-') ? '-' : (str.includes('.') ? '.' : null));
+    if (separator) {
+        const parts = str.split(separator).map(p => p.trim());
         if (parts.length === 3) {
-            const [day, month, year] = parts;
-            const fullYear = year.length === 2 ? `20${year}` : year;
-            return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            let p1 = parts[0];
+            let p2 = parts[1];
+            let p3 = parts[2];
+
+            // Case: YYYY-XX-XX
+            if (p1.length === 4) {
+                const year = p1;
+                let m = parseInt(p2);
+                let d = parseInt(p3);
+                // If month > 12, it's very likely DD and MM are swapped (YYYY-DD-MM)
+                if (m > 12 && d <= 12) {
+                    [m, d] = [d, m];
+                }
+                return `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            }
+
+            // Case: XX-XX-YYYY (DD-MM-YYYY or MM-DD-YYYY)
+            if (p3.length === 4) {
+                const year = p3;
+                let v1 = parseInt(p1);
+                let v2 = parseInt(p2);
+                let day, month;
+
+                if (v2 > 12 && v1 <= 12) { // Clearly MM-DD-YYYY
+                    month = v1;
+                    day = v2;
+                } else { // Assume DD-MM-YYYY
+                    day = v1;
+                    month = v2;
+                }
+                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            }
+
+            // Case: XX-XX-YY
+            if (p3.length === 2 && p1.length <= 2) {
+                const year = `20${p3}`;
+                let v1 = parseInt(p1);
+                let v2 = parseInt(p2);
+                let day, month;
+                if (v2 > 12 && v1 <= 12) { // MM-DD-YY
+                    month = v1;
+                    day = v2;
+                } else { // DD-MM-YY
+                    day = v1;
+                    month = v2;
+                }
+                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            }
         }
     }
 
-    // Handle YYYY-MM-DD
-    if (str.includes('-')) {
-        const parts = str.split('-');
-        if (parts.length === 3) {
-            if (parts[0].length === 4) return str; // Already YYYY-MM-DD
-            // Handle DD-MM-YYYY
-            const [day, month, year] = parts;
-            const fullYear = year.length === 2 ? `20${year}` : year;
-            return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        }
+    // 4. Handle YYYYMMDD
+    if (str.length === 8 && !isNaN(Number(str))) {
+        return `${str.substring(0, 4)}-${str.substring(4, 6)}-${str.substring(6, 8)}`;
     }
 
     return str;

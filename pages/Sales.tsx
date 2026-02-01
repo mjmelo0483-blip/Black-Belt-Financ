@@ -27,11 +27,40 @@ const Sales: React.FC = () => {
             try {
                 const bstr = evt.target?.result;
                 const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
-                const wsname = wb.SheetNames[0];
+
+                // Try to find the 'Vendas' sheet, otherwise use the first one
+                let wsname = wb.SheetNames.find(n => n.toLowerCase().includes('venda') || n.toLowerCase().includes('item'));
+                if (!wsname) wsname = wb.SheetNames[0];
+
                 const ws = wb.Sheets[wsname];
 
-                // Use the same robust parsing as Transactions
+                // FIND HEADER ROW (Robust parsing like Transactions)
+                const jsonData: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+                let headerRowIndex = -1;
+                const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+
+                const headerSynonyms = [
+                    'datavenda', 'datapedido', 'dataemissao', 'datamovimento',
+                    'numpedido', 'pedido', 'documento', 'cupom', 'ticket',
+                    'vendaid', 'idvenda', 'codigovenda',
+                    'produto', 'sku', 'codigoproduto', 'referencia',
+                    'valortotal', 'totalvenda', 'totalpedido'
+                ];
+
+                for (let i = 0; i < Math.min(jsonData.length, 50); i++) {
+                    const row = jsonData[i];
+                    if (row && Array.isArray(row) && row.some(cell => {
+                        const normalizedCell = normalize(String(cell || ''));
+                        return headerSynonyms.some(syn => normalizedCell.includes(syn));
+                    })) {
+                        headerRowIndex = i;
+                        break;
+                    }
+                }
+
                 const data = XLSX.utils.sheet_to_json(ws, {
+                    range: headerRowIndex === -1 ? 0 : headerRowIndex,
                     raw: false,
                     dateNF: 'yyyy-mm-dd',
                     defval: ''
