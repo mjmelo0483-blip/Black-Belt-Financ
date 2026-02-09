@@ -86,21 +86,27 @@ export const useSales = () => {
             const user = session?.user;
             if (!user) throw new Error('Usuário não autenticado');
 
+            // 0. Auto-delete existing sales for this filename to avoid duplicates
+            // Especially important if the spreadsheet has no unique Order IDs (we generate them based on index)
+            await deleteSalesByFilename(fileName);
+
             // --- Robust Parsing Helpers ---
             const getVal = (row: any, possibleKeys: string[]) => {
                 const keys = Object.keys(row);
-                const foundKey = keys.find(k => {
-                    const normalizedK = k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
-                    return possibleKeys.some(pk => {
-                        const normalizedPK = pk.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+                // Prioritize the order of possibleKeys to allow preferring specific letters
+                for (const pk of possibleKeys) {
+                    const normalizedPK = pk.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
+                    const foundKey = keys.find(k => {
+                        const normalizedK = k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
                         return normalizedK === normalizedPK;
                     });
-                });
-                return foundKey ? row[foundKey] : undefined;
+                    if (foundKey) return row[foundKey];
+                }
+                return undefined;
             };
 
             const parseNumber = (val: any) => {
-                if (typeof val === 'number') return Math.abs(val);
+                if (typeof val === 'number') return val;
                 if (!val) return 0;
                 let str = String(val).replace('R$', '').replace(/\s/g, '');
 
@@ -122,7 +128,7 @@ export const useSales = () => {
                         str = str.replace(/\./g, '');
                     }
                 }
-                return Math.abs(parseFloat(str) || 0);
+                return parseFloat(str) || 0;
             };
             // ------------------------------
 
@@ -144,7 +150,7 @@ export const useSales = () => {
                 let productCode = String(getVal(row, productCodeKeys) || '').trim();
 
                 // FALLBACK: If code is missing but name exists, use name as code
-                if ((!productCode || productCode === 'undefined' || productCode === '') && productName) {
+                if ((!productCode || productCode === 'undefined' || productCode === '' || productCode === 'null') && productName) {
                     productCode = productName;
                 }
 
@@ -228,6 +234,12 @@ export const useSales = () => {
                     status.includes('dev') || status.includes('canc');
                 if (isCancelled) return;
 
+                const productName = String(getVal(row, productNameKeys) || '').trim();
+                const qty = parseNumber(getVal(row, qtyKeys));
+
+                // Skip rows that are clearly empty or just separators (missing product and 0 qty)
+                if ((!productName || productName === '-') && qty === 0) return;
+
                 // Try to find a unique Sale ID (Order Number, Ticket, etc)
                 const rawCode = String(getVal(row, codeKeys) || '');
                 const rawDate = getVal(row, dateKeys);
@@ -267,7 +279,6 @@ export const useSales = () => {
                     });
                 }
 
-                const qty = parseNumber(getVal(row, qtyKeys));
                 const unitPrice = parseNumber(getVal(row, unitPriceKeys));
 
                 // Determine line total - PRIORITIZE calculation as requested by user
@@ -285,11 +296,10 @@ export const useSales = () => {
                 }
 
                 const sale = salesGroups.get(groupKey);
-                const productName = String(getVal(row, productNameKeys) || '').trim();
                 let productCode = String(getVal(row, productCodeKeys) || '').trim();
 
                 // FALLBACK: Use the same logic as above to ensure matching
-                if ((!productCode || productCode === 'undefined') && productName) {
+                if ((!productCode || productCode === 'undefined' || productCode === '' || productCode === 'null') && productName) {
                     productCode = productName;
                 }
 
@@ -378,9 +388,13 @@ export const useSales = () => {
             if (!user) throw new Error('Usuário não autenticado');
 
             if (activeCompany) {
-                await supabase.from('sales').delete().eq('company_id', activeCompany.id);
+                // Use deleteSalesByFilename with a targeted filter instead of a single massive delete if needed,
+                // but for clearSales, we'll do a robust wipe.
+                const { error } = await supabase.from('sales').delete().eq('company_id', activeCompany.id);
+                if (error) throw error;
             } else {
-                await supabase.from('sales').delete().eq('user_id', user.id).is('company_id', null);
+                const { error } = await supabase.from('sales').delete().eq('user_id', user.id).is('company_id', null);
+                if (error) throw error;
             }
             return { success: true };
         } catch (err: any) {
@@ -429,7 +443,7 @@ export const useSales = () => {
                     if (data.length < 1000) hasMore = false;
                     else page++;
                 }
-                if (page > 50) break; // Safety
+                if (page > 200) break; // Safety: 200k records
             }
 
             // 2. Delete in chunks to avoid timeout
@@ -484,7 +498,7 @@ export const useSales = () => {
                     if (data.length < 1000) hasMore = false;
                     else page++;
                 }
-                if (page > 20) break; // Limit to 20k records for summary
+                if (page > 100) break; // Limit to 100k records for summary
             }
 
             // Group by filename and date
