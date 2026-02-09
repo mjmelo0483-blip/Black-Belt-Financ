@@ -231,8 +231,6 @@ const SalesDashboard: React.FC = () => {
     }, [filteredSales, selectedCategory]);
 
     // 3. Metrics (Revenue and Units)
-    // If a category is selected, metrics only count items in that category.
-    // If 'Todas' is selected, metrics include ALL sales revenue (even if items are missing).
     const { totalRevenue, totalUnits, relevantSalesCount } = useMemo(() => {
         let rev = 0;
         let units = 0;
@@ -241,28 +239,27 @@ const SalesDashboard: React.FC = () => {
         if (selectedCategory === 'Todas') {
             filteredSales.forEach(sale => {
                 saleIds.add(sale.id);
-                // Try to use items sum if they exist, fallback to total_amount
+                const sTotal = Number(sale.total_amount || 0);
+                let itemSum = 0;
+
                 if (sale.sale_items && sale.sale_items.length > 0) {
-                    let itemSum = 0;
                     sale.sale_items.forEach((it: any) => {
-                        itemSum += Number(it.total_price || 0);
+                        const lineTotal = Number(it.total_price || 0) || (Number(it.unit_price || 0) * Number(it.quantity || 1));
+                        itemSum += lineTotal;
                         units += Number(it.quantity || 0);
                     });
-                    rev += itemSum || Number(sale.total_amount || 0);
-                } else {
-                    rev += Number(sale.total_amount || 0);
-                    // For sales without items, we count as 1 unit if units is 0? 
-                    // No, let's stick to items for units to avoid inflating count.
                 }
+
+                // Use maximum to ensure we don't undercount if items are partially loaded
+                rev += Math.max(sTotal, itemSum);
             });
         } else {
-            // Category specific metrics - only from items
+            // Category specific - only from items that match category
             filteredItems.forEach(item => {
-                rev += Number(item.total_price || 0);
+                const lineTotal = Number(item.total_price || 0) || (Number(item.unit_price || 0) * Number(item.quantity || 1));
+                rev += lineTotal;
                 units += Number(item.quantity || 0);
-                // We don't have the parent sale ID easily here but we can find it in filteredSales
             });
-            // Re-calculate sales count for this category
             filteredSales.forEach(sale => {
                 const hasItem = sale.sale_items?.some((it: any) => it.products?.category === selectedCategory);
                 if (hasItem) saleIds.add(sale.id);
@@ -274,60 +271,66 @@ const SalesDashboard: React.FC = () => {
 
     const averageTicket = relevantSalesCount > 0 ? totalRevenue / relevantSalesCount : 0;
 
-    // 4. Product Ranking (Improved Grouping)
+    // 4. Product Ranking (Improved Grouping with Accent Normalization)
     const topProductsByRevenue = useMemo(() => {
-        const map: any = {};
+        const normalizeProdName = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+        const map: Record<string, { name: string, total: number, count: number }> = {};
+
         filteredItems.forEach(item => {
             const prod = item.products;
-            const name = prod?.name || 'Item sem nome';
-            // Group by ID or Code or Name - prevents splitting
-            const key = item.product_id || prod?.code || name;
+            const rawName = prod?.name || 'Item sem nome';
+            const normName = normalizeProdName(rawName);
 
-            if (!map[key]) {
-                map[key] = { name, total: 0, count: 0 };
+            if (!map[normName]) {
+                map[normName] = { name: rawName, total: 0, count: 0 };
             }
-            map[key].total += Number(item.total_price || 0);
-            map[key].count += Number(item.quantity || 0);
+
+            const lineTotal = Number(item.total_price || 0) || (Number(item.unit_price || 0) * Number(item.quantity || 1));
+            map[normName].total += lineTotal;
+            map[normName].count += Number(item.quantity || 0);
         });
-        return Object.values(map).sort((a: any, b: any) => b.total - a.total);
+
+        return Object.values(map).sort((a, b) => b.total - a.total);
     }, [filteredItems]);
 
     const topProductsByQty = useMemo(() => {
-        return [...topProductsByRevenue].sort((a: any, b: any) => b.count - a.count);
+        return [...topProductsByRevenue].sort((a, b) => b.count - a.count);
     }, [topProductsByRevenue]);
 
     const bestProduct = topProductsByRevenue[0] || { name: '-', total: 0 };
 
-    // 5. Daily Data (Consolidated)
+    // 5. Daily Data (Consolidated with Corrected Revenue)
     const dailyData = useMemo(() => {
-        const map: any = {};
+        const map: Record<string, { date: string, revenue: number, units: number }> = {};
 
         if (selectedCategory === 'Todas') {
             filteredSales.forEach(sale => {
                 const d = sale.date;
                 if (!map[d]) map[d] = { date: d, revenue: 0, units: 0 };
 
+                const sTotal = Number(sale.total_amount || 0);
+                let itemSum = 0;
+
                 if (sale.sale_items && sale.sale_items.length > 0) {
-                    let sRev = 0;
                     sale.sale_items.forEach((it: any) => {
-                        sRev += Number(it.total_price || 0);
+                        const lineTotal = Number(it.total_price || 0) || (Number(it.unit_price || 0) * Number(it.quantity || 1));
+                        itemSum += lineTotal;
                         map[d].units += Number(it.quantity || 0);
                     });
-                    map[d].revenue += sRev || Number(sale.total_amount || 0);
-                } else {
-                    map[d].revenue += Number(sale.total_amount || 0);
                 }
+                map[d].revenue += Math.max(sTotal, itemSum);
             });
         } else {
             filteredItems.forEach(item => {
                 const d = item.date;
                 if (!map[d]) map[d] = { date: d, revenue: 0, units: 0 };
-                map[d].revenue += Number(item.total_price || 0);
+                const lineTotal = Number(item.total_price || 0) || (Number(item.unit_price || 0) * Number(item.quantity || 1));
+                map[d].revenue += lineTotal;
                 map[d].units += Number(item.quantity || 0);
             });
         }
 
-        return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
+        return Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
     }, [filteredSales, filteredItems, selectedCategory]);
 
     const dreMetrics = useMemo(() => {
@@ -335,14 +338,10 @@ const SalesDashboard: React.FC = () => {
         let totalRev = 0;
         let cmvCents = 0;
 
-        const normalizeStore = (name: string) => (name || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const sNorm = selectedStore === 'Todas' ? null : normalizeStore(selectedStore);
+        const normalizeS = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const sNorm = selectedStore === 'Todas' ? null : normalizeS(selectedStore);
 
-        const filteredSales = selectedStore === 'Todas' ? salesData : salesData.filter(s => {
-            if (!s.store_name) return false;
-            return normalizeStore(s.store_name) === sNorm;
-        });
-
+        // Calculate metrics using ONLY the filteredSales to match top-level totals
         filteredSales.forEach(sale => {
             let method = sale.payment_method || 'Outros';
             const normMethod = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -352,76 +351,66 @@ const SalesDashboard: React.FC = () => {
             else if (normMethod.includes('pix')) method = 'PIX';
             else method = 'Outros';
 
-            let saleTotal = 0;
+            const sTotal = Number(sale.total_amount || 0);
+            let itemSum = 0;
+
             if (sale.sale_items && sale.sale_items.length > 0) {
-                sale.sale_items.forEach((item: any) => {
-                    saleTotal += Number(item.total_price || 0);
-                    const itemQty = Number(item.quantity || 0);
-                    const itemCost = Number(item.unit_cost !== undefined && item.unit_cost !== null ? item.unit_cost : (item.products?.cost || 0));
+                sale.sale_items.forEach((it: any) => {
+                    const lineTotal = Number(it.total_price || 0) || (Number(it.unit_price || 0) * Number(it.quantity || 1));
+                    itemSum += lineTotal;
+
+                    const itemQty = Number(it.quantity || 0);
+                    const itemCost = Number(it.unit_cost !== undefined && it.unit_cost !== null ? it.unit_cost : (it.products?.cost || 0));
                     cmvCents += Math.round(itemCost * itemQty * 100);
                 });
-            } else {
-                saleTotal = Number(sale.total_amount || 0);
             }
 
-            revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
-            totalRev += saleTotal;
+            const saleRev = Math.max(sTotal, itemSum);
+            revByMethod[method] = (revByMethod[method] || 0) + saleRev;
+            totalRev += saleRev;
         });
 
-        const activeStoreMap = new Map<string, string>();
+        // Store active stores list
+        const storeMap = new Map<string, string>();
         salesData.forEach(s => {
             if (s.store_name) {
-                const norm = normalizeStore(s.store_name);
-                if (norm !== 'geral' && norm !== 'administrativo') {
-                    if (!activeStoreMap.has(norm)) activeStoreMap.set(norm, s.store_name);
+                const norm = normalizeS(s.store_name);
+                if (norm !== 'geral' && norm !== 'administrativo' && !storeMap.has(norm)) {
+                    storeMap.set(norm, s.store_name);
                 }
             }
         });
-        const activeStores = Array.from(activeStoreMap.values());
+        const activeStores = Array.from(storeMap.values());
 
+        // Recalculate store-specific revenue for proration
         const storeRevMapTotal: Record<string, number> = {};
-        salesData.forEach(sale => {
-            if (sale.store_name) {
-                const norm = normalizeStore(sale.store_name);
-                if (norm === 'geral' || norm === 'administrativo') return;
-                let saleTotal = 0;
-                if (sale.sale_items && sale.sale_items.length > 0) {
-                    sale.sale_items.forEach((item: any) => { saleTotal += Number(item.total_price || 0); });
-                } else {
-                    saleTotal = Number(sale.total_amount || 0);
-                }
-                storeRevMapTotal[norm] = (storeRevMapTotal[norm] || 0) + saleTotal;
-            }
+        const storeManualCashback: Record<string, { amount: number }> = {};
+        activeStores.forEach(s => {
+            storeRevMapTotal[normalizeS(s)] = 0;
+            storeManualCashback[s] = { amount: 0 };
         });
 
-        const storesWithRevenue = activeStores.filter(s => (storeRevMapTotal[normalizeStore(s)] || 0) > 0);
+        // Use ALL sales for proration baselines, consistently
+        salesData.forEach(sale => {
+            if (!sale.store_name) return;
+            const norm = normalizeS(sale.store_name);
+            if (norm === 'geral' || norm === 'administrativo') return;
+
+            const sTotal = Number(sale.total_amount || 0);
+            let itemSum = 0;
+            sale.sale_items?.forEach((it: any) => {
+                itemSum += Number(it.total_price || 0) || (Number(it.unit_price || 0) * Number(it.quantity || 1));
+            });
+            const saleRev = Math.max(sTotal, itemSum);
+            storeRevMapTotal[norm] = (storeRevMapTotal[norm] || 0) + saleRev;
+        });
+
+        const storesWithRevenue = activeStores.filter(s => (storeRevMapTotal[normalizeS(s)] || 0) > 0);
         const storesWithRevenueCount = storesWithRevenue.length || 1;
-        const isCurrentStoreInRevenueList = selectedStore !== 'Todas' && storesWithRevenue.some(s => normalizeStore(s) === sNorm);
+        const isCurrentStoreInRevenueList = selectedStore !== 'Todas' && storesWithRevenue.some(s => normalizeS(s) === sNorm);
         const prorationFactor = selectedStore === 'Todas' ? 1 : (isCurrentStoreInRevenueList ? (1 / storesWithRevenueCount) : 0);
 
-        const cmv = cmvCents / 100;
-        let impostos = 0;
-        let perdaEstoque = 0;
-
-        const storeRevMap: Record<string, number> = {};
-        const storeManualCashback: Record<string, { amount: number; items: any[] }> = {};
-        activeStores.forEach(s => {
-            storeRevMap[s] = 0;
-            storeManualCashback[s] = { amount: 0, items: [] };
-        });
-
-        salesData.forEach(sale => {
-            const sName = sale.store_name;
-            if (!sName) return;
-            let saleTotal = 0;
-            if (sale.sale_items && sale.sale_items.length > 0) {
-                sale.sale_items.forEach((item: any) => { saleTotal += Number(item.total_price || 0); });
-            } else {
-                saleTotal = Number(sale.total_amount || 0);
-            }
-            if (!storeRevMap[sName]) storeRevMap[sName] = 0;
-            storeRevMap[sName] += saleTotal;
-        });
+        const storeRevMap = storeRevMapTotal; // Re-use already calculated map
 
         const varGroups: Record<string, { label: string; amount: number; items: any[] }> = {
             cashback: { label: 'Comissão paga ao condominio (cashback)', amount: 0, items: [] },
@@ -552,7 +541,7 @@ const SalesDashboard: React.FC = () => {
         const breakEven = fixedOperationalCosts / Math.max(0.01, IMC);
 
         return { breakEven, totalRev, totalFix, IMC, fixedCosts: fixedOperationalCosts };
-    }, [salesData, expensesData, params, selectedStore]);
+    }, [filteredSales, salesData, expensesData, params, selectedStore]);
 
     const targetRevenue = dreMetrics.breakEven;
     const balancePercentage = targetRevenue > 0 ? Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100) : (totalRevenue > 0 ? 100 : 0);
