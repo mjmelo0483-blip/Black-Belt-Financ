@@ -27,7 +27,7 @@ export const useSales = () => {
                     .select(`
                     id, date, store_name, payment_method, total_amount,
                     sale_items (
-                        total_price, quantity, unit_cost,
+                        total_price, unit_price, quantity, unit_cost,
                         products (name, code, category, cost)
                     )
                 `);

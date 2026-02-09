@@ -279,16 +279,23 @@ const SalesDashboard: React.FC = () => {
 
         filteredItems.forEach(item => {
             const prod = item.products;
-            const rawName = prod?.name || 'Item sem nome';
+            const rawName = prod?.name || 'Produto sem cadastro';
             const normName = normalizeProdName(rawName);
 
             if (!map[normName]) {
-                map[normName] = { name: rawName, total: 0, count: 0 };
+                map[normName] = { name: rawName.toUpperCase().trim(), total: 0, count: 0 };
             }
 
-            const lineTotal = Number(item.total_price || 0) || (Number(item.unit_price || 0) * Number(item.quantity || 1));
-            map[normName].total += lineTotal;
-            map[normName].count += Number(item.quantity || 0);
+            // Using unit_price * quantity as primary if total_price is null or zero (to handle imports that only have unit prices)
+            const qty = Number(item.quantity || 0);
+            const unitPrice = Number(item.unit_price || 0);
+            const totalPrice = Number(item.total_price || 0);
+
+            // If total_price is available and significant, use it. Otherwise calculate from unit_price.
+            const itemRevenue = (totalPrice > 0) ? totalPrice : (unitPrice * qty);
+
+            map[normName].total += itemRevenue;
+            map[normName].count += qty;
         });
 
         return Object.values(map).sort((a, b) => b.total - a.total);
@@ -298,7 +305,7 @@ const SalesDashboard: React.FC = () => {
         return [...topProductsByRevenue].sort((a, b) => b.count - a.count);
     }, [topProductsByRevenue]);
 
-    const bestProduct = topProductsByRevenue[0] || { name: '-', total: 0 };
+    const bestProduct = topProductsByRevenue.length > 0 ? topProductsByRevenue[0] : { name: '-', total: 0, count: 0 };
 
     // 5. Daily Data (Consolidated with Corrected Revenue)
     const dailyData = useMemo(() => {
