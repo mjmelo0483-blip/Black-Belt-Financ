@@ -291,6 +291,7 @@ export const useSales = () => {
                 }
 
                 const productLookupKey = productCode.length < 5 ? `${productName.substring(0, 20)}_${productCode}` : productCode;
+                const costPerUnit = parseNumber(getVal(row, costKeys));
 
                 sale.items.push({
                     product_id: productsMap.get(productLookupKey),
