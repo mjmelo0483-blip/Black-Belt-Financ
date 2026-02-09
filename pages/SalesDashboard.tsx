@@ -241,7 +241,7 @@ const SalesDashboard: React.FC = () => {
 
     const averageTicket = relevantSalesCount > 0 ? totalRevenue / relevantSalesCount : 0;
 
-    const productSales = useMemo(() => {
+    const topProductsByRevenue = useMemo(() => {
         const map: any = {};
         filteredItems.forEach(item => {
             const prod = item.products;
@@ -255,7 +255,11 @@ const SalesDashboard: React.FC = () => {
         return Object.values(map).sort((a: any, b: any) => b.total - a.total);
     }, [filteredItems]);
 
-    const bestProduct = productSales[0] || { name: '-', total: 0 };
+    const topProductsByQty = useMemo(() => {
+        return [...topProductsByRevenue].sort((a: any, b: any) => b.count - a.count);
+    }, [topProductsByRevenue]);
+
+    const bestProduct = topProductsByRevenue[0] || { name: '-', total: 0 };
 
     const dailyData = useMemo(() => {
         const map: any = {};
@@ -704,7 +708,7 @@ const SalesDashboard: React.FC = () => {
                             </h3>
                             <div className="h-[450px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart layout="vertical" data={productSales.slice(0, 10)}>
+                                    <BarChart layout="vertical" data={topProductsByQty.slice(0, 10)}>
                                         <XAxis type="number" hide />
                                         <YAxis
                                             type="category"
@@ -738,7 +742,7 @@ const SalesDashboard: React.FC = () => {
                                                 return null;
                                             }}
                                         />
-                                        <Bar dataKey="total" fill="#4f46e5" radius={[0, 4, 4, 0]} />
+                                        <Bar dataKey="count" fill="#4f46e5" radius={[0, 4, 4, 0]} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>

@@ -140,10 +140,16 @@ export const useSales = () => {
             const costKeys = ['Custo', 'Vlr. Custo', 'Preço de Custo', 'Custo Unitário', 'Markup Cost', 'Cost', 'P', 'Vlr Custo', 'Preco Custo', 'Preço Custo'];
 
             rows.forEach(row => {
+                const productName = String(getVal(row, productNameKeys) || '').trim();
+                let productCode = String(getVal(row, productCodeKeys) || '').trim();
+
+                // FALLBACK: If code is missing but name exists, use name as code
+                if ((!productCode || productCode === 'undefined') && productName) {
+                    productCode = productName;
+                }
+
                 const customerName = getVal(row, customerValueKeys);
                 const customerCpf = getVal(row, customerCpfKeys);
-                const productCode = String(getVal(row, productCodeKeys) || '');
-                const productName = getVal(row, productNameKeys);
                 const category = getVal(row, categoryKeys) || 'Geral';
                 const cost = parseNumber(getVal(row, costKeys));
 
@@ -161,7 +167,7 @@ export const useSales = () => {
                     productsToUpsert.push({
                         user_id: user.id,
                         code: productCode,
-                        name: productName ? String(productName).trim() : 'Produto sem nome',
+                        name: productName || 'Produto sem nome',
                         category: category ? String(category).trim() : 'Geral',
                         cost: cost || 0,
                         company_id: activeCompany?.id || null
@@ -268,7 +274,14 @@ export const useSales = () => {
                 }
 
                 const sale = salesGroups.get(groupKey);
-                const productCode = String(getVal(row, productCodeKeys) || '');
+                const productName = String(getVal(row, productNameKeys) || '').trim();
+                let productCode = String(getVal(row, productCodeKeys) || '').trim();
+
+                // FALLBACK: Use the same logic as above to ensure matching
+                if ((!productCode || productCode === 'undefined') && productName) {
+                    productCode = productName;
+                }
+
                 const costPerUnit = parseNumber(getVal(row, costKeys));
 
                 sale.items.push({
