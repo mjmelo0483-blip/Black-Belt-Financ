@@ -269,7 +269,8 @@ const SalesDashboard: React.FC = () => {
         return { totalRevenue: rev, totalUnits: units, relevantSalesCount: saleIds.size };
     }, [filteredSales, filteredItems, selectedCategory]);
 
-    const averageTicket = relevantSalesCount > 0 ? totalRevenue / relevantSalesCount : 0;
+    const averageTicket = relevantSalesCount > 0 ? (totalRevenue / relevantSalesCount) : 0;
+    const safeTotalRevenue = isNaN(totalRevenue) ? 0 : totalRevenue;
 
     // 4. Product Ranking (Improved Grouping with Accent Normalization)
     const topProductsByRevenue = useMemo(() => {
@@ -415,11 +416,6 @@ const SalesDashboard: React.FC = () => {
         let impostos = 0;
         let perdaEstoque = 0;
 
-        const storeManualCashback: Record<string, { amount: number }> = {};
-        activeStores.forEach(s => {
-            storeManualCashback[s] = { amount: 0 };
-        });
-
         const varGroups: Record<string, { label: string; amount: number, items: any[] }> = {
             cashback: { label: 'Comissão paga ao condominio (cashback)', amount: 0, items: [] },
             royalties: { label: 'Royalties', amount: 0, items: [] },
@@ -551,7 +547,7 @@ const SalesDashboard: React.FC = () => {
         return { breakEven, totalRev, totalFix, IMC, fixedCosts: fixedOperationalCosts };
     }, [filteredSales, salesData, expensesData, params, selectedStore]);
 
-    const targetRevenue = dreMetrics.breakEven;
+    const targetRevenue = isNaN(dreMetrics.breakEven) || !isFinite(dreMetrics.breakEven) ? 0 : dreMetrics.breakEven;
     const balancePercentage = targetRevenue > 0 ? Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100) : (totalRevenue > 0 ? 100 : 0);
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -579,7 +575,11 @@ const SalesDashboard: React.FC = () => {
             .sort();
 
         const lastSaleDateStr = saleDates.length > 0 ? saleDates[saleDates.length - 1] : null;
-        const lastSaleDay = lastSaleDateStr ? parseInt(lastSaleDateStr.split('-')[2]) : today.getDate();
+        let lastSaleDay = today.getDate();
+        if (lastSaleDateStr) {
+            const dayPart = lastSaleDateStr.split('-')[2];
+            if (dayPart) lastSaleDay = parseInt(dayPart) || today.getDate();
+        }
 
         const daysInMonth = totalDaysInMonth;
         const daysElapsed = lastSaleDay; // Dias corridos até a última venda
@@ -649,7 +649,7 @@ const SalesDashboard: React.FC = () => {
                         <div className="size-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4">
                             <span className="material-symbols-outlined text-indigo-400 text-3xl">api</span>
                         </div>
-                        <p className="text-xl font-black text-white whitespace-nowrap">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <p className="text-xl font-black text-white whitespace-nowrap">R$ {(safeTotalRevenue).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Total Faturado</p>
                     </div>
 
