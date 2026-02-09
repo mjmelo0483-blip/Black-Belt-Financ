@@ -686,7 +686,7 @@ const SalesDashboard: React.FC = () => {
                         <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
                             <span className="material-symbols-outlined text-xs">filter_alt</span> Categoria
                         </p>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                             {categories.map(cat => (
                                 <button
                                     key={cat}

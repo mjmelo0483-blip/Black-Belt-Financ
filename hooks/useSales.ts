@@ -144,9 +144,12 @@ export const useSales = () => {
                 let productCode = String(getVal(row, productCodeKeys) || '').trim();
 
                 // FALLBACK: If code is missing but name exists, use name as code
-                if ((!productCode || productCode === 'undefined') && productName) {
+                if ((!productCode || productCode === 'undefined' || productCode === '') && productName) {
                     productCode = productName;
                 }
+
+                // Prevent collisions: Use compound key if code is short or suspiciously generic
+                const productLookupKey = productCode.length < 5 ? `${productName.substring(0, 20)}_${productCode}` : productCode;
 
                 const customerName = getVal(row, customerValueKeys);
                 const customerCpf = getVal(row, customerCpfKeys);
@@ -163,16 +166,16 @@ export const useSales = () => {
                     uniqueCustomerKeys.add(customerCpf || customerName);
                 }
 
-                if (productCode && productCode !== 'undefined' && productCode !== '' && !uniqueProductCodes.has(productCode)) {
+                if (productCode && productCode !== 'undefined' && productCode !== '' && !uniqueProductCodes.has(productLookupKey)) {
                     productsToUpsert.push({
                         user_id: user.id,
-                        code: productCode,
+                        code: productLookupKey,
                         name: productName || 'Produto sem nome',
                         category: category ? String(category).trim() : 'Geral',
                         cost: cost || 0,
                         company_id: activeCompany?.id || null
                     });
-                    uniqueProductCodes.add(productCode);
+                    uniqueProductCodes.add(productLookupKey);
                 }
             });
 
@@ -209,14 +212,19 @@ export const useSales = () => {
             const codeKeys = ['Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº', 'Codigo', 'ID', 'Transacao', 'Venda ID'];
             const dateKeys = ['Data da Compra', 'Data', 'Data Venda', 'Data Emissão', 'Data Movimento', 'Emissão', 'Data do Pedido', 'Dt. Venda', 'Data Transação', 'Data de Emissão', 'Data Vda', 'Dt Venda'];
             const storeKeys = ['Loja', 'Unidade', 'Filial', 'Ponto de Venda', 'Estabelecimento', 'Nome da Loja', 'PDV', 'Checkout'];
-            const paymentKeys = ['Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'E', 'Tipo de Pagamento', 'Pagto', 'Forma Pagto', 'Meio Pagto'];
+            const paymentKeys = ['Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'Tipo de Pagamento', 'Pagto', 'Forma Pagto', 'Meio Pagto'];
             const deviceKeys = ['Dispositivo', 'Origem', 'Canal', 'Marketplace', 'Plataforma'];
-            const qtyKeys = ['Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume', 'O', 'Units', 'Quantity'];
+            const qtyKeys = ['Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume', 'Units', 'Quantity'];
             const unitPriceKeys = ['Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.', 'Vlr. Liq.', 'Preço Venda Unitário', 'Vlr Unit'];
-            const itemTotalKeys = ['Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Total', 'Vlr. Total', 'Total', 'Vlr Total'];
+            const itemTotalKeys = ['Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Líquido Item', 'Vlr liq item', 'Valor Total', 'Vlr. Total', 'Total', 'Vlr Total'];
             const orderTotalKeys = ['Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda', 'Total', 'Valor Total'];
+            const statusKeys = ['Status', 'Situacao', 'Situação', 'Estado', 'Operação', 'Operacao', 'Tipo Movimento', 'Movimento', 'Cancelado'];
 
             rows.forEach((row, index) => {
+                // SKIP CANCELLED ROWS
+                const status = String(getVal(row, statusKeys) || '').toLowerCase();
+                if (status.includes('cancel') || status.includes('estorn') || status.includes('dev')) return;
+
                 // Try to find a unique Sale ID (Order Number, Ticket, etc)
                 const rawCode = String(getVal(row, codeKeys) || '');
                 const rawDate = getVal(row, dateKeys);
@@ -282,10 +290,10 @@ export const useSales = () => {
                     productCode = productName;
                 }
 
-                const costPerUnit = parseNumber(getVal(row, costKeys));
+                const productLookupKey = productCode.length < 5 ? `${productName.substring(0, 20)}_${productCode}` : productCode;
 
                 sale.items.push({
-                    product_id: productsMap.get(productCode),
+                    product_id: productsMap.get(productLookupKey),
                     quantity: qty,
                     unit_price: unitPrice || (qty > 0 ? lineTotalPrice / qty : 0),
                     total_price: lineTotalPrice,
