@@ -410,9 +410,17 @@ const SalesDashboard: React.FC = () => {
         const isCurrentStoreInRevenueList = selectedStore !== 'Todas' && storesWithRevenue.some(s => normalizeS(s) === sNorm);
         const prorationFactor = selectedStore === 'Todas' ? 1 : (isCurrentStoreInRevenueList ? (1 / storesWithRevenueCount) : 0);
 
-        const storeRevMap = storeRevMapTotal; // Re-use already calculated map
+        const storeRevMap = storeRevMapTotal;
+        const cmv = cmvCents / 100;
+        let impostos = 0;
+        let perdaEstoque = 0;
 
-        const varGroups: Record<string, { label: string; amount: number; items: any[] }> = {
+        const storeManualCashback: Record<string, { amount: number }> = {};
+        activeStores.forEach(s => {
+            storeManualCashback[s] = { amount: 0 };
+        });
+
+        const varGroups: Record<string, { label: string; amount: number, items: any[] }> = {
             cashback: { label: 'Comissão paga ao condominio (cashback)', amount: 0, items: [] },
             royalties: { label: 'Royalties', amount: 0, items: [] },
             tarifaCartao: { label: 'Tarifa de cartão', amount: 0, items: [] },
@@ -421,7 +429,7 @@ const SalesDashboard: React.FC = () => {
             diversas: { label: 'Despesas diversas da loja', amount: 0, items: [] },
         };
 
-        const fixGroups: Record<string, { label: string; amount: number; items: any[] }> = {
+        const fixGroups: Record<string, { label: string; amount: number, items: any[] }> = {
             funcionarios: { label: 'Funcionários', amount: 0, items: [] },
             manutencaoVeiculo: { label: 'Manutenção de veículo', amount: 0, items: [] },
             taxaSistema: { label: 'Taxa de uso do sistema', amount: 0, items: [] },
@@ -441,7 +449,7 @@ const SalesDashboard: React.FC = () => {
             const dreGroup = exp.categories?.dre_group;
             const desc = (exp.description || '').toLowerCase();
             let amount = Number(exp.amount || 0);
-            const expNorm = normalizeStore(exp.store_name);
+            const expNorm = normalizeS(exp.store_name);
             const isGeralItem = !exp.store_name || expNorm === 'geral' || expNorm === 'administrativo';
 
             if (selectedStore !== 'Todas') {
@@ -458,7 +466,7 @@ const SalesDashboard: React.FC = () => {
 
             if (dreGroup) {
                 if (dreGroup === 'cashback') {
-                    const cashbackKey = activeStores.find(as => normalizeStore(as) === expNorm);
+                    const cashbackKey = activeStores.find(as => normalizeS(as) === expNorm);
                     if (cashbackKey && storeManualCashback[cashbackKey]) {
                         storeManualCashback[cashbackKey].amount += amount;
                     } else { varGroups.cashback.amount += amount; }
@@ -476,7 +484,7 @@ const SalesDashboard: React.FC = () => {
             else if (catName.includes('escritorio') && (catName.includes('aluguel') || desc.includes('aluguel'))) { pushToGroup(fixGroups.aluguelEscritorio); }
             else if (catName.includes('container')) { pushToGroup(fixGroups.aluguelContainer); }
             else if (catName.includes('comissão') || desc.includes('cashback')) {
-                const cashbackKey = activeStores.find(as => normalizeStore(as) === expNorm);
+                const cashbackKey = activeStores.find(as => normalizeS(as) === expNorm);
                 if (cashbackKey && storeManualCashback[cashbackKey]) { storeManualCashback[cashbackKey].amount += amount; }
                 else { pushToGroup(varGroups.cashback); }
             }
@@ -496,12 +504,12 @@ const SalesDashboard: React.FC = () => {
         varGroups.tarifaCartao.amount = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
 
         if (selectedStore !== 'Todas') {
-            const key = Object.keys(storeManualCashback).find(k => normalizeStore(k) === sNorm);
+            const key = Object.keys(storeManualCashback).find(k => normalizeS(k) === sNorm);
             const manual = key ? storeManualCashback[key] : null;
             if (manual && manual.amount > 0) { varGroups.cashback.amount += manual.amount; }
             else {
                 const rates = params.cashback_rates as Record<string, number>;
-                const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === sNorm);
+                const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === sNorm);
                 const rate = rateKey ? rates[rateKey] : 0;
                 varGroups.cashback.amount += (totalRev * (rate / 100));
             }
@@ -511,9 +519,9 @@ const SalesDashboard: React.FC = () => {
                 if (manual && manual.amount > 0) { varGroups.cashback.amount += manual.amount; }
                 else {
                     const rates = params.cashback_rates as Record<string, number>;
-                    const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === normalizeStore(s));
+                    const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === normalizeS(s));
                     const rate = rateKey ? rates[rateKey] : 0;
-                    const sRev = storeRevMap[s] || 0;
+                    const sRev = storeRevMap[normalizeS(s)] || 0;
                     varGroups.cashback.amount += (sRev * (rate / 100));
                 }
             });
