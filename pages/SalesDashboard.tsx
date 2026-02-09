@@ -191,66 +191,103 @@ const SalesDashboard: React.FC = () => {
         return ['Todas', ...Array.from(storeMap.values()).sort()];
     }, [salesData]);
 
-    const filteredItems = useMemo(() => {
+    // 1. Base Filtered Sales (Store, Month, Year) - includes all sales regardless of items
+    const filteredSales = useMemo(() => {
         const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const items: any[] = [];
-        salesData.forEach(sale => {
-            if (!sale.date) return;
+        const sNorm = selectedStore === 'Todas' ? null : normalize(selectedStore);
+
+        return salesData.filter(sale => {
+            if (!sale.date) return false;
             const parts = sale.date.split('-');
             const y = parseInt(parts[0]);
             const m = parseInt(parts[1]) - 1;
 
-            const matchesMonth = m === selectedMonth;
-            const matchesYear = y === selectedYear;
-            const matchesStore = selectedStore === 'Todas' || (sale.store_name && normalize(sale.store_name) === normalize(selectedStore));
+            if (y !== selectedYear || m !== selectedMonth) return false;
 
-            if (matchesMonth && matchesYear && matchesStore) {
-                sale.sale_items?.forEach((item: any) => {
-                    const matchesCategory = selectedCategory === 'Todas' || item.products?.category === selectedCategory;
-                    if (matchesCategory) {
-                        items.push({
-                            ...item,
-                            date: sale.date,
-                            store_name: sale.store_name
-                        });
-                    }
-                });
+            if (sNorm) {
+                if (!sale.store_name) return false;
+                return normalize(sale.store_name) === sNorm;
             }
+            return true;
+        });
+    }, [salesData, selectedMonth, selectedYear, selectedStore]);
+
+    // 2. Filtered Items (adds Category filter)
+    const filteredItems = useMemo(() => {
+        const items: any[] = [];
+        filteredSales.forEach(sale => {
+            sale.sale_items?.forEach((item: any) => {
+                const matchesCategory = selectedCategory === 'Todas' || item.products?.category === selectedCategory;
+                if (matchesCategory) {
+                    items.push({
+                        ...item,
+                        date: sale.date,
+                        store_name: sale.store_name
+                    });
+                }
+            });
         });
         return items;
-    }, [salesData, selectedMonth, selectedYear, selectedCategory, selectedStore]);
+    }, [filteredSales, selectedCategory]);
 
-    const totalRevenue = filteredItems.reduce((acc, item) => acc + Number(item.total_price || 0), 0);
-    const totalUnits = filteredItems.reduce((acc, item) => acc + Number(item.quantity || 0), 0);
-
-    const relevantSalesCount = useMemo(() => {
-        const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    // 3. Metrics (Revenue and Units)
+    // If a category is selected, metrics only count items in that category.
+    // If 'Todas' is selected, metrics include ALL sales revenue (even if items are missing).
+    const { totalRevenue, totalUnits, relevantSalesCount } = useMemo(() => {
+        let rev = 0;
+        let units = 0;
         const saleIds = new Set();
-        salesData.forEach(sale => {
-            if (!sale.date) return;
-            const parts = sale.date.split('-');
-            const m = parseInt(parts[1]) - 1;
-            const y = parseInt(parts[0]);
-            if (m === selectedMonth && y === selectedYear && (selectedStore === 'Todas' || (sale.store_name && normalize(sale.store_name) === normalize(selectedStore)))) {
-                const hasMatchingItem = sale.sale_items?.some((item: any) => selectedCategory === 'Todas' || item.products?.category === selectedCategory);
-                if (hasMatchingItem) saleIds.add(sale.id);
-            }
-        });
-        return saleIds.size;
-    }, [salesData, selectedMonth, selectedYear, selectedStore, selectedCategory]);
+
+        if (selectedCategory === 'Todas') {
+            filteredSales.forEach(sale => {
+                saleIds.add(sale.id);
+                // Try to use items sum if they exist, fallback to total_amount
+                if (sale.sale_items && sale.sale_items.length > 0) {
+                    let itemSum = 0;
+                    sale.sale_items.forEach((it: any) => {
+                        itemSum += Number(it.total_price || 0);
+                        units += Number(it.quantity || 0);
+                    });
+                    rev += itemSum || Number(sale.total_amount || 0);
+                } else {
+                    rev += Number(sale.total_amount || 0);
+                    // For sales without items, we count as 1 unit if units is 0? 
+                    // No, let's stick to items for units to avoid inflating count.
+                }
+            });
+        } else {
+            // Category specific metrics - only from items
+            filteredItems.forEach(item => {
+                rev += Number(item.total_price || 0);
+                units += Number(item.quantity || 0);
+                // We don't have the parent sale ID easily here but we can find it in filteredSales
+            });
+            // Re-calculate sales count for this category
+            filteredSales.forEach(sale => {
+                const hasItem = sale.sale_items?.some((it: any) => it.products?.category === selectedCategory);
+                if (hasItem) saleIds.add(sale.id);
+            });
+        }
+
+        return { totalRevenue: rev, totalUnits: units, relevantSalesCount: saleIds.size };
+    }, [filteredSales, filteredItems, selectedCategory]);
 
     const averageTicket = relevantSalesCount > 0 ? totalRevenue / relevantSalesCount : 0;
 
+    // 4. Product Ranking (Improved Grouping)
     const topProductsByRevenue = useMemo(() => {
         const map: any = {};
         filteredItems.forEach(item => {
             const prod = item.products;
-            if (!prod) return;
-            if (!map[prod.code]) {
-                map[prod.code] = { name: prod.name, total: 0, count: 0 };
+            const name = prod?.name || 'Item sem nome';
+            // Group by ID or Code or Name - prevents splitting
+            const key = item.product_id || prod?.code || name;
+
+            if (!map[key]) {
+                map[key] = { name, total: 0, count: 0 };
             }
-            map[prod.code].total += Number(item.total_price || 0);
-            map[prod.code].count += Number(item.quantity || 0);
+            map[key].total += Number(item.total_price || 0);
+            map[key].count += Number(item.quantity || 0);
         });
         return Object.values(map).sort((a: any, b: any) => b.total - a.total);
     }, [filteredItems]);
@@ -261,18 +298,37 @@ const SalesDashboard: React.FC = () => {
 
     const bestProduct = topProductsByRevenue[0] || { name: '-', total: 0 };
 
+    // 5. Daily Data (Consolidated)
     const dailyData = useMemo(() => {
         const map: any = {};
-        filteredItems.forEach(item => {
-            const dateStr = item.date;
-            if (!map[dateStr]) {
-                map[dateStr] = { date: dateStr, revenue: 0, units: 0 };
-            }
-            map[dateStr].revenue += Number(item.total_price || 0);
-            map[dateStr].units += Number(item.quantity || 0);
-        });
+
+        if (selectedCategory === 'Todas') {
+            filteredSales.forEach(sale => {
+                const d = sale.date;
+                if (!map[d]) map[d] = { date: d, revenue: 0, units: 0 };
+
+                if (sale.sale_items && sale.sale_items.length > 0) {
+                    let sRev = 0;
+                    sale.sale_items.forEach((it: any) => {
+                        sRev += Number(it.total_price || 0);
+                        map[d].units += Number(it.quantity || 0);
+                    });
+                    map[d].revenue += sRev || Number(sale.total_amount || 0);
+                } else {
+                    map[d].revenue += Number(sale.total_amount || 0);
+                }
+            });
+        } else {
+            filteredItems.forEach(item => {
+                const d = item.date;
+                if (!map[d]) map[d] = { date: d, revenue: 0, units: 0 };
+                map[d].revenue += Number(item.total_price || 0);
+                map[d].units += Number(item.quantity || 0);
+            });
+        }
+
         return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
-    }, [filteredItems]);
+    }, [filteredSales, filteredItems, selectedCategory]);
 
     const dreMetrics = useMemo(() => {
         const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Outros': 0 };
