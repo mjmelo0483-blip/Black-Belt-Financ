@@ -346,18 +346,21 @@ const DRE: React.FC = () => {
             else if (normMethod.includes('pix')) method = 'PIX';
             else method = 'Outros';
 
-            let saleTotal = 0;
+            const sTotal = Number(sale.total_amount || 0);
+            let itemSum = 0;
+
             if (sale.sale_items && sale.sale_items.length > 0) {
                 sale.sale_items.forEach((item: any) => {
-                    saleTotal += Number(item.total_price || 0);
+                    const lineTotal = Number(item.total_price || 0) || (Number(item.unit_price || 0) * Number(item.quantity || 1));
+                    itemSum += lineTotal;
+
                     const itemQty = Number(item.quantity || 0);
                     const itemCost = Number(item.unit_cost !== undefined && item.unit_cost !== null ? item.unit_cost : (item.products?.cost || 0));
                     cmvCents += Math.round(itemCost * itemQty * 100);
                 });
-            } else {
-                saleTotal = Number(sale.total_amount || 0);
             }
 
+            const saleTotal = Math.max(sTotal, itemSum);
             revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
             totalRev += saleTotal;
         });

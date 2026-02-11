@@ -83,7 +83,12 @@ const SalesDashboard: React.FC = () => {
                 .from('transactions')
                 .select('amount, type, description, date, due_date, category_id, store_name, categories(name, parent_id, dre_group)')
                 .eq('is_business', true)
-                .eq('type', 'expense')
+                .is('transfer_id', null)
+                .is('investment_id', null)
+                .or('payment_method.not.ilike.transferencia,payment_method.is.null')
+                .not('type', 'ilike', 'transfer')
+                .not('type', 'ilike', 'investment')
+                .ilike('type', 'expense')
                 .gte('date', startDate)
                 .lte('date', endDate);
 
@@ -464,7 +469,16 @@ const SalesDashboard: React.FC = () => {
 
             const pushToGroup = (group: any) => { group.amount += amount; };
             if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
-            const isCalculated = desc.includes('royalties') || desc.includes('imposto') || desc.includes('tarifa') || desc.includes('perda');
+
+            const isCalculated =
+                desc.includes('royalties') ||
+                desc.includes('imposto') ||
+                desc.includes('tarifa de pix') ||
+                desc.includes('tarifa pix') ||
+                desc.includes('tarifa de cartao') ||
+                desc.includes('taxa de cartao') ||
+                desc.includes('perda');
+
             if (isCalculated && !dreGroup) return;
 
             if (dreGroup) {
@@ -482,20 +496,20 @@ const SalesDashboard: React.FC = () => {
             if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) { pushToGroup(fixGroups.internet); }
             else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial') || desc.includes('enel') || desc.includes('celpa')) { pushToGroup(fixGroups.energia); }
             else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel') || desc.includes('etanol') || (desc.includes('posto ') && !desc.includes('imposto'))) { pushToGroup(fixGroups.combustivel); }
-            else if (catName.includes('funcionario') || catName.includes('salario') || catName.includes('pro-labore') || desc.includes('salario') || desc.includes('folha pgto')) { pushToGroup(fixGroups.funcionarios); }
+            else if (catName.includes('funcionario') || catName.includes('salario') || catName.includes('pro-labore') || desc.includes('salario') || desc.includes('folha pgto') || desc.includes('pro-labore')) { pushToGroup(fixGroups.funcionarios); }
             else if (catName.includes('contabil') || desc.includes('contador') || desc.includes('contabilidade')) { pushToGroup(fixGroups.contabilidade); }
             else if (catName.includes('escritorio') && (catName.includes('aluguel') || desc.includes('aluguel'))) { pushToGroup(fixGroups.aluguelEscritorio); }
             else if (catName.includes('container')) { pushToGroup(fixGroups.aluguelContainer); }
-            else if (catName.includes('comissão') || desc.includes('cashback')) {
+            else if (catName.includes('comissão') || desc.includes('cashback') || desc.includes('comissão condomínio')) {
                 const cashbackKey = activeStores.find(as => normalizeS(as) === expNorm);
                 if (cashbackKey && storeManualCashback[cashbackKey]) { storeManualCashback[cashbackKey].amount += amount; }
                 else { pushToGroup(varGroups.cashback); }
             }
-            else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda')) { pushToGroup(varGroups.marketing); }
-            else if (catName.includes('veiculo') || desc.includes('oficina') || desc.includes('pneu')) { pushToGroup(fixGroups.manutencaoVeiculo); }
+            else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda') || desc.includes('facebook ads') || desc.includes('google ads')) { pushToGroup(varGroups.marketing); }
+            else if (catName.includes('veiculo') || desc.includes('carro') || desc.includes('moto') || desc.includes('oficina') || desc.includes('pneu')) { pushToGroup(fixGroups.manutencaoVeiculo); }
             else if (catName.includes('taxa de uso do sistema') || (catName.includes('sistema') && (desc.includes('taxa') || desc.includes('mensalidade')))) { pushToGroup(fixGroups.taxaSistema); }
-            else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass')) { pushToGroup(fixGroups.tef); }
-            else if (catName.includes('despesas financeiras') || desc.includes('aluguel da loja')) { pushToGroup(fixGroups.despesasFinanceiras); }
+            else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass') || catName.includes('lgopass')) { pushToGroup(fixGroups.tef); }
+            else if (catName.includes('despesas financeiras') || catName.includes('aluguel do espaco') || desc.includes('aluguel da loja') || desc.includes('aluguel sala')) { pushToGroup(fixGroups.despesasFinanceiras); }
             else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) { if (!isCalculated) pushToGroup(varGroups.diversas); }
             else if (!isCalculated) { pushToGroup(fixGroups.outros); }
         });
