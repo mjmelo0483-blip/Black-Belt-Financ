@@ -326,31 +326,39 @@ const Dashboard: React.FC = () => {
 
       {/* Expense Chart - Expandido para toda largura */}
       <div className="bg-[#233648] rounded-xl border border-[#324d67]/50 p-6 shadow-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-white text-lg font-bold text-white/90">
-            Despesas por Categoria ({monthNames[selectedMonth]} de {selectedYear})
-          </h2>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h2 className="text-white text-lg font-bold text-white/90">
+              Despesas por Categoria
+            </h2>
+            <p className="text-[#92adc9] text-sm uppercase tracking-wider mt-1">
+              {monthNames[selectedMonth]} de {selectedYear}
+            </p>
+          </div>
           {selectedCategory && (
             <button
               onClick={() => setSelectedCategory(null)}
-              className="flex items-center gap-1 text-primary hover:text-blue-400 text-sm font-bold transition-colors"
+              className="flex items-center gap-1 text-primary hover:text-blue-400 text-sm font-bold transition-colors bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20"
             >
               <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-              Voltar
+              Voltar para Geral
             </button>
           )}
         </div>
 
         {selectedCategory && (
-          <div className="mb-4 px-3 py-2 bg-[#111a22] rounded-lg border border-[#324d67]/50">
-            <p className="text-[#92adc9] text-xs uppercase tracking-widest">Categoria Principal</p>
-            <p className="text-white font-bold">{selectedCategory}</p>
+          <div className="mb-8 px-4 py-3 bg-[#111a22] rounded-xl border border-[#324d67]/50 flex items-center gap-3">
+            <div className="size-3 rounded-full" style={{ backgroundColor: expensesByCategory.find(c => c.name === selectedCategory)?.color }} />
+            <div>
+              <p className="text-[#92adc9] text-[10px] uppercase tracking-[0.15em] font-bold">Filtro Ativo</p>
+              <p className="text-white font-bold text-lg">{selectedCategory}</p>
+            </div>
           </div>
         )}
 
-        <div className="flex flex-col lg:flex-row items-center gap-8">
-          <div className="flex flex-col items-center justify-center relative">
-            <div className="size-64">
+        <div className="flex flex-col lg:flex-row items-start gap-10">
+          <div className="flex flex-col items-center justify-center relative w-full lg:w-auto">
+            <div className="size-64 lg:size-72">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -359,9 +367,9 @@ const Dashboard: React.FC = () => {
                         ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
                         : expensesByCategory
                     }
-                    innerRadius={85}
-                    outerRadius={115}
-                    paddingAngle={5}
+                    innerRadius={90}
+                    outerRadius={125}
+                    paddingAngle={3}
                     dataKey="value"
                     onClick={(data) => {
                       if (!selectedCategory && data?.children?.length > 0) {
@@ -374,22 +382,27 @@ const Dashboard: React.FC = () => {
                       ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
                       : expensesByCategory
                     ).map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.color}
+                        stroke="#233648"
+                        strokeWidth={2}
+                      />
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#111a22', border: '1px solid #324d67', borderRadius: '8px' }}
-                    itemStyle={{ color: '#fff' }}
-                    formatter={(value: number) => formatCurrency(value)}
+                    contentStyle={{ backgroundColor: '#111a22', border: '1px solid #324d67', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)' }}
+                    itemStyle={{ color: '#fff', fontSize: '13px', fontWeight: 'bold' }}
+                    formatter={(value: number) => [formatCurrency(value), 'Valor']}
                   />
                 </PieChart>
               </ResponsiveContainer>
             </div>
             <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-              <p className="text-[#92adc9] text-sm font-medium uppercase">
-                {selectedCategory ? 'Total Cat.' : 'Total Mês'}
+              <p className="text-[#92adc9] text-xs font-bold uppercase tracking-widest mb-1">
+                {selectedCategory ? 'Subtotal' : 'Total Mês'}
               </p>
-              <p className="text-white text-3xl font-bold">
+              <p className="text-white text-2xl font-black">
                 {formatCurrency(
                   selectedCategory
                     ? expensesByCategory.find(c => c.name === selectedCategory)?.value || 0
@@ -399,33 +412,45 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 w-full">
             {(selectedCategory
               ? (expensesByCategory.find(c => c.name === selectedCategory) as any)?.children || []
               : expensesByCategory
-            ).slice(0, 12).map((cat: any, i: number) => (
-              <div
-                key={i}
-                className={`flex items-center gap-2 p-2 rounded-lg transition-all ${!selectedCategory && cat.children?.length > 0
-                  ? 'hover:bg-[#111a22] cursor-pointer'
-                  : ''
-                  }`}
-                onClick={() => {
-                  if (!selectedCategory && cat.children?.length > 0) {
-                    setSelectedCategory(cat.name);
-                  }
-                }}
-              >
-                <div className="size-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-white text-sm font-bold">{formatCurrency(cat.value)}</p>
-                  <p className="text-[#92adc9] text-xs truncate">{cat.name}</p>
+            ).map((cat: any, i: number) => {
+              const currentTotal = selectedCategory
+                ? expensesByCategory.find(c => c.name === selectedCategory)?.value || 1
+                : stats.monthlyExpenses || 1;
+              const percentage = ((cat.value / currentTotal) * 100).toFixed(1);
+
+              return (
+                <div
+                  key={i}
+                  className={`flex flex-col justify-between p-4 rounded-xl transition-all bg-[#1c2a38] border border-[#324d67]/30 group ${!selectedCategory && cat.children?.length > 0
+                    ? 'hover:border-primary/50 cursor-pointer hover:shadow-lg hover:shadow-primary/5'
+                    : ''
+                    }`}
+                  onClick={() => {
+                    if (!selectedCategory && cat.children?.length > 0) {
+                      setSelectedCategory(cat.name);
+                    }
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <div className="size-2.5 rounded-full flex-shrink-0 shadow-[0_0_8px] shadow-current" style={{ backgroundColor: cat.color, color: cat.color }} />
+                      <p className="text-[#92adc9] text-[10px] font-black uppercase tracking-widest truncate">{cat.name}</p>
+                    </div>
+                    {!selectedCategory && cat.children?.length > 0 && (
+                      <span className="material-symbols-outlined text-[#92adc9] text-[18px] group-hover:text-primary transition-colors">chevron_right</span>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-white text-lg font-bold leading-none mb-1">{formatCurrency(cat.value)}</p>
+                    <p className="text-[#6384a3] text-[11px] font-bold">{percentage}%</p>
+                  </div>
                 </div>
-                {!selectedCategory && cat.children?.length > 0 && (
-                  <span className="material-symbols-outlined text-[#92adc9] text-[16px]">chevron_right</span>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
