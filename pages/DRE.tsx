@@ -30,6 +30,7 @@ const DRE: React.FC = () => {
         card_fee_rate: 1.110284,
         cashback_rates: {} as Record<string, number>
     });
+    const [currentParamId, setCurrentParamId] = useState<string | null>(null);
     const [configTab, setConfigTab] = useState<'rates' | 'mapping'>('rates');
     const [categories, setCategories] = useState<any[]>([]);
 
@@ -193,6 +194,7 @@ const DRE: React.FC = () => {
                 const { data: pData } = await paramQuery.maybeSingle();
 
                 if (pData) {
+                    setCurrentParamId(pData.id);
                     setParams({
                         tax_rate: Number(pData.tax_rate || 3.24),
                         royalty_rate: Number(pData.royalty_rate || 6.00),
@@ -202,6 +204,7 @@ const DRE: React.FC = () => {
                         cashback_rates: pData.cashback_rates || {}
                     });
                 } else {
+                    setCurrentParamId(null);
                     setParams({
                         tax_rate: 3.24,
                         royalty_rate: 6.00,
@@ -276,9 +279,10 @@ const DRE: React.FC = () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) return;
 
-        const { error } = await supabase
+        const { error, data } = await supabase
             .from('dre_parameters')
             .upsert({
+                id: currentParamId || undefined,
                 user_id: session.user.id,
                 month: selectedMonth,
                 year: selectedYear,
@@ -286,12 +290,16 @@ const DRE: React.FC = () => {
                 is_business: !!activeCompany,
                 company_id: activeCompany?.id || null
             }, {
-                onConflict: activeCompany ? 'company_id, month, year' : 'user_id, month, year'
-            });
+                onConflict: currentParamId ? 'id' : (activeCompany ? 'company_id, month, year' : 'user_id, month, year')
+            })
+            .select('id')
+            .single();
 
         if (error) {
+            console.error('Error saving dre_parameters:', error);
             alert('Erro ao salvar configurações.');
         } else {
+            if (data) setCurrentParamId(data.id);
             setShowConfig(false);
         }
     };

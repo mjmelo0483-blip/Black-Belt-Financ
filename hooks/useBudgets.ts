@@ -226,7 +226,7 @@ export const useBudgets = () => {
                         is_business: isBusiness,
                         company_id: isBusiness ? activeCompany?.id : null
                     }, {
-                        onConflict: 'user_id, category_id, month, is_business, company_id'
+                        onConflict: 'user_id, category_id, month'
                     })
                     .select()
             );
