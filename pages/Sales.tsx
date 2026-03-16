@@ -47,17 +47,24 @@ const Sales: React.FC = () => {
                     'numpedido', 'pedido', 'documento', 'cupom', 'ticket',
                     'vendaid', 'idvenda', 'codigovenda',
                     'produto', 'sku', 'codigoproduto', 'referencia',
-                    'valortotal', 'totalvenda', 'totalpedido'
+                    'valortotal', 'totalvenda', 'totalpedido',
+                    'data', 'cliente', 'loja', 'situacao', 'valorliquido', 'numero', 'cpf'
                 ];
 
                 for (let i = 0; i < Math.min(jsonData.length, 50); i++) {
                     const row = jsonData[i];
-                    if (row && Array.isArray(row) && row.some(cell => {
-                        const normalizedCell = normalize(String(cell || ''));
-                        return headerSynonyms.some(syn => normalizedCell.includes(syn));
-                    })) {
-                        headerRowIndex = i;
-                        break;
+                    if (row && Array.isArray(row)) {
+                        let matches = 0;
+                        row.forEach(cell => {
+                            const normalizedCell = normalize(String(cell || ''));
+                            if (headerSynonyms.some(syn => normalizedCell.includes(syn))) {
+                                matches++;
+                            }
+                        });
+                        if (matches >= 3) {
+                            headerRowIndex = i;
+                            break;
+                        }
                     }
                 }
 
