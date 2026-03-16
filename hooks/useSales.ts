@@ -362,7 +362,23 @@ export const useSales = () => {
             const chunkSize = 500;
             for (let i = 0; i < allSalesData.length; i += chunkSize) {
                 const chunk = allSalesData.slice(i, i + chunkSize);
-                const salesToUpsert = chunk.map(({ items, ...sale }) => sale);
+
+                // DEDUPLICATE by external_code to prevent "ON CONFLICT DO UPDATE cannot affect row a second time"
+                const deduped = new Map<string, any>();
+                chunk.forEach(sale => {
+                    const key = sale.external_code;
+                    if (deduped.has(key)) {
+                        // Merge items and totals from duplicate entries
+                        const existing = deduped.get(key);
+                        existing.items = [...existing.items, ...sale.items];
+                        existing.total_amount += sale.total_amount;
+                    } else {
+                        deduped.set(key, { ...sale });
+                    }
+                });
+                const dedupedChunk = Array.from(deduped.values());
+
+                const salesToUpsert = dedupedChunk.map(({ items, ...sale }) => sale);
 
                 const { data: upsertedSales, error: upsertError } = await supabase
                     .from('sales')
@@ -376,7 +392,7 @@ export const useSales = () => {
                 const saleIdsToDelete: string[] = [];
 
                 upsertedSales?.forEach(insertedSale => {
-                    const originalSale = chunk.find(s => s.external_code === insertedSale.external_code);
+                    const originalSale = dedupedChunk.find(s => s.external_code === insertedSale.external_code);
                     if (originalSale && originalSale.items.length > 0) {
                         saleIdsToDelete.push(insertedSale.id);
                         originalSale.items.forEach((item: any) => {
