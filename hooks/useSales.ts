@@ -566,7 +566,8 @@ function formatDate(dateValue: any) {
         return `${y}-${m}-${d}`;
     }
 
-    const str = String(dateValue).trim();
+    // Extract just the date part, ignoring time (e.g. "16/03/2026 15:30")
+    const str = String(dateValue).trim().split(' ')[0];
     if (!str || str === '-') return null;
 
     // 3. Handle strings with separators / or - or .
