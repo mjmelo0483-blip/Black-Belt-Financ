@@ -100,7 +100,9 @@ export const useSales = () => {
                         const normalizedK = k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s/g, '');
                         return normalizedK === normalizedPK;
                     });
-                    if (foundKey) return row[foundKey];
+                    if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null && String(row[foundKey]).trim() !== '') {
+                        return row[foundKey];
+                    }
                 }
                 return undefined;
             };
@@ -218,7 +220,7 @@ export const useSales = () => {
             let lastCode: string | null = null;
             let lastStore: string | null = null;
 
-            const codeKeys = ['A', 'Nº Pedido Loja', 'Número', 'Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº', 'Codigo', 'ID', 'Transacao', 'Venda ID'];
+            const codeKeys = ['A', 'Número', 'Nº Pedido Loja', 'Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº', 'Codigo', 'ID', 'Transacao', 'Venda ID'];
             const dateKeys = ['B', 'Data', 'Data da Compra', 'Data Venda', 'Data Emissão', 'Data Movimento', 'Emissão', 'Data do Pedido', 'Dt. Venda', 'Data Transação', 'Data de Emissão', 'Data Vda', 'Dt Venda'];
             const storeKeys = ['Loja', 'Unidade', 'Filial', 'Ponto de Venda', 'Estabelecimento', 'Nome da Loja', 'PDV', 'Checkout'];
             const paymentKeys = ['E', 'Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'Tipo de Pagamento', 'Pagto', 'Forma Pagto', 'Meio Pagto'];
