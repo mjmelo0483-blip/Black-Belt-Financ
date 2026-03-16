@@ -306,7 +306,10 @@ export const useSales = () => {
                 if (!date) { diagNoDate++; return; } // Skip rows without date (and no previous date to carry over)
                 lastDate = date;
 
-                const store = getVal(row, storeKeys) || lastStore || 'Unica';
+                let store = String(getVal(row, storeKeys) || lastStore || 'Unica').trim();
+                // Normalize store names: strip brand prefixes so different spreadsheet formats match
+                // e.g. "Minha Quitandinha - Condomínio Lar Portugal" → "Condomínio Lar Portugal"
+                store = store.replace(/^Minha Quitandinha\s*-\s*/i, '').trim();
                 lastStore = store;
 
                 // Carry over or generate code
