@@ -147,17 +147,28 @@ export const useSales = () => {
             const categoryKeys = ['Categoria', 'Grupo', 'Familia', 'Categoria do Produto', 'Departamento', 'Setor'];
             const costKeys = ['P', 'Custo', 'Custo Un.', 'Custo Unitário', 'Vlr. Custo', 'Preço de Custo', 'Markup Cost', 'Cost', 'Vlr Custo', 'Preco Custo', 'Preço Custo'];
 
+            const normalizeCode = (c: string) => {
+                const s = String(c || '').trim();
+                if (/^\d+$/.test(s)) return s.replace(/^0+/, ''); // Remove leading zeros if numeric
+                return s;
+            };
+
+            const normalizeName = (n: string) => String(n || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
             rows.forEach(row => {
                 let productName = String(getVal(row, productNameKeys) || '').trim();
                 if (!productName) {
                     productName = activeCompany?.business_type === 'services' ? 'Serviço Prestado' : 'Produto Geral';
                 }
-                let productCode = String(getVal(row, productCodeKeys) || '').trim();
+                let rawProductCode = String(getVal(row, productCodeKeys) || '').trim();
 
                 // FALLBACK: If code is missing but name exists, use name as code
-                if ((!productCode || productCode === 'undefined' || productCode === '' || productCode === 'null') && productName) {
-                    productCode = productName;
+                if ((!rawProductCode || rawProductCode === 'undefined' || rawProductCode === '' || rawProductCode === 'null') && productName) {
+                    rawProductCode = productName;
                 }
+
+                // Normalization for lookup
+                const productCode = normalizeCode(rawProductCode);
 
                 // Prevent collisions: Use compound key if code is short or suspiciously generic
                 const productLookupKey = productCode.length < 5 ? `${productName.substring(0, 20)}_${productCode}` : productCode;
@@ -192,13 +203,10 @@ export const useSales = () => {
             });
 
             // Bulk Upsert Customers - split by CPF presence
-            // The DB constraint is UNIQUE NULLS NOT DISTINCT (user_id, cpf, company_id)
-            // This means ALL customers with cpf=null collapse to the same key, so we can't batch-upsert them
             const customersMap = new Map();
             const customersWithCpf = customersToUpsert.filter(c => c.cpf !== null);
             const customersWithoutCpf = customersToUpsert.filter(c => c.cpf === null);
 
-            // Batch upsert customers WITH CPF (safe, each has a unique conflict key)
             if (customersWithCpf.length > 0) {
                 const { data: custData, error: custError } = await supabase
                     .from('customers')
@@ -209,7 +217,6 @@ export const useSales = () => {
                 custData?.forEach(c => customersMap.set(c.cpf || c.name, c.id));
             }
 
-            // For customers WITHOUT CPF, insert individually (select-then-insert by name)
             for (const cust of customersWithoutCpf) {
                 const { data: existing } = await supabase
                     .from('customers')
@@ -240,31 +247,51 @@ export const useSales = () => {
 
             // First, fetch existing products to get their current categories
             const existingProductCodes = productsToUpsert.map(p => p.code);
-            const existingProductsMap = new Map<string, string>();
+            const existingProductsMap = new Map<string, string>(); // key: normalized code
+            const nameToCategoryMap = new Map<string, string>(); // key: normalized name
+
             if (existingProductCodes.length > 0) {
                 // Fetch in batches of 200
                 for (let i = 0; i < existingProductCodes.length; i += 200) {
                     const batch = existingProductCodes.slice(i, i + 200);
                     const { data: existingProducts } = await supabase
                         .from('products')
-                        .select('code, category')
+                        .select('code, category, name')
                         .eq('user_id', user.id)
-                        .in('code', batch)
                         .eq('company_id', activeCompany?.id || '');
 
-                    existingProducts?.forEach(p => {
-                        if (p.category && p.category !== 'Geral') {
-                            existingProductsMap.set(p.code, p.category);
-                        }
-                    });
+                    // We filter code after fetching or use smart or condition if possible, 
+                    // but for simplicity let's rely on the codes we have + name matches from all products of company
+                    // Note: 'in batch' is more efficient but we might miss name-matches if codes don't match.
+                    // Let's refine this to fetch ALL products for the company if the list is small, 
+                    // or do a broad search for names.
                 }
+
+                // REFINED STRATEGY: Fetch all products for company that HAVE categories
+                const { data: companyProducts } = await supabase
+                    .from('products')
+                    .select('code, name, category')
+                    .eq('company_id', activeCompany?.id || '')
+                    .not('category', 'is', null)
+                    .neq('category', 'Geral');
+
+                companyProducts?.forEach(p => {
+                    const normCode = normalizeCode(p.code);
+                    const normName = normalizeName(p.name);
+                    if (p.category) {
+                        existingProductsMap.set(normCode, p.category);
+                        nameToCategoryMap.set(normName, p.category);
+                    }
+                });
             }
 
             // Apply existing categories to products that don't have one from the spreadsheet
-            const finalProductsToUpsert = productsToUpsert.map(p => ({
-                ...p,
-                category: p.category || existingProductsMap.get(p.code) || 'Geral'
-            }));
+            const finalProductsToUpsert = productsToUpsert.map(p => {
+                const normCode = normalizeCode(p.code);
+                const normName = normalizeName(p.name);
+                const existingCat = p.category || existingProductsMap.get(normCode) || nameToCategoryMap.get(normName) || 'Geral';
+                return { ...p, category: existingCat };
+            });
 
             if (finalProductsToUpsert.length > 0) {
                 const { data: prodData, error: prodError } = await supabase
