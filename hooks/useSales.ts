@@ -140,12 +140,12 @@ export const useSales = () => {
             const uniqueCustomerKeys = new Set();
             const uniqueProductCodes = new Set();
 
-            const customerValueKeys = ['Cliente', 'Nome do Cliente', 'Nome Cliente', 'Destinatario', 'Nome', 'Customer'];
+            const customerValueKeys = ['Cliente', 'Cliente/Nome social', 'Cliente/Nome Social', 'Nome do Cliente', 'Nome Cliente', 'Destinatario', 'Nome', 'Customer'];
             const customerCpfKeys = ['CPF do Cliente', 'CPF', 'CNPJ/CPF', 'CPF/CNPJ', 'Documento', 'Doc'];
-            const productCodeKeys = ['C', 'Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto', 'Cod. Produto', 'Cod Produto', 'Codigo', 'Cod', 'Item ID'];
-            const productNameKeys = ['K', 'Nome do Produto', 'Produto', 'Descricao', 'Description', 'Item', 'Nome Produto', 'Rotulos de Linha'];
+            const productCodeKeys = ['C', 'Cód. de Barras', 'Codigo de Barras', 'Codigo do Produto', 'SKU', 'Ref', 'Referencia', 'Codigo Produto', 'ID Produto', 'Cod. Produto', 'Cod Produto', 'Codigo', 'Cod', 'Item ID'];
+            const productNameKeys = ['K', 'Item', 'Nome do Produto', 'Produto', 'Descricao', 'Description', 'Nome Produto', 'Rotulos de Linha'];
             const categoryKeys = ['Categoria', 'Grupo', 'Familia', 'Categoria do Produto', 'Departamento', 'Setor'];
-            const costKeys = ['P', 'Custo', 'Vlr. Custo', 'Preço de Custo', 'Custo Unitário', 'Markup Cost', 'Cost', 'Vlr Custo', 'Preco Custo', 'Preço Custo'];
+            const costKeys = ['P', 'Custo', 'Custo Un.', 'Custo Unitário', 'Vlr. Custo', 'Preço de Custo', 'Markup Cost', 'Cost', 'Vlr Custo', 'Preco Custo', 'Preço Custo'];
 
             rows.forEach(row => {
                 let productName = String(getVal(row, productNameKeys) || '').trim();
@@ -220,15 +220,15 @@ export const useSales = () => {
             let lastCode: string | null = null;
             let lastStore: string | null = null;
 
-            const codeKeys = ['A', 'Número', 'Nº Pedido Loja', 'Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº', 'Codigo', 'ID', 'Transacao', 'Venda ID'];
-            const dateKeys = ['B', 'Data', 'Data da Compra', 'Data Venda', 'Data Emissão', 'Data Movimento', 'Emissão', 'Data do Pedido', 'Dt. Venda', 'Data Transação', 'Data de Emissão', 'Data Vda', 'Dt Venda'];
+            const codeKeys = ['A', 'ID Transação', 'ID Transacao', 'Número', 'Nº Pedido Loja', 'Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº', 'Codigo', 'Transacao'];
+            const dateKeys = ['B', 'Data / Hora (GMT -3)', 'Data / Hora', 'Data', 'Data da Compra', 'Data Venda', 'Data Emissão', 'Data Movimento', 'Emissão', 'Data do Pedido', 'Dt. Venda', 'Data Transação', 'Data de Emissão', 'Data Vda', 'Dt Venda'];
             const storeKeys = ['Loja', 'Unidade', 'Filial', 'Ponto de Venda', 'Estabelecimento', 'Nome da Loja', 'PDV', 'Checkout'];
-            const paymentKeys = ['E', 'Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'Tipo de Pagamento', 'Pagto', 'Forma Pagto', 'Meio Pagto'];
-            const deviceKeys = ['Dispositivo', 'Origem', 'Canal', 'Marketplace', 'Plataforma', 'Canal de Venda'];
-            const qtyKeys = ['O', 'Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume', 'Units', 'Quantity'];
-            const unitPriceKeys = ['L', 'Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.', 'Vlr. Liq.', 'Preço Venda Unitário', 'Vlr Unit'];
-            const itemTotalKeys = ['N', 'Vlr Total', 'Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Líquido Item', 'Vlr liq item', 'Valor Total', 'Vlr. Total', 'Total'];
-            const orderTotalKeys = ['Valor Líquido', 'Vlr Total', 'Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda', 'Total', 'Valor Total'];
+            const paymentKeys = ['E', 'Bandeira', 'Modalidade', 'Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'Tipo de Pagamento', 'Pagto', 'Forma Pagto', 'Meio Pagto'];
+            const deviceKeys = ['Dispositivo', 'Formato Transação', 'Formato Transacao', 'Origem', 'Canal', 'Marketplace', 'Plataforma', 'Canal de Venda'];
+            const qtyKeys = ['O', 'Qtd', 'Quantidade', 'Qtde', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume', 'Units', 'Quantity'];
+            const unitPriceKeys = ['L', 'Preço Un.', 'Preço Unitário', 'Valor Unitario', 'Vlr Unitario', 'Preco', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.', 'Vlr. Liq.', 'Preço Venda Unitário', 'Vlr Unit'];
+            const itemTotalKeys = ['N', 'Total Item', 'Vlr Total', 'Valor Total Item', 'Vlr. Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Líquido Item', 'Vlr liq item', 'Valor Total', 'Vlr. Total', 'Total'];
+            const orderTotalKeys = ['Total Pago', 'Total Carrinho', 'Valor Líquido', 'Vlr Total', 'Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda', 'Total', 'Valor Total'];
             const statusKeys = ['Q', 'Status', 'Situacao', 'Situação', 'Estado', 'Operação', 'Operacao', 'Tipo Movimento', 'Movimento', 'Cancelado'];
 
             // DIAGNOSTIC COUNTERS
@@ -247,9 +247,10 @@ export const useSales = () => {
                 }
                 // SKIP CANCELLED ROWS - Robust detection for retail software
                 const status = String(getVal(row, statusKeys) || '').toLowerCase().trim();
-                const isCancelled = status === 'c' || status === 'e' || status === 'd' ||
+                const isCancelled = status === 'c' ||
                     status.includes('cancel') || status.includes('estorn') ||
-                    status.includes('dev') || status.includes('canc');
+                    status.includes('devol') || status.includes('canc') ||
+                    status.includes('refund') || status.includes('failed') || status.includes('error');
                 if (isCancelled) { diagCancelled++; return; }
 
                 let productName = String(getVal(row, productNameKeys) || '').trim();
@@ -291,7 +292,7 @@ export const useSales = () => {
                         customer_id: customersMap.get(getVal(row, customerCpfKeys)) ||
                             customersMap.get(getVal(row, customerValueKeys)) || null,
                         date: date,
-                        time: getVal(row, ['Hora da Compra', 'Hora', 'Horário']),
+                        time: getVal(row, ['Hora da Compra', 'Hora', 'Horário', 'Hora Saída']),
                         payment_method: getVal(row, paymentKeys),
                         store_name: store,
                         device: getVal(row, deviceKeys),

@@ -30,8 +30,8 @@ const Sales: React.FC = () => {
                 const bstr = evt.target?.result;
                 const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
 
-                // Try to find the 'Vendas' or 'Pedidos' sheet, otherwise use the first one
-                let wsname = wb.SheetNames.find(n => n.toLowerCase().includes('venda') || n.toLowerCase().includes('pedido') || n.toLowerCase().includes('item'));
+                // Try to find the relevant sheet, otherwise use the first one
+                let wsname = wb.SheetNames.find(n => n.toLowerCase().includes('venda') || n.toLowerCase().includes('pedido') || n.toLowerCase().includes('item') || n.toLowerCase().includes('transac'));
                 if (!wsname) wsname = wb.SheetNames[0];
 
                 const ws = wb.Sheets[wsname];
@@ -45,10 +45,11 @@ const Sales: React.FC = () => {
                 const headerSynonyms = [
                     'datavenda', 'datapedido', 'dataemissao', 'datamovimento',
                     'numpedido', 'pedido', 'documento', 'cupom', 'ticket',
-                    'vendaid', 'idvenda', 'codigovenda',
-                    'produto', 'sku', 'codigoproduto', 'referencia',
-                    'valortotal', 'totalvenda', 'totalpedido',
-                    'data', 'cliente', 'loja', 'situacao', 'valorliquido', 'numero', 'cpf'
+                    'vendaid', 'idvenda', 'codigovenda', 'idtransacao',
+                    'produto', 'sku', 'codigoproduto', 'referencia', 'item',
+                    'valortotal', 'totalvenda', 'totalpedido', 'totalitem',
+                    'totalcarrinho', 'totalpago', 'bandeira', 'modalidade',
+                    'data', 'cliente', 'loja', 'situacao', 'valorliquido', 'numero', 'cpf', 'status'
                 ];
 
                 for (let i = 0; i < Math.min(jsonData.length, 50); i++) {
