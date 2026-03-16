@@ -972,7 +972,7 @@ const DRE: React.FC = () => {
                 {Object.entries(metrics.revByMethod).map(([method, val]) => (
                     <Row
                         key={method}
-                        label={`Vendas realizadas no ${method}`}
+                        label={activeCompany?.business_type === 'services' ? `Pedidos recebidos no ${method}` : `Vendas realizadas no ${method}`}
                         value={val}
                         percentage={Number(metrics.totalRev) > 0 ? (Number(val) / Number(metrics.totalRev)) * 100 : 0}
                     />
@@ -985,7 +985,7 @@ const DRE: React.FC = () => {
                 />
 
                 <Row
-                    label="Impostos sobre as vendas"
+                    label={activeCompany?.business_type === 'services' ? "Impostos sobre os pedidos" : "Impostos sobre as vendas"}
                     value={metrics.impostos}
                     percentage={metrics.totalRev > 0 ? (metrics.impostos / metrics.totalRev) * 100 : 0}
                     isNegative
@@ -998,7 +998,7 @@ const DRE: React.FC = () => {
                 />
 
                 <Row
-                    label="Custos de mercadoria vendida (CMV)"
+                    label={activeCompany?.business_type === 'services' ? "Custos de serviços prestados (CSP)" : "Custos de mercadoria vendida (CMV)"}
                     value={metrics.cmv}
                     percentage={metrics.totalRev > 0 ? (metrics.cmv / metrics.totalRev) * 100 : 0}
                     isNegative
@@ -1011,13 +1011,13 @@ const DRE: React.FC = () => {
                 />
 
                 <Row
-                    label="Perda do estoque (Furto, vencido, danificado)"
+                    label={activeCompany?.business_type === 'services' ? "Perdas ou cancelamentos" : "Perda do estoque (Furto, vencido, danificado)"}
                     value={metrics.perdaEstoque}
                     percentage={metrics.totalRev > 0 ? (metrics.perdaEstoque / metrics.totalRev) * 100 : 0}
                     isNegative
                 />
                 <Row
-                    label="MARGEM BRUTA SEM PERDA DE ESTOQUE"
+                    label={activeCompany?.business_type === 'services' ? "MARGEM BRUTA SEM PERDAS" : "MARGEM BRUTA SEM PERDA DE ESTOQUE"}
                     value={metrics.marginAfterLoss}
                     percentage={metrics.totalRev > 0 ? (metrics.marginAfterLoss / metrics.totalRev) * 100 : 0}
                     isSubTotal

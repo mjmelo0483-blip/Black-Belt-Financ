@@ -1,10 +1,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSales } from '../hooks/useSales';
+import { useCompany } from '../contexts/CompanyContext';
 import * as XLSX from 'xlsx';
 
 const Sales: React.FC = () => {
     const { importSalesFromExcel, fetchImports, deleteSalesByFilename, loading } = useSales();
+    const { activeCompany } = useCompany();
     const [importStatus, setImportStatus] = useState<string>('');
     const [history, setHistory] = useState<any[]>([]);
 
@@ -28,8 +30,8 @@ const Sales: React.FC = () => {
                 const bstr = evt.target?.result;
                 const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
 
-                // Try to find the 'Vendas' sheet, otherwise use the first one
-                let wsname = wb.SheetNames.find(n => n.toLowerCase().includes('venda') || n.toLowerCase().includes('item'));
+                // Try to find the 'Vendas' or 'Pedidos' sheet, otherwise use the first one
+                let wsname = wb.SheetNames.find(n => n.toLowerCase().includes('venda') || n.toLowerCase().includes('pedido') || n.toLowerCase().includes('item'));
                 if (!wsname) wsname = wb.SheetNames[0];
 
                 const ws = wb.Sheets[wsname];
@@ -95,7 +97,8 @@ const Sales: React.FC = () => {
 
     const handleDeleteImport = async (item: any) => {
         const name = item.isLegacy ? 'os dados antigos (Sem Nome)' : `o arquivo "${item.name}"`;
-        if (window.confirm(`Tem certeza que deseja excluir ${name}? Esta ação apagará ${item.count} vendas.`)) {
+        const itemType = activeCompany?.business_type === 'services' ? 'pedidos' : 'vendas';
+        if (window.confirm(`Tem certeza que deseja excluir ${name}? Esta ação apagará ${item.count} ${itemType}.`)) {
             setImportStatus('Excluindo...');
             const result = await deleteSalesByFilename(item.isLegacy ? null : item.name);
             if (result.success) {
@@ -110,8 +113,12 @@ const Sales: React.FC = () => {
     return (
         <div className="p-6 max-w-6xl mx-auto space-y-8">
             <header className="flex flex-col gap-2">
-                <h1 className="text-3xl font-black text-white tracking-tight uppercase">Importação de Vendas</h1>
-                <p className="text-[#92adc9] text-sm">Gerencie o histórico de vendas importadas do seu sistema.</p>
+                <h1 className="text-3xl font-black text-white tracking-tight uppercase">
+                    {activeCompany?.business_type === 'services' ? 'Importação de Pedidos' : 'Importação de Vendas'}
+                </h1>
+                <p className="text-[#92adc9] text-sm">
+                    {activeCompany?.business_type === 'services' ? 'Gerencie o histórico de pedidos importados do seu sistema.' : 'Gerencie o histórico de vendas importadas do seu sistema.'}
+                </p>
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -150,7 +157,7 @@ const Sales: React.FC = () => {
                             Dica de Importação
                         </h3>
                         <p className="text-[#92adc9] text-[11px] leading-relaxed">
-                            O sistema identifica automaticamente as colunas. Para evitar duplicações, certifique-se de que a coluna de <strong>Código da Venda</strong> ou <strong>Nº Pedido</strong> esteja preenchida corretamente.
+                            O sistema identifica automaticamente as colunas. Para evitar duplicações, certifique-se de que a coluna de <strong>{activeCompany?.business_type === 'services' ? 'Nº do Pedido' : 'Código da Venda'}</strong> ou <strong>Nº Pedido</strong> esteja preenchida corretamente.
                         </p>
                     </div>
                 </div>

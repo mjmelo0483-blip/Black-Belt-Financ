@@ -4,6 +4,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { useProfile } from '../hooks/useProfile';
 import { useView } from '../contexts/ViewContext';
+import { useCompany } from '../contexts/CompanyContext';
 import logo from '../assets/logo.png';
 
 interface SidebarProps {
@@ -16,13 +17,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { profile } = useProfile();
   const { isBusiness } = useView();
+  const { activeCompany } = useCompany();
   const [isSupportExpanded, setIsSupportExpanded] = React.useState(false);
 
   const navItems = [
     { label: 'Dashboard', icon: 'dashboard', path: '/dashboard' },
     ...(isBusiness ? [
-      { label: 'Vendas', icon: 'shopping_cart', path: '/sales' },
-      { label: 'Análise de Vendas', icon: 'analytics', path: '/sales-dashboard' },
+      { label: activeCompany?.business_type === 'services' ? 'Pedidos' : 'Vendas', icon: 'shopping_cart', path: '/sales' },
+      ...(activeCompany?.business_type !== 'services' ? [{ label: 'Análise de Vendas', icon: 'analytics', path: '/sales-dashboard' }] : []),
       { label: 'DRE', icon: 'list_alt', path: '/dre' },
       { label: 'Empresas', icon: 'corporate_fare', path: '/companies' },
     ] : []),

@@ -6,6 +6,7 @@ const CompanyManagement: React.FC = () => {
     const { companies, activeCompany, setActiveCompany, createCompany, addMember, removeMember, members } = useCompany();
     const [newCompanyName, setNewCompanyName] = useState('');
     const [cnpj, setCnpj] = useState('');
+    const [businessType, setBusinessType] = useState<'products'|'services'|'both'>('both');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
@@ -19,7 +20,7 @@ const CompanyManagement: React.FC = () => {
         if (!newCompanyName.trim()) return;
         setLoading(true);
         try {
-            const company = await createCompany(newCompanyName, cnpj);
+            const company = await createCompany(newCompanyName, cnpj, businessType);
             if (company) {
                 handleSelectCompany(company);
             }
@@ -59,7 +60,14 @@ const CompanyManagement: React.FC = () => {
                                         </div>
                                         <div>
                                             <p className="text-white font-bold text-sm">{c.name}</p>
-                                            {c.cnpj && <p className="text-[10px] text-[#92adc9]">{c.cnpj}</p>}
+                                            <div className="flex gap-2 items-center mt-0.5">
+                                                {c.cnpj && <p className="text-[10px] text-[#92adc9]">{c.cnpj}</p>}
+                                                {c.business_type && (
+                                                    <span className="text-[8px] uppercase tracking-widest font-black bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-md">
+                                                        {c.business_type === 'products' ? 'Produtos' : c.business_type === 'services' ? 'Serviços' : 'Ambos'}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                     <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0">arrow_forward</span>
@@ -103,6 +111,32 @@ const CompanyManagement: React.FC = () => {
                                     className="w-full bg-[#111a22] border border-[#324d67] rounded-2xl py-4 px-5 text-white placeholder-[#4a6b8a] font-bold outline-none focus:ring-1 focus:ring-emerald-500"
                                     placeholder="00.000.000/0000-00"
                                 />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-[#92adc9] uppercase tracking-widest ml-1">Ramo de Atuação</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setBusinessType('products')}
+                                        className={`py-3 px-2 text-center rounded-2xl text-[11px] font-bold transition-all border ${businessType === 'products' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-[#111a22] border-[#324d67] text-[#92adc9] hover:bg-[#1a2632]'}`}
+                                    >
+                                        Produtos
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBusinessType('services')}
+                                        className={`py-3 px-2 text-center rounded-2xl text-[11px] font-bold transition-all border ${businessType === 'services' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-[#111a22] border-[#324d67] text-[#92adc9] hover:bg-[#1a2632]'}`}
+                                    >
+                                        Serviços
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBusinessType('both')}
+                                        className={`py-3 px-2 text-center rounded-2xl text-[11px] font-bold transition-all border ${businessType === 'both' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-[#111a22] border-[#324d67] text-[#92adc9] hover:bg-[#1a2632]'}`}
+                                    >
+                                        Ambos
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

@@ -5,6 +5,7 @@ export interface Company {
     id: string;
     name: string;
     cnpj?: string; // Novo campo
+    business_type?: 'products' | 'services' | 'both'; // Tipo de negócio
     owner_id: string;
     created_at: string;
 }
@@ -23,7 +24,7 @@ interface CompanyContextType {
     setActiveCompany: (company: Company | null) => void;
     loading: boolean;
     refreshCompanies: () => Promise<void>;
-    createCompany: (name: string, cnpj?: string) => Promise<Company | undefined>;
+    createCompany: (name: string, cnpj?: string, business_type?: string) => Promise<Company | undefined>;
     addMember: (email: string, role?: 'admin' | 'member') => Promise<void>;
     removeMember: (memberId: string) => Promise<void>;
     members: CompanyMember[];
@@ -103,7 +104,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fetchMembers();
     }, [fetchMembers]);
 
-    const createCompany = async (name: string, cnpj?: string) => {
+    const createCompany = async (name: string, cnpj?: string, business_type: string = 'both') => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return;
@@ -114,6 +115,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 .insert({
                     name,
                     cnpj, // Salvar o CNPJ
+                    business_type,
                     owner_id: session.user.id
                 })
                 .select()
