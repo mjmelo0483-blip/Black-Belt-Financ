@@ -231,13 +231,26 @@ export const useSales = () => {
             const orderTotalKeys = ['Valor Líquido', 'Vlr Total', 'Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda', 'Total', 'Valor Total'];
             const statusKeys = ['Q', 'Status', 'Situacao', 'Situação', 'Estado', 'Operação', 'Operacao', 'Tipo Movimento', 'Movimento', 'Cancelado'];
 
+            // DIAGNOSTIC COUNTERS
+            let diagCancelled = 0;
+            let diagNoDate = 0;
+            let diagEmpty = 0;
+            let diagProcessed = 0;
+            let diagFirstRowKeys = '';
+            let diagFirstRowSample = '';
+
             rows.forEach((row, index) => {
+                if (index === 0) {
+                    diagFirstRowKeys = Object.keys(row).join(', ');
+                    const vals = Object.entries(row).slice(0, 8).map(([k,v]) => `${k}=${v}`);
+                    diagFirstRowSample = vals.join(' | ');
+                }
                 // SKIP CANCELLED ROWS - Robust detection for retail software
                 const status = String(getVal(row, statusKeys) || '').toLowerCase().trim();
                 const isCancelled = status === 'c' || status === 'e' || status === 'd' ||
                     status.includes('cancel') || status.includes('estorn') ||
                     status.includes('dev') || status.includes('canc');
-                if (isCancelled) return;
+                if (isCancelled) { diagCancelled++; return; }
 
                 let productName = String(getVal(row, productNameKeys) || '').trim();
                 if (!productName) {
@@ -250,14 +263,14 @@ export const useSales = () => {
                 const itemTotal = parseNumber(getVal(row, itemTotalKeys));
 
                 // Skip rows that are clearly empty or just separators
-                if ((!productName || productName === '-') && orderTotal === 0 && itemTotal === 0) return;
+                if ((!productName || productName === '-') && orderTotal === 0 && itemTotal === 0) { diagEmpty++; return; }
 
                 // Try to find a unique Sale ID (Order Number, Ticket, etc)
                 const rawCode = String(getVal(row, codeKeys) || '');
                 const rawDate = getVal(row, dateKeys);
                 const date = formatDate(rawDate) || lastDate;
 
-                if (!date) return; // Skip rows without date (and no previous date to carry over)
+                if (!date) { diagNoDate++; return; } // Skip rows without date (and no previous date to carry over)
                 lastDate = date;
 
                 const store = getVal(row, storeKeys) || lastStore || 'Unica';
@@ -328,6 +341,7 @@ export const useSales = () => {
 
                 // Increment calculated total
                 sale.total_amount += lineTotalPrice;
+                diagProcessed++;
             });
 
             const allSalesData = Array.from(salesGroups.values()).map(s => {
@@ -383,7 +397,7 @@ export const useSales = () => {
                 }
             }
 
-            return { success: true };
+            return { success: true, diagnostics: { totalRows: rows.length, processed: diagProcessed, cancelled: diagCancelled, noDate: diagNoDate, empty: diagEmpty, salesCreated: allSalesData.length, firstRowKeys: diagFirstRowKeys, firstRowSample: diagFirstRowSample } };
         } catch (err: any) {
             console.error('Import error:', err);
             return { error: formatError(err) };

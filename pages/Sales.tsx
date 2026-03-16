@@ -84,7 +84,17 @@ const Sales: React.FC = () => {
                 const result = await importSalesFromExcel(data, file.name);
 
                 if (result.success) {
-                    setImportStatus('Sucesso: ' + data.length + ' registros processados.');
+                    const d = (result as any).diagnostics;
+                    if (d) {
+                        setImportStatus(
+                            `✅ ${d.totalRows} linhas lidas | ${d.processed} processadas | ${d.salesCreated} vendas criadas | ` +
+                            `Canceladas: ${d.cancelled} | Sem data: ${d.noDate} | Vazias: ${d.empty}\n` +
+                            `🔑 Colunas: ${d.firstRowKeys}\n` +
+                            `📋 Amostra: ${d.firstRowSample}`
+                        );
+                    } else {
+                        setImportStatus('Sucesso: ' + data.length + ' registros processados.');
+                    }
                     loadHistory();
                     // Clear input
                     e.target.value = '';
@@ -149,11 +159,11 @@ const Sales: React.FC = () => {
                         </label>
 
                         {importStatus && (
-                            <div className={`mt-6 p-4 rounded-xl text-xs font-bold flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${importStatus.includes('Erro') ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-primary/10 text-primary border border-primary/20'}`}>
-                                <span className="material-symbols-outlined text-[18px]">
-                                    {importStatus.includes('Erro') ? 'error' : importStatus.includes('Sucesso') ? 'check_circle' : 'info'}
+                            <div className={`mt-6 p-4 rounded-xl text-xs font-bold flex items-start gap-3 animate-in fade-in slide-in-from-top-2 ${importStatus.includes('Erro') ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-primary/10 text-primary border border-primary/20'}`}>
+                                <span className="material-symbols-outlined text-[18px] mt-0.5">
+                                    {importStatus.includes('Erro') ? 'error' : (importStatus.includes('Sucesso') || importStatus.includes('✅')) ? 'check_circle' : 'info'}
                                 </span>
-                                {importStatus}
+                                <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{importStatus}</span>
                             </div>
                         )}
                     </div>
