@@ -190,16 +190,48 @@ export const useSales = () => {
                 }
             });
 
-            // Bulk Upsert Customers
+            // Bulk Upsert Customers - split by CPF presence
+            // The DB constraint is UNIQUE NULLS NOT DISTINCT (user_id, cpf, company_id)
+            // This means ALL customers with cpf=null collapse to the same key, so we can't batch-upsert them
             const customersMap = new Map();
-            if (customersToUpsert.length > 0) {
+            const customersWithCpf = customersToUpsert.filter(c => c.cpf !== null);
+            const customersWithoutCpf = customersToUpsert.filter(c => c.cpf === null);
+
+            // Batch upsert customers WITH CPF (safe, each has a unique conflict key)
+            if (customersWithCpf.length > 0) {
                 const { data: custData, error: custError } = await supabase
                     .from('customers')
-                    .upsert(customersToUpsert, { onConflict: 'user_id, cpf, company_id' })
+                    .upsert(customersWithCpf, { onConflict: 'user_id, cpf, company_id' })
                     .select();
 
                 if (custError) throw custError;
                 custData?.forEach(c => customersMap.set(c.cpf || c.name, c.id));
+            }
+
+            // For customers WITHOUT CPF, insert individually (select-then-insert by name)
+            for (const cust of customersWithoutCpf) {
+                const { data: existing } = await supabase
+                    .from('customers')
+                    .select('id, name')
+                    .eq('user_id', cust.user_id)
+                    .eq('name', cust.name)
+                    .is('cpf', null)
+                    .eq('company_id', cust.company_id)
+                    .maybeSingle();
+
+                if (existing) {
+                    customersMap.set(cust.name, existing.id);
+                } else {
+                    const { data: inserted, error: insertErr } = await supabase
+                        .from('customers')
+                        .insert(cust)
+                        .select()
+                        .maybeSingle();
+
+                    if (!insertErr && inserted) {
+                        customersMap.set(inserted.name, inserted.id);
+                    }
+                }
             }
 
             // Bulk Upsert Products
