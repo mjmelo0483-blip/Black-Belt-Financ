@@ -255,7 +255,7 @@ export const useSales = () => {
             const codeKeys = ['A', 'ID Transação', 'ID Transacao', 'Número', 'Nº Pedido Loja', 'Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº', 'Codigo', 'Transacao'];
             const dateKeys = ['B', 'Data / Hora (GMT -3)', 'Data / Hora', 'Data', 'Data da Compra', 'Data Venda', 'Data Emissão', 'Data Movimento', 'Emissão', 'Data do Pedido', 'Dt. Venda', 'Data Transação', 'Data de Emissão', 'Data Vda', 'Dt Venda'];
             const storeKeys = ['Loja', 'Unidade', 'Filial', 'Ponto de Venda', 'Estabelecimento', 'Nome da Loja', 'PDV', 'Checkout'];
-            const paymentKeys = ['E', 'Bandeira', 'Modalidade', 'Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'Tipo de Pagamento', 'Pagto', 'Forma Pagto', 'Meio Pagto'];
+            const paymentKeys = ['E', 'Modalidade', 'Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'Tipo de Pagamento', 'Pagto', 'Forma Pagto', 'Meio Pagto', 'Bandeira'];
             const deviceKeys = ['Dispositivo', 'Formato Transação', 'Formato Transacao', 'Origem', 'Canal', 'Marketplace', 'Plataforma', 'Canal de Venda'];
             const qtyKeys = ['O', 'Qtd', 'Quantidade', 'Qtde', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume', 'Units', 'Quantity'];
             const unitPriceKeys = ['L', 'Preço Un.', 'Preço Unitário', 'Valor Unitario', 'Vlr Unitario', 'Preco', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.', 'Vlr. Liq.', 'Preço Venda Unitário', 'Vlr Unit'];

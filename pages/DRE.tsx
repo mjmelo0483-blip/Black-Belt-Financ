@@ -334,7 +334,7 @@ const DRE: React.FC = () => {
     }
 
     const metrics = useMemo<DREMetrics>(() => {
-        const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Outros': 0 };
+        const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Dinheiro': 0, 'Outros': 0 };
         let totalRev = 0;
         let cmvCents = 0;
 
@@ -349,9 +349,10 @@ const DRE: React.FC = () => {
             let method = sale.payment_method || 'Outros';
             const normMethod = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-            if (normMethod.includes('credito')) method = 'Crédito';
-            else if (normMethod.includes('debito')) method = 'Débito';
+            if (normMethod.includes('credito') || normMethod.includes('credit')) method = 'Crédito';
+            else if (normMethod.includes('debito') || normMethod.includes('debit')) method = 'Débito';
             else if (normMethod.includes('pix')) method = 'PIX';
+            else if (normMethod.includes('dinheiro') || normMethod.includes('cash') || normMethod.includes('especie')) method = 'Dinheiro';
             else method = 'Outros';
 
             const sTotal = Number(sale.total_amount || 0);
