@@ -146,7 +146,10 @@ export const useSales = () => {
             const costKeys = ['P', 'Custo', 'Vlr. Custo', 'Preço de Custo', 'Custo Unitário', 'Markup Cost', 'Cost', 'Vlr Custo', 'Preco Custo', 'Preço Custo'];
 
             rows.forEach(row => {
-                const productName = String(getVal(row, productNameKeys) || '').trim();
+                let productName = String(getVal(row, productNameKeys) || '').trim();
+                if (!productName) {
+                    productName = activeCompany?.business_type === 'services' ? 'Serviço Prestado' : 'Produto Geral';
+                }
                 let productCode = String(getVal(row, productCodeKeys) || '').trim();
 
                 // FALLBACK: If code is missing but name exists, use name as code
@@ -215,15 +218,15 @@ export const useSales = () => {
             let lastCode: string | null = null;
             let lastStore: string | null = null;
 
-            const codeKeys = ['A', 'Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº', 'Codigo', 'ID', 'Transacao', 'Venda ID'];
-            const dateKeys = ['B', 'Data da Compra', 'Data', 'Data Venda', 'Data Emissão', 'Data Movimento', 'Emissão', 'Data do Pedido', 'Dt. Venda', 'Data Transação', 'Data de Emissão', 'Data Vda', 'Dt Venda'];
+            const codeKeys = ['A', 'Nº Pedido Loja', 'Número', 'Nº Pedido', 'Pedido', 'Documento', 'Cupom', 'Ticket', 'Venda', 'ID Venda', 'Codigo Venda', 'Nº Transação', 'Venda ID', 'Nº', 'Codigo', 'ID', 'Transacao', 'Venda ID'];
+            const dateKeys = ['B', 'Data', 'Data da Compra', 'Data Venda', 'Data Emissão', 'Data Movimento', 'Emissão', 'Data do Pedido', 'Dt. Venda', 'Data Transação', 'Data de Emissão', 'Data Vda', 'Dt Venda'];
             const storeKeys = ['Loja', 'Unidade', 'Filial', 'Ponto de Venda', 'Estabelecimento', 'Nome da Loja', 'PDV', 'Checkout'];
             const paymentKeys = ['E', 'Forma de Pagamento', 'Pagamento', 'Metodo', 'Meio de Pagamento', 'Tipo de Pagamento', 'Pagto', 'Forma Pagto', 'Meio Pagto'];
-            const deviceKeys = ['Dispositivo', 'Origem', 'Canal', 'Marketplace', 'Plataforma'];
+            const deviceKeys = ['Dispositivo', 'Origem', 'Canal', 'Marketplace', 'Plataforma', 'Canal de Venda'];
             const qtyKeys = ['O', 'Quantidade', 'Qtde', 'Qtd', 'Quant.', 'Quantidade Vendida', 'Qtd.', 'Quant', 'Volume', 'Units', 'Quantity'];
             const unitPriceKeys = ['L', 'Valor Unitario', 'Vlr Unitario', 'Preco', 'Preço Unitário', 'Vlr. Unit.', 'Valor Unit.', 'Preco Venda', 'Preço Vda', 'Preço Liq.', 'Preço Líquido', 'Valor Liq.', 'Vlr. Liq.', 'Preço Venda Unitário', 'Vlr Unit'];
-            const itemTotalKeys = ['N', 'Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Líquido Item', 'Vlr liq item', 'Valor Total', 'Vlr. Total', 'Total', 'Vlr Total'];
-            const orderTotalKeys = ['Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda', 'Total', 'Valor Total'];
+            const itemTotalKeys = ['N', 'Vlr Total', 'Valor Total Item', 'Vlr. Total Item', 'Total Item', 'Subtotal', 'Total Líquido', 'Total Liquido', 'Vlr Total Item', 'Valor Líquido Item', 'Vlr liq item', 'Valor Total', 'Vlr. Total', 'Total'];
+            const orderTotalKeys = ['Valor Líquido', 'Vlr Total', 'Total Venda', 'Total Pedido', 'Valor da Venda', 'Valor Total Pedido', 'Vlr. Total Venda', 'Total', 'Valor Total'];
             const statusKeys = ['Q', 'Status', 'Situacao', 'Situação', 'Estado', 'Operação', 'Operacao', 'Tipo Movimento', 'Movimento', 'Cancelado'];
 
             rows.forEach((row, index) => {
@@ -234,11 +237,18 @@ export const useSales = () => {
                     status.includes('dev') || status.includes('canc');
                 if (isCancelled) return;
 
-                const productName = String(getVal(row, productNameKeys) || '').trim();
-                const qty = parseNumber(getVal(row, qtyKeys));
+                let productName = String(getVal(row, productNameKeys) || '').trim();
+                if (!productName) {
+                    productName = activeCompany?.business_type === 'services' ? 'Serviço Prestado' : 'Produto Geral';
+                }
+                let qty = parseNumber(getVal(row, qtyKeys));
+                if (qty === 0) qty = 1; // Default to 1 for order-level imports
 
-                // Skip rows that are clearly empty or just separators (missing product and 0 qty)
-                if ((!productName || productName === '-') && qty === 0) return;
+                const orderTotal = parseNumber(getVal(row, orderTotalKeys));
+                const itemTotal = parseNumber(getVal(row, itemTotalKeys));
+
+                // Skip rows that are clearly empty or just separators
+                if ((!productName || productName === '-') && orderTotal === 0 && itemTotal === 0) return;
 
                 // Try to find a unique Sale ID (Order Number, Ticket, etc)
                 const rawCode = String(getVal(row, codeKeys) || '');
@@ -299,7 +309,7 @@ export const useSales = () => {
                 let productCode = String(getVal(row, productCodeKeys) || '').trim();
 
                 // FALLBACK: Use the same logic as above to ensure matching
-                if ((!productCode || productCode === 'undefined' || productCode === '' || productCode === 'null') && productName) {
+                if (!productCode || productCode === 'undefined' || productCode === '' || productCode === 'null') {
                     productCode = productName;
                 }
 
