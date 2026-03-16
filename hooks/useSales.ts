@@ -164,7 +164,8 @@ export const useSales = () => {
 
                 const customerName = getVal(row, customerValueKeys);
                 const customerCpf = getVal(row, customerCpfKeys);
-                const category = getVal(row, categoryKeys) || 'Geral';
+                const rawCategory = getVal(row, categoryKeys);
+                const category = rawCategory ? String(rawCategory).trim() : null; // null = no category in spreadsheet
                 const cost = parseNumber(getVal(row, costKeys));
 
                 if (customerName && customerName !== '-' && !uniqueCustomerKeys.has(customerCpf || customerName)) {
@@ -182,7 +183,7 @@ export const useSales = () => {
                         user_id: user.id,
                         code: productLookupKey,
                         name: productName || 'Produto sem nome',
-                        category: category ? String(category).trim() : 'Geral',
+                        category: category, // null if not provided by spreadsheet
                         cost: cost || 0,
                         company_id: activeCompany?.id || null
                     });
@@ -234,12 +235,41 @@ export const useSales = () => {
                 }
             }
 
-            // Bulk Upsert Products
+            // Bulk Upsert Products - preserve existing categories when spreadsheet doesn't provide one
             const productsMap = new Map();
-            if (productsToUpsert.length > 0) {
+
+            // First, fetch existing products to get their current categories
+            const existingProductCodes = productsToUpsert.map(p => p.code);
+            const existingProductsMap = new Map<string, string>();
+            if (existingProductCodes.length > 0) {
+                // Fetch in batches of 200
+                for (let i = 0; i < existingProductCodes.length; i += 200) {
+                    const batch = existingProductCodes.slice(i, i + 200);
+                    const { data: existingProducts } = await supabase
+                        .from('products')
+                        .select('code, category')
+                        .eq('user_id', user.id)
+                        .in('code', batch)
+                        .eq('company_id', activeCompany?.id || '');
+
+                    existingProducts?.forEach(p => {
+                        if (p.category && p.category !== 'Geral') {
+                            existingProductsMap.set(p.code, p.category);
+                        }
+                    });
+                }
+            }
+
+            // Apply existing categories to products that don't have one from the spreadsheet
+            const finalProductsToUpsert = productsToUpsert.map(p => ({
+                ...p,
+                category: p.category || existingProductsMap.get(p.code) || 'Geral'
+            }));
+
+            if (finalProductsToUpsert.length > 0) {
                 const { data: prodData, error: prodError } = await supabase
                     .from('products')
-                    .upsert(productsToUpsert, { onConflict: 'user_id, code, company_id' })
+                    .upsert(finalProductsToUpsert, { onConflict: 'user_id, code, company_id' })
                     .select();
 
                 if (prodError) throw prodError;
