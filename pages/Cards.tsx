@@ -568,7 +568,16 @@ const Cards: React.FC = () => {
                     max="31"
                     className="w-full bg-[#111a22] border border-[#324d67] rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-primary outline-none transition-all"
                     value={formData.due_day}
-                    onChange={(e) => setFormData({ ...formData, due_day: e.target.value })}
+                    onChange={(e) => {
+                      const newDueDay = e.target.value;
+                      let suggestedClosingDay = parseInt(newDueDay) - 10;
+                      if (suggestedClosingDay <= 0) suggestedClosingDay += 30;
+                      setFormData({
+                        ...formData,
+                        due_day: newDueDay,
+                        closing_day: suggestedClosingDay.toString()
+                      });
+                    }}
                   />
                 </div>
               </div>

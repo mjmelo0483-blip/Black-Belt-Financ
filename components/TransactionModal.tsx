@@ -142,6 +142,40 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
         return `${y}-${m}-${d}`;
     };
 
+    const calculateCardDueDate = (purchaseDate: string, cardId: string) => {
+        const card = cards.find(c => c.id === cardId);
+        if (!card || !card.due_day || !card.closing_day) return purchaseDate;
+
+        const [pYear, pMonth, pDay] = purchaseDate.split('-').map(Number);
+        const closingDay = parseInt(card.closing_day);
+        const dueDay = parseInt(card.due_day);
+
+        let targetMonth = pMonth;
+        let targetYear = pYear;
+
+        // Se a compra foi feita no dia do fechamento ou depois, vence no mês seguinte
+        if (pDay >= closingDay) {
+            targetMonth++;
+            if (targetMonth > 12) {
+                targetMonth = 1;
+                targetYear++;
+            }
+        }
+
+        // Se o dia de vencimento for menor que o dia de fechamento (ex: fecha 25, vence 05),
+        // o vencimento já seria naturalmente no mês seguinte ao fechamento.
+        if (dueDay < closingDay) {
+            // Já estamos no mês correto se pDay >= closingDay, 
+            // mas se pDay < closingDay, o vencimento é no mês atual referente ao fechamento passado
+            // A lógica de cartões costuma ser: fechou -> vence 10 dias depois.
+        }
+
+        const dueMonthStr = String(targetMonth).padStart(2, '0');
+        const dueDayStr = String(dueDay).padStart(2, '0');
+
+        return `${targetYear}-${dueMonthStr}-${dueDayStr}`;
+    };
+
     const handleSave = async () => {
         // Validação para investimento
         if (type === 'investment') {
@@ -357,7 +391,18 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                     <>
                                         <label className="flex flex-col gap-2">
                                             <span className="text-[#92adc9] text-xs font-bold uppercase tracking-wider">Cartão</span>
-                                            <select className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm" value={cardId} onChange={(e) => setCardId(e.target.value)}>
+                                            <select
+                                                className="w-full bg-[#1c2a38] border border-[#324d67] rounded-xl py-4 px-4 text-white outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
+                                                value={cardId}
+                                                onChange={(e) => {
+                                                    const newCardId = e.target.value;
+                                                    setCardId(newCardId);
+                                                    if (newCardId) {
+                                                        const newDueDate = calculateCardDueDate(date, newCardId);
+                                                        setDueDate(newDueDate);
+                                                    }
+                                                }}
+                                            >
                                                 <option value="">Selecionar...</option>
                                                 {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                             </select>
