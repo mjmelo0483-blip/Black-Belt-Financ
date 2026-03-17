@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSales } from '../hooks/useSales';
 import { useCompany } from '../contexts/CompanyContext';
+import ServiceProposalsView from '../components/ServiceProposalsView';
 import * as XLSX from 'xlsx';
 
 const Sales: React.FC = () => {
@@ -18,6 +18,14 @@ const Sales: React.FC = () => {
     useEffect(() => {
         loadHistory();
     }, [loadHistory]);
+
+    if (activeCompany?.business_type === 'services') {
+        return (
+            <div className="p-6 lg:p-10 max-w-7xl mx-auto">
+                <ServiceProposalsView companyName={activeCompany.name} />
+            </div>
+        );
+    }
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
