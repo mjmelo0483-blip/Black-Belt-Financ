@@ -180,7 +180,7 @@ const ServiceProposalsView: React.FC<ServiceProposalsViewProps> = ({ companyName
                                         <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
                                             <td className="p-5">
                                                 <span className="text-white text-sm font-bold">
-                                                    {new Date(p.date).toLocaleDateString('pt-BR')}
+                                                    {p.date ? new Date(p.date + 'T12:00:00').toLocaleDateString('pt-BR') : '---'}
                                                 </span>
                                             </td>
                                             <td className="p-5 text-white text-sm font-bold truncate max-w-[200px] uppercase">
