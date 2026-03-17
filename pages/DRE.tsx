@@ -31,11 +31,15 @@ const DRE: React.FC = () => {
         cashback_rates: {} as Record<string, number>
     });
     const [currentParamId, setCurrentParamId] = useState<string | null>(null);
-    const [configTab, setConfigTab] = useState<'rates' | 'mapping'>('rates');
+    const [configTab, setConfigTab] = useState<'rates' | 'mapping' | 'groups'>('rates');
     const [categories, setCategories] = useState<any[]>([]);
 
-    const DRE_GROUPS = [
-        { id: 'cashback', label: 'Comissão paga ao condominio (cashback)', type: 'variable' },
+    const DEFAULT_DRE_GROUPS = [
+        { id: 'vendas', label: 'Venda de mercadoria (Bruto)', type: 'revenue', isSystem: true },
+        { id: 'cashback', label: 'Comissão paga ao condominio (cashback)', type: 'variable', isSystem: true },
+        { id: 'royalties', label: 'Royalties', type: 'variable', isSystem: true },
+        { id: 'tarifaCartao', label: 'Tarifa de cartão', type: 'variable', isSystem: true },
+        { id: 'tarifaPix', label: 'Tarifa de Pix', type: 'variable', isSystem: true },
         { id: 'marketing', label: 'Investimento Marketing da loja', type: 'variable' },
         { id: 'diversas', label: 'Despesas diversas da loja', type: 'variable' },
         { id: 'funcionarios', label: 'Funcionários', type: 'fixed' },
@@ -50,8 +54,12 @@ const DRE: React.FC = () => {
         { id: 'internet', label: 'Despesa com internet', type: 'fixed' },
         { id: 'energia', label: 'Despesa com energia elétrica', type: 'fixed' },
         { id: 'outros', label: 'Outros', type: 'fixed' },
-        { id: 'perda', label: 'Perda do estoque', type: 'variable' },
+        { id: 'perda', label: 'Perda do estoque', type: 'variable', isSystem: true },
     ];
+
+    const [dreGroups, setDreGroups] = useState<any[]>(DEFAULT_DRE_GROUPS);
+    const [editingGroup, setEditingGroup] = useState<{ id: string, label: string, type: string } | null>(null);
+    const [isAddingGroup, setIsAddingGroup] = useState(false);
 
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -108,15 +116,22 @@ const DRE: React.FC = () => {
                 setAllPeriods(sortedPeriods);
             }
 
-            // Fetch all known stores to ensure config is always populated
-            const knownStores = [
-                'Vitta Bela Fonte',
-                'Associação Dos Amigos Do Residencial Cenere',
-                'Condomínio Lar Chile',
-                'Condomínio Lar Portugal',
-                'Associação dos Proprietarios em loteamento village costa Sul'
-            ];
+            // Fetch DRE structure from company
+            if (activeCompany) {
+                const { data: compData } = await supabase
+                    .from('companies')
+                    .select('dre_structure')
+                    .eq('id', activeCompany.id)
+                    .single();
+                
+                if (compData?.dre_structure && Array.isArray(compData.dre_structure) && compData.dre_structure.length > 0) {
+                    setDreGroups(compData.dre_structure);
+                } else {
+                    setDreGroups(DEFAULT_DRE_GROUPS);
+                }
+            }
 
+            // Fetch all known stores to ensure config is always populated
             let storeQuery = supabase
                 .from('sales')
                 .select('store_name')
@@ -136,7 +151,7 @@ const DRE: React.FC = () => {
             const normalize = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
             const storeMap = new Map<string, string>();
-            [...knownStores, ...dbStores].forEach(name => {
+            dbStores.forEach(name => {
                 if (!name) return;
                 const normalized = normalize(name);
                 // If we don't have it yet, OR if the new name is "prettier" (more uppercase letters, or has accents which are usually more correct)
@@ -232,7 +247,6 @@ const DRE: React.FC = () => {
                 .or('payment_method.not.ilike.transferencia,payment_method.is.null')
                 .not('type', 'ilike', 'transfer')
                 .not('type', 'ilike', 'investment')
-                .ilike('type', 'expense')
                 .gte('date', startDate)
                 .lte('date', endDate);
 
@@ -319,8 +333,14 @@ const DRE: React.FC = () => {
 
     interface DREMetrics {
         revByMethod: Record<string, number>;
+        revGroups: Record<string, { label: string; amount: number; items: any[] }>;
         totalRev: number;
         impostos: number;
+        commissions: number;
+        cardFees: number;
+        pixFees: number;
+        royalties: number;
+        operadoraMargin: number;
         rl: number;
         cmv: number;
         grossMargin: number;
@@ -331,6 +351,8 @@ const DRE: React.FC = () => {
         fixGroups: Record<string, { label: string; amount: number; items: any[] }>;
         totalFix: number;
         netProfit: number;
+        IMC: number;
+        breakEven: number;
     }
 
     const metrics = useMemo<DREMetrics>(() => {
@@ -442,34 +464,29 @@ const DRE: React.FC = () => {
             storeRevMap[sName] += saleTotal;
         });
 
-        const varGroups: Record<string, { label: string; amount: number; items: any[] }> = {
-            cashback: { label: 'Comissão paga ao condominio (cashback)', amount: 0, items: [] },
-            royalties: { label: 'Royalties', amount: 0, items: [] },
-            tarifaCartao: { label: 'Tarifa de cartão', amount: 0, items: [] },
-            tarifaPix: { label: 'Tarifa de Pix', amount: 0, items: [] },
-            marketing: { label: 'Investimento Marketing da loja', amount: 0, items: [] },
-            diversas: { label: 'Despesas diversas da loja', amount: 0, items: [] },
-        };
+        const varGroups: Record<string, { label: string; amount: number; items: any[] }> = {};
+        const fixGroups: Record<string, { label: string; amount: number; items: any[] }> = {};
+        const revGroups: Record<string, { label: string; amount: number; items: any[] }> = {};
 
-        const fixGroups: Record<string, { label: string; amount: number; items: any[] }> = {
-            funcionarios: { label: 'Funcionários', amount: 0, items: [] },
-            manutencaoVeiculo: { label: 'Manutenção de veículo', amount: 0, items: [] },
-            taxaSistema: { label: 'Taxa de uso do sistema', amount: 0, items: [] },
-            aluguelContainer: { label: 'Aluguel de container', amount: 0, items: [] },
-            combustivel: { label: 'Despesa com combustível', amount: 0, items: [] },
-            aluguelEscritorio: { label: 'Aluguel de Escritório', amount: 0, items: [] },
-            tef: { label: 'Elgin+TEF+LgoPass', amount: 0, items: [] },
-            despesasFinanceiras: { label: 'Despesas financeiras', amount: 0, items: [] },
-            contabilidade: { label: 'Despesa com contabilidade', amount: 0, items: [] },
-            internet: { label: 'Despesa com internet', amount: 0, items: [] },
-            energia: { label: 'Despesa com energia elétrica', amount: 0, items: [] },
-            outros: { label: 'Outros', amount: 0, items: [] },
-        };
+        dreGroups.forEach(g => {
+            const groupData = { label: g.label, amount: 0, items: [] };
+            if (g.type === 'variable') varGroups[g.id] = groupData;
+            else if (g.type === 'fixed') fixGroups[g.id] = groupData;
+            else if (g.type === 'revenue') revGroups[g.id] = groupData;
+        });
+
+        // Ensure system groups exist
+        if (!varGroups.cashback) varGroups.cashback = { label: 'Comissão (Cashback)', amount: 0, items: [] };
+        if (!varGroups.royalties) varGroups.royalties = { label: 'Royalties', amount: 0, items: [] };
+        if (!varGroups.tarifaCartao) varGroups.tarifaCartao = { label: 'Tarifa de Cartão', amount: 0, items: [] };
+        if (!varGroups.tarifaPix) varGroups.tarifaPix = { label: 'Tarifa de Pix', amount: 0, items: [] };
+        if (!fixGroups.outros) fixGroups.outros = { label: 'Outros', amount: 0, items: [] };
 
         expensesData.forEach(exp => {
             const catName = (exp.categories?.name || 'Geral').toLowerCase();
             const dreGroup = exp.categories?.dre_group;
             const desc = (exp.description || '').toLowerCase();
+            const isIncome = exp.type?.toLowerCase().includes('income');
             let amount = Number(exp.amount || 0);
 
             const sNorm = normalizeStore(exp.store_name);
@@ -487,6 +504,16 @@ const DRE: React.FC = () => {
             }
 
             const expToPush = (selectedStore !== 'Todas' && isGeralItem) ? { ...exp, amount, is_prorated: true } : exp;
+            
+            if (isIncome) {
+                if (dreGroup && revGroups[dreGroup]) {
+                    revGroups[dreGroup].amount += amount;
+                    revGroups[dreGroup].items.push(expToPush);
+                }
+                totalRev += amount;
+                return;
+            }
+
             const pushToGroup = (group: any) => {
                 group.amount += amount;
                 group.items.push(expToPush);
@@ -513,8 +540,10 @@ const DRE: React.FC = () => {
                         storeManualCashback[cashbackKey].amount += amount;
                         storeManualCashback[cashbackKey].items.push(exp);
                     } else {
-                        varGroups.cashback.amount += amount;
-                        varGroups.cashback.items.push(exp);
+                        if (varGroups.cashback) {
+                            varGroups.cashback.amount += amount;
+                            varGroups.cashback.items.push(exp);
+                        }
                     }
                 } else if (varGroups[dreGroup]) {
                     varGroups[dreGroup].amount += amount;
@@ -612,15 +641,20 @@ const DRE: React.FC = () => {
             }
             // Outros (Fallback)
             else if (!isCalculated) {
-                pushToGroup(fixGroups.outros);
+                if (fixGroups.outros) {
+                    pushToGroup(fixGroups.outros);
+                } else {
+                    const firstFix = Object.values(fixGroups)[0];
+                    if (firstFix) pushToGroup(firstFix);
+                }
             }
         });
 
         impostos = (totalRev * (params.tax_rate / 100));
         perdaEstoque = (totalRev * (params.loss_rate / 100));
-        varGroups.royalties.amount = (totalRev * (params.royalty_rate / 100));
-        varGroups.tarifaPix.amount = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
-        varGroups.tarifaCartao.amount = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
+        if (varGroups.royalties) varGroups.royalties.amount = (totalRev * (params.royalty_rate / 100));
+        if (varGroups.tarifaPix) varGroups.tarifaPix.amount = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
+        if (varGroups.tarifaCartao) varGroups.tarifaCartao.amount = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
 
         if (selectedStore !== 'Todas') {
             const sNorm = normalizeStore(selectedStore);
@@ -628,29 +662,37 @@ const DRE: React.FC = () => {
             const manual = key ? storeManualCashback[key] : null;
 
             if (manual && manual.amount > 0) {
-                varGroups.cashback.amount += manual.amount;
-                varGroups.cashback.items.push(...manual.items);
+                if (varGroups.cashback) {
+                    varGroups.cashback.amount += manual.amount;
+                    varGroups.cashback.items.push(...manual.items);
+                }
             } else {
                 const rates = params.cashback_rates as Record<string, number>;
                 // Find rate using normalized key
                 const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === sNorm);
                 const rate = rateKey ? rates[rateKey] : 0;
-                varGroups.cashback.amount += (totalRev * (rate / 100));
+                if (varGroups.cashback) varGroups.cashback.amount += (totalRev * (rate / 100));
             }
         } else {
             activeStores.forEach(s => {
                 const manual = storeManualCashback[s];
                 if (manual && manual.amount > 0) {
-                    varGroups.cashback.amount += manual.amount;
-                    varGroups.cashback.items.push(...manual.items);
+                    if (varGroups.cashback) {
+                        varGroups.cashback.amount += manual.amount;
+                        varGroups.cashback.items.push(...manual.items);
+                    }
                 } else {
                     const rates = params.cashback_rates as Record<string, number>;
                     const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === normalizeStore(s));
                     const rate = rateKey ? rates[rateKey] : 0;
                     const sRev = storeRevMap[s] || 0;
-                    varGroups.cashback.amount += (sRev * (rate / 100));
+                    if (varGroups.cashback) varGroups.cashback.amount += (sRev * (rate / 100));
                 }
             });
+        }
+
+        if (revGroups.vendas) {
+            revGroups.vendas.amount = totalRev; 
         }
 
         const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
@@ -661,28 +703,27 @@ const DRE: React.FC = () => {
         const marginAfterLoss = grossMargin - perdaEstoque;
         const netProfit = marginAfterLoss - totalVar - totalFix;
 
-        // Para o cálculo do Ponto de Equilíbrio:
-        // 1. Custos Variáveis Reais (O que varia com a venda)
         const realVariableCosts = impostos + cmv + perdaEstoque +
-            varGroups.royalties.amount +
-            varGroups.tarifaPix.amount +
-            varGroups.tarifaCartao.amount +
-            varGroups.cashback.amount;
+            (varGroups.royalties?.amount || 0) +
+            (varGroups.tarifaPix?.amount || 0) +
+            (varGroups.tarifaCartao?.amount || 0) +
+            (varGroups.cashback?.amount || 0);
 
-        // 2. Custos Fixos Operacionais (Numerador do PE)
-        const fixedOperationalCosts = totalFix + varGroups.marketing.amount + varGroups.diversas.amount;
-
-        // IMC = (Faturamento - Custos Variáveis Reais) / Faturamento
-        const margemContribuicao = totalRev - realVariableCosts;
+        const fixedOperationalCosts = totalFix + (varGroups.marketing?.amount || 0) + (varGroups.diversas?.amount || 0);
+        const margemContribuicao = totalRev - realVariableCosts - totalVar;
         const IMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
-
-        // Ponto de Equilíbrio de Faturamento = Custos Fixos Operacionais / IMC
         const breakEven = fixedOperationalCosts / Math.max(0.01, IMC);
 
         return {
             revByMethod,
+            revGroups,
             totalRev,
             impostos,
+            commissions: (varGroups.cashback?.amount || 0),
+            cardFees: (varGroups.tarifaCartao?.amount || 0),
+            pixFees: (varGroups.tarifaPix?.amount || 0),
+            royalties: (varGroups.royalties?.amount || 0),
+            operadoraMargin: (varGroups.tarifaPix?.amount || 0) + (varGroups.tarifaCartao?.amount || 0),
             rl,
             cmv,
             grossMargin,
@@ -693,11 +734,10 @@ const DRE: React.FC = () => {
             fixGroups,
             totalFix,
             netProfit,
-            margemContribuicao,
             IMC,
             breakEven
         };
-    }, [salesData, expensesData, params, selectedStore]);
+    }, [salesData, expensesData, params, selectedStore, dreGroups]);
 
     const Row = ({ label, value, percentage, isTotal, isSubTotal, isNegative, isFinal, onClick }: any) => (
         <div
@@ -772,27 +812,23 @@ const DRE: React.FC = () => {
             </div>
 
             {showConfig && (
-                <div className="bg-[#1e293b] border border-amber-500/30 p-4 rounded-xl shadow-xl animate-in zoom-in-95 duration-200">
+                <div className="bg-[#1e293b] border border-amber-500/30 p-4 rounded-xl shadow-xl animate-in zoom-in-95 duration-200 mt-2">
                     <div className="flex justify-between items-center mb-6 border-b border-[#334155]/50">
                         <div className="flex gap-6">
-                            <button
-                                onClick={() => setConfigTab('rates')}
-                                className={`text-[10px] font-black uppercase tracking-widest pb-3 border-b-2 transition-all ${configTab === 'rates' ? 'border-amber-500 text-amber-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-sm">percent</span>
-                                    Taxas e Comissões
-                                </span>
-                            </button>
-                            <button
-                                onClick={() => setConfigTab('mapping')}
-                                className={`text-[10px] font-black uppercase tracking-widest pb-3 border-b-2 transition-all ${configTab === 'mapping' ? 'border-amber-500 text-amber-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-sm">account_tree</span>
-                                    Mapeamento de Contas
-                                </span>
-                            </button>
+                            {(['rates', 'groups', 'mapping'] as const).map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setConfigTab(tab)}
+                                    className={`text-[10px] font-black uppercase tracking-widest pb-3 border-b-2 transition-all ${configTab === tab ? 'border-amber-500 text-amber-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm">
+                                            {tab === 'rates' ? 'percent' : tab === 'groups' ? 'edit_note' : 'account_tree'}
+                                        </span>
+                                        {tab === 'rates' ? 'Taxas e Comissões' : tab === 'groups' ? 'Tópicos DRE' : 'Mapeamento de Contas'}
+                                    </span>
+                                </button>
+                            ))}
                         </div>
                         <h3 className="text-amber-400 font-bold text-xs uppercase tracking-widest flex items-center gap-2 mb-3">
                             <span className="material-symbols-outlined text-sm">tune</span>
@@ -800,78 +836,66 @@ const DRE: React.FC = () => {
                         </h3>
                     </div>
 
-                    {configTab === 'rates' ? (
-                        <>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Impostos (Geral %)</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={params.tax_rate}
-                                            onChange={(e) => setParams({ ...params, tax_rate: Number(e.target.value) })}
-                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                        />
-                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
-                                    </div>
+                    {configTab === 'rates' && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Impostos (Geral %)</label>
+                                <div className="relative">
+                                    <input
+                                        type="number" step="0.01" value={params.tax_rate}
+                                        onChange={(e) => setParams({ ...params, tax_rate: Number(e.target.value) })}
+                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                    />
+                                    <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Royalties (% Faturamento)</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            value={params.royalty_rate}
-                                            onChange={(e) => setParams({ ...params, royalty_rate: Number(e.target.value) })}
-                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                        />
-                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
-                                    </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Royalties (% Faturamento)</label>
+                                <div className="relative">
+                                    <input
+                                        type="number" step="0.1" value={params.royalty_rate}
+                                        onChange={(e) => setParams({ ...params, royalty_rate: Number(e.target.value) })}
+                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                    />
+                                    <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa PIX (% sobre PIX)</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={params.pix_fee_rate}
-                                            onChange={(e) => setParams({ ...params, pix_fee_rate: Number(e.target.value) })}
-                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                        />
-                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
-                                    </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa PIX (% sobre PIX)</label>
+                                <div className="relative">
+                                    <input
+                                        type="number" step="0.01" value={params.pix_fee_rate}
+                                        onChange={(e) => setParams({ ...params, pix_fee_rate: Number(e.target.value) })}
+                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                    />
+                                    <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Perdas (% Faturamento)</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            value={params.loss_rate}
-                                            onChange={(e) => setParams({ ...params, loss_rate: Number(e.target.value) })}
-                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                        />
-                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
-                                    </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Perdas (% Faturamento)</label>
+                                <div className="relative">
+                                    <input
+                                        type="number" step="0.1" value={params.loss_rate}
+                                        onChange={(e) => setParams({ ...params, loss_rate: Number(e.target.value) })}
+                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                    />
+                                    <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa Cartão (% Crédito+Débito)</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            step="0.000001"
-                                            value={params.card_fee_rate}
-                                            onChange={(e) => setParams({ ...params, card_fee_rate: Number(e.target.value) })}
-                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                        />
-                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
-                                    </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa Cartão (% Crédito+Débito)</label>
+                                <div className="relative">
+                                    <input
+                                        type="number" step="0.000001" value={params.card_fee_rate}
+                                        onChange={(e) => setParams({ ...params, card_fee_rate: Number(e.target.value) })}
+                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                    />
+                                    <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
                                 </div>
                             </div>
 
                             {stores.length > 0 && (
-                                <div className="mt-6 pt-6 border-t border-[#334155]">
+                                <div className="col-span-full mt-6 pt-6 border-t border-[#334155]">
                                     <h4 className="text-amber-400 font-bold text-[10px] uppercase tracking-widest mb-3 flex items-center gap-2">
                                         <span className="material-symbols-outlined text-sm">storefront</span>
                                         Comissões (Cashback) por Condomínio (%)
@@ -882,16 +906,11 @@ const DRE: React.FC = () => {
                                                 <label className="text-[9px] text-slate-500 font-black uppercase truncate block">{storeName}</label>
                                                 <div className="relative">
                                                     <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        placeholder="0.00"
+                                                        type="number" step="0.01" placeholder="0.00"
                                                         value={(params.cashback_rates as Record<string, number>)[storeName] || ''}
                                                         onChange={(e) => setParams({
                                                             ...params,
-                                                            cashback_rates: {
-                                                                ...params.cashback_rates,
-                                                                [storeName]: Number(e.target.value)
-                                                            }
+                                                            cashback_rates: { ...params.cashback_rates, [storeName]: Number(e.target.value) }
                                                         })}
                                                         className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-amber-500/50"
                                                     />
@@ -902,48 +921,45 @@ const DRE: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-                        </>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="p-3 bg-amber-600/10 border border-amber-500/20 rounded-lg">
+                        </div>
+                    )}
+
+                    {configTab === 'mapping' && (
+                        <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="p-3 bg-amber-600/10 border border-amber-500/20 rounded-lg mb-4">
                                 <p className="text-amber-200 text-[10px] uppercase font-black leading-relaxed">
                                     Vincule suas categorias diretamente às contas da DRE para garantir 100% de precisão nos relatórios.
-                                    <br /><span className="text-white/60 font-medium">Categorias não vinculadas continuarão sendo classificadas automaticamente pelo sistema.</span>
                                 </p>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar p-1">
-                                {categories.filter(c => {
-                                    if (c.type !== 'expense') return false;
-                                    const n = (c.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                                    const isAuto = n.includes('royalties') ||
-                                        n.includes('imposto') ||
-                                        n.includes('tarifa de pix') ||
-                                        n.includes('tarifa pix') ||
-                                        n.includes('tarifa de cartao') ||
-                                        n.includes('taxa de cartao') ||
-                                        n.includes('perda') ||
-                                        n.includes('fornecedor');
-                                    return !isAuto;
-                                }).map(cat => (
-                                    <div key={cat.id} className="bg-[#0f172a] p-3 rounded-xl border border-[#334155] hover:border-amber-500/30 transition-colors flex flex-col gap-2 shadow-inner">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar p-1">
+                                {categories.filter(c => c.type === 'expense' || c.type === 'income').map(cat => (
+                                    <div key={cat.id} className="bg-[#0f172a] p-3 rounded-xl border border-[#334155] hover:border-amber-500/30 transition-colors flex flex-col gap-2">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-xs font-black text-white truncate max-w-[70%]">{cat.name}</span>
+                                            <div className="flex flex-col gap-0.5 max-w-[70%]">
+                                                <span className="text-xs font-black text-white truncate">{cat.name}</span>
+                                                <span className={`text-[8px] font-black uppercase tracking-tighter ${cat.type === 'income' ? 'text-emerald-500' : 'text-amber-500'}`}>{cat.type === 'income' ? 'Entrada' : 'Saída'}</span>
+                                            </div>
                                             <span className="material-symbols-outlined text-slate-600 text-sm">link</span>
                                         </div>
                                         <select
                                             value={cat.dre_group || ''}
                                             onChange={(e) => updateCategoryMapping(cat.id, e.target.value)}
-                                            className={`w-full bg-[#1e293b] border rounded-lg px-2 py-2 text-[10px] font-black transition-all focus:outline-none ${cat.dre_group ? 'border-amber-500/50 text-amber-400' : 'border-[#334155] text-slate-400'}`}
+                                            className={`w-full bg-[#1e293b] border rounded-lg px-2 py-2 text-[10px] font-black transition-all focus:outline-none ${cat.dre_group ? 'border-indigo-500/50 text-indigo-400' : 'border-[#334155] text-slate-400'}`}
                                         >
-                                            <option value="" className="text-slate-500 italic">AUTOMÁTICO (Fuzzy Match)</option>
-                                            <optgroup label="Despesas Variáveis" className="bg-[#0f172a] text-indigo-400">
-                                                {DRE_GROUPS.filter(g => g.type === 'variable').map(group => (
-                                                    <option key={group.id} value={group.id} className="text-white">{group.label}</option>
+                                            <option value="" className="text-slate-500 italic">AUTOMÁTICO</option>
+                                            <optgroup label="Receitas" className="bg-[#1e293b] text-indigo-400">
+                                                {dreGroups.filter(g => g.type === 'revenue').map(g => (
+                                                    <option key={g.id} value={g.id} className="text-white">{g.label}</option>
                                                 ))}
                                             </optgroup>
-                                            <optgroup label="Despesas Fixas" className="bg-[#0f172a] text-emerald-400">
-                                                {DRE_GROUPS.filter(g => g.type === 'fixed').map(group => (
-                                                    <option key={group.id} value={group.id} className="text-white">{group.label}</option>
+                                            <optgroup label="Despesas Variáveis" className="bg-[#1e293b] text-amber-500">
+                                                {dreGroups.filter(g => g.type === 'variable').map(g => (
+                                                    <option key={g.id} value={g.id} className="text-white">{g.label}</option>
+                                                ))}
+                                            </optgroup>
+                                            <optgroup label="Despesas Fixas" className="bg-[#1e293b] text-emerald-400">
+                                                {dreGroups.filter(g => g.type === 'fixed').map(g => (
+                                                    <option key={g.id} value={g.id} className="text-white">{g.label}</option>
                                                 ))}
                                             </optgroup>
                                         </select>
@@ -953,9 +969,184 @@ const DRE: React.FC = () => {
                         </div>
                     )}
 
+                    {configTab === 'groups' && (
+                        <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="p-3 bg-indigo-600/10 border border-indigo-500/20 rounded-lg mb-4">
+                                <p className="text-indigo-200 text-[10px] uppercase font-black leading-relaxed">
+                                    Personalize os tópicos da sua DRE. Você pode adicionar, remover ou renomear tópicos de Receita e Despesas.
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar p-1">
+                                <div className="space-y-3">
+                                    <h5 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm">payments</span>
+                                        Tópicos de Receita
+                                    </h5>
+                                    {dreGroups.filter(g => g.type === 'revenue').map(group => (
+                                        <div key={group.id} className="bg-[#0f172a] p-3 rounded-xl border border-[#334155] flex items-center justify-between group/item">
+                                            {editingGroup?.id === group.id ? (
+                                                <input 
+                                                    autoFocus
+                                                    className="bg-transparent border-b border-indigo-500 outline-none text-xs font-bold text-white w-full"
+                                                    value={editingGroup.label}
+                                                    onChange={e => setEditingGroup({...editingGroup, label: e.target.value})}
+                                                    onBlur={async () => {
+                                                        const newGroups = dreGroups.map(g => g.id === group.id ? {...g, label: editingGroup.label} : g);
+                                                        setDreGroups(newGroups);
+                                                        setEditingGroup(null);
+                                                        if (activeCompany) await supabase.from('companies').update({ dre_structure: newGroups }).eq('id', activeCompany.id);
+                                                    }}
+                                                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                                />
+                                            ) : (
+                                                <>
+                                                    <span className="text-xs font-bold text-slate-300">{group.label}</span>
+                                                    {!group.isSystem && (
+                                                        <div className="flex gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                            <button onClick={() => setEditingGroup(group)} className="text-slate-500 hover:text-amber-500">
+                                                                <span className="material-symbols-outlined text-sm">edit</span>
+                                                            </button>
+                                                            <button onClick={async () => {
+                                                                const newGroups = dreGroups.filter(g => g.id !== group.id);
+                                                                setDreGroups(newGroups);
+                                                                if (activeCompany) await supabase.from('companies').update({ dre_structure: newGroups }).eq('id', activeCompany.id);
+                                                            }} className="text-slate-500 hover:text-red-500">
+                                                                <span className="material-symbols-outlined text-sm">delete</span>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <button 
+                                        onClick={() => {
+                                            const newId = 'rev_' + Math.random().toString(36).substr(2, 9);
+                                            const newGroups = [...dreGroups, { id: newId, label: 'Novo Tópico de Receita', type: 'revenue', isSystem: false }];
+                                            setDreGroups(newGroups);
+                                            setEditingGroup({ id: newId, label: 'Novo Tópico de Receita', type: 'revenue', isSystem: false });
+                                        }}
+                                        className="w-full py-2 border border-dashed border-[#334155] rounded-xl text-[10px] font-black text-slate-500 hover:text-indigo-400 transition-all uppercase tracking-widest"
+                                    >
+                                        + Adicionar Tópico
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <h5 className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm">variable_insert</span>
+                                        Despesas Variáveis
+                                    </h5>
+                                    {dreGroups.filter(g => g.type === 'variable').map(group => (
+                                        <div key={group.id} className="bg-[#0f172a] p-3 rounded-xl border border-[#334155] flex items-center justify-between group/item">
+                                            {editingGroup?.id === group.id ? (
+                                                <input 
+                                                    autoFocus
+                                                    className="bg-transparent border-b border-amber-500 outline-none text-xs font-bold text-white w-full"
+                                                    value={editingGroup.label}
+                                                    onChange={e => setEditingGroup({...editingGroup, label: e.target.value})}
+                                                    onBlur={async () => {
+                                                        const newGroups = dreGroups.map(g => g.id === group.id ? {...g, label: editingGroup.label} : g);
+                                                        setDreGroups(newGroups);
+                                                        setEditingGroup(null);
+                                                        if (activeCompany) await supabase.from('companies').update({ dre_structure: newGroups }).eq('id', activeCompany.id);
+                                                    }}
+                                                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                                />
+                                            ) : (
+                                                <>
+                                                    <span className="text-xs font-bold text-slate-300">{group.label}</span>
+                                                    {!group.isSystem && (
+                                                        <div className="flex gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                            <button onClick={() => setEditingGroup(group)} className="text-slate-500 hover:text-amber-500">
+                                                                <span className="material-symbols-outlined text-sm">edit</span>
+                                                            </button>
+                                                            <button onClick={async () => {
+                                                                const newGroups = dreGroups.filter(g => g.id !== group.id);
+                                                                setDreGroups(newGroups);
+                                                                if (activeCompany) await supabase.from('companies').update({ dre_structure: newGroups }).eq('id', activeCompany.id);
+                                                            }} className="text-slate-500 hover:text-red-500">
+                                                                <span className="material-symbols-outlined text-sm">delete</span>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <button 
+                                        onClick={() => {
+                                            const newId = 'var_' + Math.random().toString(36).substr(2, 9);
+                                            const newGroups = [...dreGroups, { id: newId, label: 'Novo Tópico Variável', type: 'variable', isSystem: false }];
+                                            setDreGroups(newGroups);
+                                            setEditingGroup({ id: newId, label: 'Novo Tópico Variável', type: 'variable', isSystem: false });
+                                        }}
+                                        className="w-full py-2 border border-dashed border-[#334155] rounded-xl text-[10px] font-black text-slate-500 hover:text-amber-500 transition-all uppercase tracking-widest"
+                                    >
+                                        + Adicionar Tópico
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <h5 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm">inventory_2</span>
+                                        Despesas Fixas
+                                    </h5>
+                                    {dreGroups.filter(g => g.type === 'fixed').map(group => (
+                                        <div key={group.id} className="bg-[#0f172a] p-3 rounded-xl border border-[#334155] flex items-center justify-between group/item">
+                                            {editingGroup?.id === group.id ? (
+                                                <input 
+                                                    autoFocus
+                                                    className="bg-transparent border-b border-emerald-500 outline-none text-xs font-bold text-white w-full"
+                                                    value={editingGroup.label}
+                                                    onChange={e => setEditingGroup({...editingGroup, label: e.target.value})}
+                                                    onBlur={async () => {
+                                                        const newGroups = dreGroups.map(g => g.id === group.id ? {...g, label: editingGroup.label} : g);
+                                                        setDreGroups(newGroups);
+                                                        setEditingGroup(null);
+                                                        if (activeCompany) await supabase.from('companies').update({ dre_structure: newGroups }).eq('id', activeCompany.id);
+                                                    }}
+                                                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                                />
+                                            ) : (
+                                                <>
+                                                    <span className="text-xs font-bold text-slate-300">{group.label}</span>
+                                                    {!group.isSystem && (
+                                                        <div className="flex gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                            <button onClick={() => setEditingGroup(group)} className="text-slate-500 hover:text-amber-500">
+                                                                <span className="material-symbols-outlined text-sm">edit</span>
+                                                            </button>
+                                                            <button onClick={async () => {
+                                                                const newGroups = dreGroups.filter(g => g.id !== group.id);
+                                                                setDreGroups(newGroups);
+                                                                if (activeCompany) await supabase.from('companies').update({ dre_structure: newGroups }).eq('id', activeCompany.id);
+                                                            }} className="text-slate-500 hover:text-red-500">
+                                                                <span className="material-symbols-outlined text-sm">delete</span>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <button 
+                                        onClick={() => {
+                                            const newId = 'fix_' + Math.random().toString(36).substr(2, 9);
+                                            const newGroups = [...dreGroups, { id: newId, label: 'Novo Tópico Fixo', type: 'fixed', isSystem: false }];
+                                            setDreGroups(newGroups);
+                                            setEditingGroup({ id: newId, label: 'Novo Tópico Fixo', type: 'fixed', isSystem: false });
+                                        }}
+                                        className="w-full py-2 border border-dashed border-[#334155] rounded-xl text-[10px] font-black text-slate-500 hover:text-emerald-400 transition-all uppercase tracking-widest"
+                                    >
+                                        + Adicionar Tópico
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="mt-6 flex justify-end gap-3 border-t border-[#334155] pt-4">
-                        <button onClick={() => setShowConfig(false)} className="text-[10px] font-black uppercase text-slate-400 hover:text-white px-4 py-2">Cancelar</button>
+                        <button onClick={() => setShowConfig(false)} className="text-[10px] font-black uppercase text-slate-400 hover:text-white px-4 py-2 transition-colors">Cancelar</button>
                         <button onClick={saveParams} className="bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest px-6 py-2 rounded-lg shadow-lg shadow-amber-600/20 transition-all">Salvar para este mês</button>
                     </div>
                 </div>
@@ -970,14 +1161,19 @@ const DRE: React.FC = () => {
                     </div>
                 </div>
 
-                {Object.entries(metrics.revByMethod).map(([method, val]) => (
+                <div className="bg-[#1e293b]/50 px-4 py-2 text-[10px] font-black text-indigo-400 uppercase tracking-widest border-b border-[#334155]/30">RECEITAS</div>
+                {Object.values(metrics.revGroups).map((group: any, i) => (
                     <Row
-                        key={method}
-                        label={activeCompany?.business_type === 'services' ? `Pedidos recebidos no ${method}` : `Vendas realizadas no ${method}`}
-                        value={val}
-                        percentage={Number(metrics.totalRev) > 0 ? (Number(val) / Number(metrics.totalRev)) * 100 : 0}
+                        key={i}
+                        label={group.label}
+                        value={group.amount}
+                        percentage={metrics.totalRev > 0 ? (group.amount / metrics.totalRev) * 100 : 0}
+                        onClick={group.items.length > 0 ? () => { setDetailingItems(group.items); setDetailingTitle(group.label); setShowDetailModal(true); } : undefined}
                     />
                 ))}
+                
+                <div className="h-2"></div>
+
                 <Row
                     label="RECEITA BRUTA (RB)"
                     value={metrics.totalRev}
@@ -986,13 +1182,13 @@ const DRE: React.FC = () => {
                 />
 
                 <Row
-                    label={activeCompany?.business_type === 'services' ? "Impostos sobre os pedidos" : "Impostos sobre as vendas"}
+                    label="Impostos sobre faturamento"
                     value={metrics.impostos}
                     percentage={metrics.totalRev > 0 ? (metrics.impostos / metrics.totalRev) * 100 : 0}
                     isNegative
                 />
                 <Row
-                    label="RECEITA SEM IMPOSTOS (RL)"
+                    label="RECEITA LÍQUIDA (RL)"
                     value={metrics.rl}
                     percentage={metrics.totalRev > 0 ? (metrics.rl / metrics.totalRev) * 100 : 0}
                     isSubTotal
