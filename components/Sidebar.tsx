@@ -18,7 +18,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { profile } = useProfile();
   const { isBusiness } = useView();
   const { activeCompany } = useCompany();
-  const [isSupportExpanded, setIsSupportExpanded] = React.useState(false);
 
   const navItems = [
     { label: 'Dashboard', icon: 'dashboard', path: '/dashboard' },
@@ -90,35 +89,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </nav>
 
           <div className="mt-auto flex flex-col gap-4">
-            <div
-              className="p-4 rounded-xl bg-[#1c2a38] border border-[#233648] transition-all duration-300 cursor-pointer overflow-hidden group"
-              onClick={() => setIsSupportExpanded(!isSupportExpanded)}
-            >
-              <div className="flex items-center justify-between pointer-events-none">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-[#92adc9] group-hover:text-primary transition-colors">support_agent</span>
-                  <span className="text-xs font-semibold text-[#92adc9] group-hover:text-white transition-colors">Suporte</span>
-                </div>
-                <span className={`material-symbols-outlined text-[18px] text-[#92adc9] transition-transform duration-300 ${isSupportExpanded ? 'rotate-180' : ''}`}>
-                  expand_more
-                </span>
-              </div>
-
-              <div className={`transition-all duration-300 ${isSupportExpanded ? 'max-h-32 opacity-100 mt-3' : 'max-h-0 opacity-0 mt-0'}`}>
-                <p className="text-xs text-white mb-3">Precisa de ajuda com suas finanças?</p>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.open('https://wa.me/seu-numero', '_blank');
-                  }}
-                  className="w-full h-9 text-xs font-semibold text-white bg-primary hover:bg-primary/90 rounded-lg transition-all active:scale-95 flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-sm">chat</span>
-                  Contatar Assessor
-                </button>
-              </div>
-            </div>
-
             <div className="flex flex-col gap-2 pt-3 border-t border-[#233648]">
               <div
                 onClick={() => { navigate('/profile'); onClose(); }}
