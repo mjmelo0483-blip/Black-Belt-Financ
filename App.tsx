@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import AIAdvisor from './components/AIAdvisor';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Cards from './pages/Cards';
@@ -66,6 +67,7 @@ const AppContent: React.FC = () => {
 
           <div className="flex-1 flex flex-col h-full overflow-hidden relative">
             <Header onMenuClick={() => setSidebarOpen(true)} />
+            <AIAdvisor month={new Date().getMonth()} year={new Date().getFullYear()} />
 
             <main className="flex-1 overflow-y-auto relative">
               <Routes>
