@@ -19,6 +19,7 @@ export interface ServiceProposal {
         unit_price: number;
     }[];
     notes?: string;
+    file_url?: string;
     created_at?: string;
 }
 
@@ -51,14 +52,38 @@ export const useProposals = () => {
         }
     }, [activeCompany]);
 
-    const saveProposal = useCallback(async (proposal: Partial<ServiceProposal>) => {
+    const uploadFile = async (file: File) => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+        const filePath = `proposals/${fileName}`;
+
+        const { error: uploadError, data } = await supabase.storage
+            .from('proposals')
+            .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('proposals')
+            .getPublicUrl(filePath);
+
+        return publicUrl;
+    };
+
+    const saveProposal = useCallback(async (proposal: Partial<ServiceProposal>, file?: File) => {
         setLoading(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) throw new Error('Não autenticado');
 
+            let fileUrl = proposal.file_url;
+            if (file) {
+                fileUrl = await uploadFile(file);
+            }
+
             const dataToSave = {
                 ...proposal,
+                file_url: fileUrl,
                 user_id: session.user.id,
                 company_id: activeCompany?.id || null,
             };
@@ -79,9 +104,17 @@ export const useProposals = () => {
         }
     }, [activeCompany]);
 
-    const deleteProposal = useCallback(async (id: string) => {
+    const deleteProposal = useCallback(async (id: string, fileUrl?: string) => {
         setLoading(true);
         try {
+            // Delete file from storage if exists
+            if (fileUrl) {
+                const path = fileUrl.split('/').pop();
+                if (path) {
+                    await supabase.storage.from('proposals').remove([`proposals/${path}`]);
+                }
+            }
+
             const { error } = await supabase
                 .from('service_proposals')
                 .delete()
@@ -123,3 +156,4 @@ export const useProposals = () => {
         updateStatus
     };
 };
+
