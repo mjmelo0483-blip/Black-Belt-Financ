@@ -1001,20 +1001,20 @@ const DRE: React.FC = () => {
                                             ) : (
                                                 <>
                                                     <span className="text-xs font-bold text-slate-300">{group.label}</span>
-                                                    {!group.isSystem && (
-                                                        <div className="flex gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                                            <button onClick={() => setEditingGroup(group)} className="text-slate-500 hover:text-amber-500">
-                                                                <span className="material-symbols-outlined text-sm">edit</span>
-                                                            </button>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => setEditingGroup(group)} className="text-slate-500 hover:text-amber-500 transition-colors">
+                                                            <span className="material-symbols-outlined text-sm">edit</span>
+                                                        </button>
+                                                        {!group.isSystem && (
                                                             <button onClick={async () => {
                                                                 const newGroups = dreGroups.filter(g => g.id !== group.id);
                                                                 setDreGroups(newGroups);
                                                                 if (activeCompany) await supabase.from('companies').update({ dre_structure: newGroups }).eq('id', activeCompany.id);
-                                                            }} className="text-slate-500 hover:text-red-500">
+                                                            }} className="text-slate-500 hover:text-red-500 transition-colors">
                                                                 <span className="material-symbols-outlined text-sm">delete</span>
                                                             </button>
-                                                        </div>
-                                                    )}
+                                                        )}
+                                                    </div>
                                                 </>
                                             )}
                                         </div>
@@ -1056,20 +1056,20 @@ const DRE: React.FC = () => {
                                             ) : (
                                                 <>
                                                     <span className="text-xs font-bold text-slate-300">{group.label}</span>
-                                                    {!group.isSystem && (
-                                                        <div className="flex gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                                            <button onClick={() => setEditingGroup(group)} className="text-slate-500 hover:text-amber-500">
-                                                                <span className="material-symbols-outlined text-sm">edit</span>
-                                                            </button>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => setEditingGroup(group)} className="text-slate-500 hover:text-amber-500 transition-colors">
+                                                            <span className="material-symbols-outlined text-sm">edit</span>
+                                                        </button>
+                                                        {!group.isSystem && (
                                                             <button onClick={async () => {
                                                                 const newGroups = dreGroups.filter(g => g.id !== group.id);
                                                                 setDreGroups(newGroups);
                                                                 if (activeCompany) await supabase.from('companies').update({ dre_structure: newGroups }).eq('id', activeCompany.id);
-                                                            }} className="text-slate-500 hover:text-red-500">
+                                                            }} className="text-slate-500 hover:text-red-500 transition-colors">
                                                                 <span className="material-symbols-outlined text-sm">delete</span>
                                                             </button>
-                                                        </div>
-                                                    )}
+                                                        )}
+                                                    </div>
                                                 </>
                                             )}
                                         </div>
@@ -1111,20 +1111,20 @@ const DRE: React.FC = () => {
                                             ) : (
                                                 <>
                                                     <span className="text-xs font-bold text-slate-300">{group.label}</span>
-                                                    {!group.isSystem && (
-                                                        <div className="flex gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                                            <button onClick={() => setEditingGroup(group)} className="text-slate-500 hover:text-amber-500">
-                                                                <span className="material-symbols-outlined text-sm">edit</span>
-                                                            </button>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => setEditingGroup(group)} className="text-slate-500 hover:text-amber-500 transition-colors">
+                                                            <span className="material-symbols-outlined text-sm">edit</span>
+                                                        </button>
+                                                        {!group.isSystem && (
                                                             <button onClick={async () => {
                                                                 const newGroups = dreGroups.filter(g => g.id !== group.id);
                                                                 setDreGroups(newGroups);
                                                                 if (activeCompany) await supabase.from('companies').update({ dre_structure: newGroups }).eq('id', activeCompany.id);
-                                                            }} className="text-slate-500 hover:text-red-500">
+                                                            }} className="text-slate-500 hover:text-red-500 transition-colors">
                                                                 <span className="material-symbols-outlined text-sm">delete</span>
                                                             </button>
-                                                        </div>
-                                                    )}
+                                                        )}
+                                                    </div>
                                                 </>
                                             )}
                                         </div>
