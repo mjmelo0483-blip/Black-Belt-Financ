@@ -538,16 +538,7 @@ const DRE: React.FC = () => {
 
             if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
 
-            const isCalculated =
-                desc.includes('royalties') ||
-                desc.includes('imposto') ||
-                desc.includes('tarifa de pix') ||
-                desc.includes('tarifa pix') ||
-                desc.includes('tarifa de cartao') ||
-                desc.includes('taxa de cartao') ||
-                desc.includes('perda');
-
-            // --- Prioridade 0: Mapeamento Fixo da Categoria ---
+            // --- Prioridade 0: Mapeamento da Categoria ---
             if (dreGroup) {
                 if (dreGroup === params.cashback_group_id) {
                     const sNorm = exp.store_name ? normalizeStore(exp.store_name) : null;
@@ -555,114 +546,26 @@ const DRE: React.FC = () => {
 
                     if (cashbackKey && storeManualCashback[cashbackKey]) {
                         storeManualCashback[cashbackKey].amount += amount;
-                        storeManualCashback[cashbackKey].items.push(exp);
+                        storeManualCashback[cashbackKey].items.push(expToPush);
                     } else if (varGroups[dreGroup]) {
-                        varGroups[dreGroup].amount += amount;
-                        varGroups[dreGroup].items.push(exp);
+                        pushToGroup(varGroups[dreGroup]);
                     }
                 } else if (varGroups[dreGroup]) {
-                    varGroups[dreGroup].amount += amount;
-                    varGroups[dreGroup].items.push(exp);
+                    pushToGroup(varGroups[dreGroup]);
                 } else if (fixGroups[dreGroup]) {
-                    fixGroups[dreGroup].amount += amount;
-                    fixGroups[dreGroup].items.push(exp);
+                    pushToGroup(fixGroups[dreGroup]);
                 } else if (revGroups[dreGroup]) {
-                    revGroups[dreGroup].amount += amount;
-                    revGroups[dreGroup].items.push(exp);
+                    pushToGroup(revGroups[dreGroup]);
                 }
                 return;
             }
 
-            // --- Prioridade 1: Categorias específicas e Serviços Fixos (Fallback Inteligente) ---
-
-            // Se já foi identificado como um item calculado por fórmula (imposto, royalty, etc), 
-            // não deve cair nos grupos manuais por coincidência de palavras (ex: imPOSTO)
-            if (isCalculated && !dreGroup) return;
-
-            // Internet e Celular
-            if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) {
-                pushToGroup(fixGroups.internet);
-            }
-            // Energia Elétrica
-            else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial') || desc.includes('enel') || desc.includes('celpa')) {
-                pushToGroup(fixGroups.energia);
-            }
-            // Combustível - Proteção contra "Imposto" contendo "posto"
-            else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel') || desc.includes('etanol') || (desc.includes('posto ') && !desc.includes('imposto'))) {
-                pushToGroup(fixGroups.combustivel);
-            }
-            // Funcionários e Pró-labore
-            else if (catName.includes('funcionario') || catName.includes('salario') || catName.includes('pro-labore') || desc.includes('salario') || desc.includes('folha pgto') || desc.includes('pro-labore')) {
-                pushToGroup(fixGroups.funcionarios);
-            }
-            // Contabilidade
-            else if (catName.includes('contabil') || desc.includes('contador') || desc.includes('contabilidade')) {
-                pushToGroup(fixGroups.contabilidade);
-            }
-            // Aluguel de Escritório
-            else if (catName.includes('escritorio') && (catName.includes('aluguel') || desc.includes('aluguel'))) {
-                pushToGroup(fixGroups.aluguelEscritorio);
-            }
-            // Aluguel de Container
-            else if (catName.includes('container')) {
-                pushToGroup(fixGroups.aluguelContainer);
-            }
-
-            // --- Prioridade 2: Despesas Variáveis Específicas ---
-
-            // Cashback / Comissão Condomínio (mais restrito para evitar falsos positivos)
-            else if (catName.includes('comissão') || desc.includes('cashback') || desc.includes('comissão condomínio')) {
-                const sNormExp = exp.store_name ? normalizeStore(exp.store_name) : null;
-                const cashbackKey = activeStores.find(as => normalizeStore(as) === sNormExp);
-
-                if (cashbackKey && storeManualCashback[cashbackKey]) {
-                    storeManualCashback[cashbackKey].amount += amount;
-                    storeManualCashback[cashbackKey].items.push(expToPush);
-                } else if (varGroups[params.cashback_group_id]) {
-                    pushToGroup(varGroups[params.cashback_group_id]);
-                }
-            }
-            // Marketing e Propaganda
-            else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda') || desc.includes('facebook ads') || desc.includes('google ads')) {
-                pushToGroup(varGroups.marketing);
-            }
-            // Perda de Estoque (se não for calculado automaticamente)
-            else if (!isCalculated && (catName.includes('perda') || desc.includes('perda') || desc.includes('furto') || desc.includes('vencido') || desc.includes('danificado'))) {
-                perdaEstoque += amount;
-            }
-
-            // --- Prioridade 3: Outros Grupos ---
-
-            // Manutenção de Veículos
-            else if (desc.includes('veiculo') || desc.includes('carro') || desc.includes('moto') || desc.includes('oficina') || desc.includes('pneu')) {
-                pushToGroup(fixGroups.manutencaoVeiculo);
-            }
-            // Taxas de Sistema
-            else if (catName.includes('taxa de uso do sistema') || (catName.includes('sistema') && (desc.includes('taxa') || desc.includes('mensalidade')))) {
-                pushToGroup(fixGroups.taxaSistema);
-            }
-            // TEF / Equipamentos Pagamento
-            else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass') || catName.includes('lgopass')) {
-                pushToGroup(fixGroups.tef);
-            }
-            // Despesas Financeiras e Espaço
-            else if (catName.includes('despesas financeiras') || catName.includes('aluguel do espaco') || desc.includes('aluguel da loja') || desc.includes('aluguel sala')) {
-                pushToGroup(fixGroups.despesasFinanceiras);
-            }
-            // Despesas Diversas da Loja
-            else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) {
-                if (!isCalculated) {
-                    pushToGroup(varGroups.diversas);
-                }
-            }
-            // Outros (Fallback)
-            else if (!isCalculated) {
-                if (fixGroups.outros) {
-                    pushToGroup(fixGroups.outros);
-                } else {
-                    const firstFix = Object.values(fixGroups)[0];
-                    if (firstFix) pushToGroup(firstFix);
-                }
+            // Fallback: If not mapped to any group, send to 'Outros' (Fixed)
+            if (fixGroups.outros) {
+                pushToGroup(fixGroups.outros);
+            } else {
+                const firstFix = Object.values(fixGroups)[0];
+                if (firstFix) pushToGroup(firstFix);
             }
         });
 
