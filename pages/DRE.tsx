@@ -24,10 +24,16 @@ const DRE: React.FC = () => {
     const [allKnownStores, setAllKnownStores] = useState<string[]>([]);
     const [params, setParams] = useState({
         tax_rate: 3.24,
+        tax_group_id: 'impostos',
         royalty_rate: 6.00,
+        royalty_group_id: 'royalties',
         pix_fee_rate: 0.80,
+        pix_fee_group_id: 'tarifaPix',
         loss_rate: 2.00,
+        loss_group_id: 'perda',
         card_fee_rate: 1.110284,
+        card_fee_group_id: 'tarifaCartao',
+        cashback_group_id: 'cashback',
         cashback_rates: {} as Record<string, number>
     });
     const [currentParamId, setCurrentParamId] = useState<string | null>(null);
@@ -36,10 +42,11 @@ const DRE: React.FC = () => {
 
     const DEFAULT_DRE_GROUPS = [
         { id: 'vendas', label: 'Venda de mercadoria (Bruto)', type: 'revenue', isSystem: true },
-        { id: 'cashback', label: 'Comissão paga ao condominio (cashback)', type: 'variable', isSystem: true },
-        { id: 'royalties', label: 'Royalties', type: 'variable', isSystem: true },
-        { id: 'tarifaCartao', label: 'Tarifa de cartão', type: 'variable', isSystem: true },
-        { id: 'tarifaPix', label: 'Tarifa de Pix', type: 'variable', isSystem: true },
+        { id: 'impostos', label: 'Impostos sobre faturamento', type: 'variable', isSystem: true },
+        { id: 'cashback', label: 'Comissão paga ao condominio (cashback)', type: 'variable' },
+        { id: 'royalties', label: 'Royalties', type: 'variable' },
+        { id: 'tarifaCartao', label: 'Tarifa de cartão', type: 'variable' },
+        { id: 'tarifaPix', label: 'Tarifa de Pix', type: 'variable' },
         { id: 'marketing', label: 'Investimento Marketing da loja', type: 'variable' },
         { id: 'diversas', label: 'Despesas diversas da loja', type: 'variable' },
         { id: 'funcionarios', label: 'Funcionários', type: 'fixed' },
@@ -54,7 +61,7 @@ const DRE: React.FC = () => {
         { id: 'internet', label: 'Despesa com internet', type: 'fixed' },
         { id: 'energia', label: 'Despesa com energia elétrica', type: 'fixed' },
         { id: 'outros', label: 'Outros', type: 'fixed' },
-        { id: 'perda', label: 'Perda do estoque', type: 'variable', isSystem: true },
+        { id: 'perda', label: 'Perda do estoque', type: 'variable' },
     ];
 
     const [dreGroups, setDreGroups] = useState<any[]>(DEFAULT_DRE_GROUPS);
@@ -212,20 +219,32 @@ const DRE: React.FC = () => {
                     setCurrentParamId(pData.id);
                     setParams({
                         tax_rate: Number(pData.tax_rate || 3.24),
+                        tax_group_id: pData.tax_group_id || 'impostos',
                         royalty_rate: Number(pData.royalty_rate || 6.00),
+                        royalty_group_id: pData.royalty_group_id || 'royalties',
                         pix_fee_rate: Number(pData.pix_fee_rate || 0.80),
+                        pix_fee_group_id: pData.pix_fee_group_id || 'tarifaPix',
                         loss_rate: Number(pData.loss_rate || 2.00),
+                        loss_group_id: pData.loss_group_id || 'perda',
                         card_fee_rate: Number(pData.card_fee_rate || 1.110284),
+                        card_fee_group_id: pData.card_fee_group_id || 'tarifaCartao',
+                        cashback_group_id: pData.cashback_group_id || 'cashback',
                         cashback_rates: pData.cashback_rates || {}
                     });
                 } else {
                     setCurrentParamId(null);
                     setParams({
                         tax_rate: 3.24,
+                        tax_group_id: 'impostos',
                         royalty_rate: 6.00,
+                        royalty_group_id: 'royalties',
                         pix_fee_rate: 0.80,
+                        pix_fee_group_id: 'tarifaPix',
                         loss_rate: 2.00,
+                        loss_group_id: 'perda',
                         card_fee_rate: 1.110284,
+                        card_fee_group_id: 'tarifaCartao',
+                        cashback_group_id: 'cashback',
                         cashback_rates: {}
                     });
                 }
@@ -475,12 +494,10 @@ const DRE: React.FC = () => {
             else if (g.type === 'revenue') revGroups[g.id] = groupData;
         });
 
-        // Ensure system groups exist
-        if (!varGroups.cashback) varGroups.cashback = { label: 'Comissão (Cashback)', amount: 0, items: [] };
-        if (!varGroups.royalties) varGroups.royalties = { label: 'Royalties', amount: 0, items: [] };
-        if (!varGroups.tarifaCartao) varGroups.tarifaCartao = { label: 'Tarifa de Cartão', amount: 0, items: [] };
-        if (!varGroups.tarifaPix) varGroups.tarifaPix = { label: 'Tarifa de Pix', amount: 0, items: [] };
-        if (!fixGroups.outros) fixGroups.outros = { label: 'Outros', amount: 0, items: [] };
+        // Ensure group data is initialized correctly
+        Object.keys(varGroups).forEach(id => { if (!varGroups[id]) varGroups[id] = { label: '', amount: 0, items: [] }; });
+        Object.keys(fixGroups).forEach(id => { if (!fixGroups[id]) fixGroups[id] = { label: '', amount: 0, items: [] }; });
+        Object.keys(revGroups).forEach(id => { if (!revGroups[id]) revGroups[id] = { label: '', amount: 0, items: [] }; });
 
         expensesData.forEach(exp => {
             const catName = (exp.categories?.name || 'Geral').toLowerCase();
@@ -532,18 +549,16 @@ const DRE: React.FC = () => {
 
             // --- Prioridade 0: Mapeamento Fixo da Categoria ---
             if (dreGroup) {
-                if (dreGroup === 'cashback') {
+                if (dreGroup === params.cashback_group_id) {
                     const sNorm = exp.store_name ? normalizeStore(exp.store_name) : null;
                     const cashbackKey = activeStores.find(as => normalizeStore(as) === sNorm);
 
                     if (cashbackKey && storeManualCashback[cashbackKey]) {
                         storeManualCashback[cashbackKey].amount += amount;
                         storeManualCashback[cashbackKey].items.push(exp);
-                    } else {
-                        if (varGroups.cashback) {
-                            varGroups.cashback.amount += amount;
-                            varGroups.cashback.items.push(exp);
-                        }
+                    } else if (varGroups[dreGroup]) {
+                        varGroups[dreGroup].amount += amount;
+                        varGroups[dreGroup].items.push(exp);
                     }
                 } else if (varGroups[dreGroup]) {
                     varGroups[dreGroup].amount += amount;
@@ -551,8 +566,9 @@ const DRE: React.FC = () => {
                 } else if (fixGroups[dreGroup]) {
                     fixGroups[dreGroup].amount += amount;
                     fixGroups[dreGroup].items.push(exp);
-                } else if (dreGroup === 'perda') {
-                    perdaEstoque += amount;
+                } else if (revGroups[dreGroup]) {
+                    revGroups[dreGroup].amount += amount;
+                    revGroups[dreGroup].items.push(exp);
                 }
                 return;
             }
@@ -602,8 +618,8 @@ const DRE: React.FC = () => {
                 if (cashbackKey && storeManualCashback[cashbackKey]) {
                     storeManualCashback[cashbackKey].amount += amount;
                     storeManualCashback[cashbackKey].items.push(expToPush);
-                } else {
-                    pushToGroup(varGroups.cashback);
+                } else if (varGroups[params.cashback_group_id]) {
+                    pushToGroup(varGroups[params.cashback_group_id]);
                 }
             }
             // Marketing e Propaganda
@@ -652,9 +668,13 @@ const DRE: React.FC = () => {
 
         impostos = (totalRev * (params.tax_rate / 100));
         perdaEstoque = (totalRev * (params.loss_rate / 100));
-        if (varGroups.royalties) varGroups.royalties.amount = (totalRev * (params.royalty_rate / 100));
-        if (varGroups.tarifaPix) varGroups.tarifaPix.amount = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
-        if (varGroups.tarifaCartao) varGroups.tarifaCartao.amount = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
+        
+        // Automatic assignments based on mappings
+        if (params.tax_group_id && varGroups[params.tax_group_id]) varGroups[params.tax_group_id].amount = impostos;
+        if (params.loss_group_id && varGroups[params.loss_group_id]) varGroups[params.loss_group_id].amount = perdaEstoque;
+        if (params.royalty_group_id && varGroups[params.royalty_group_id]) varGroups[params.royalty_group_id].amount = (totalRev * (params.royalty_rate / 100));
+        if (params.pix_fee_group_id && varGroups[params.pix_fee_group_id]) varGroups[params.pix_fee_group_id].amount = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
+        if (params.card_fee_group_id && varGroups[params.card_fee_group_id]) varGroups[params.card_fee_group_id].amount = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
 
         if (selectedStore !== 'Todas') {
             const sNorm = normalizeStore(selectedStore);
@@ -662,31 +682,30 @@ const DRE: React.FC = () => {
             const manual = key ? storeManualCashback[key] : null;
 
             if (manual && manual.amount > 0) {
-                if (varGroups.cashback) {
-                    varGroups.cashback.amount += manual.amount;
-                    varGroups.cashback.items.push(...manual.items);
+                if (varGroups[params.cashback_group_id]) {
+                    varGroups[params.cashback_group_id].amount += manual.amount;
+                    varGroups[params.cashback_group_id].items.push(...manual.items);
                 }
             } else {
                 const rates = params.cashback_rates as Record<string, number>;
-                // Find rate using normalized key
                 const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === sNorm);
                 const rate = rateKey ? rates[rateKey] : 0;
-                if (varGroups.cashback) varGroups.cashback.amount += (totalRev * (rate / 100));
+                if (varGroups[params.cashback_group_id]) varGroups[params.cashback_group_id].amount += (totalRev * (rate / 100));
             }
         } else {
             activeStores.forEach(s => {
                 const manual = storeManualCashback[s];
                 if (manual && manual.amount > 0) {
-                    if (varGroups.cashback) {
-                        varGroups.cashback.amount += manual.amount;
-                        varGroups.cashback.items.push(...manual.items);
+                    if (varGroups[params.cashback_group_id]) {
+                        varGroups[params.cashback_group_id].amount += manual.amount;
+                        varGroups[params.cashback_group_id].items.push(...manual.items);
                     }
                 } else {
                     const rates = params.cashback_rates as Record<string, number>;
                     const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === normalizeStore(s));
                     const rate = rateKey ? rates[rateKey] : 0;
                     const sRev = storeRevMap[s] || 0;
-                    if (varGroups.cashback) varGroups.cashback.amount += (sRev * (rate / 100));
+                    if (varGroups[params.cashback_group_id]) varGroups[params.cashback_group_id].amount += (sRev * (rate / 100));
                 }
             });
         }
@@ -703,27 +722,25 @@ const DRE: React.FC = () => {
         const marginAfterLoss = grossMargin - perdaEstoque;
         const netProfit = marginAfterLoss - totalVar - totalFix;
 
-        const realVariableCosts = impostos + cmv + perdaEstoque +
-            (varGroups.royalties?.amount || 0) +
-            (varGroups.tarifaPix?.amount || 0) +
-            (varGroups.tarifaCartao?.amount || 0) +
-            (varGroups.cashback?.amount || 0);
-
-        const fixedOperationalCosts = totalFix + (varGroups.marketing?.amount || 0) + (varGroups.diversas?.amount || 0);
-        const margemContribuicao = totalRev - realVariableCosts - totalVar;
+        // Marginal Contribution calculation
+        // Total Var includes everything in varGroups (mapped taxes, royalties, etc.)
+        // We just need to add CMV and any calculated variables NOT in groups (though we try to keep them in groups now)
+        const totalVariableExpenses = cmv + totalVar + (params.tax_group_id ? 0 : impostos) + (params.loss_group_id ? 0 : perdaEstoque);
+        const margemContribuicao = totalRev - totalVariableExpenses;
+        
         const IMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
-        const breakEven = fixedOperationalCosts / Math.max(0.01, IMC);
+        const breakEven = totalFix / Math.max(0.01, IMC);
 
         return {
             revByMethod,
             revGroups,
             totalRev,
             impostos,
-            commissions: (varGroups.cashback?.amount || 0),
-            cardFees: (varGroups.tarifaCartao?.amount || 0),
-            pixFees: (varGroups.tarifaPix?.amount || 0),
-            royalties: (varGroups.royalties?.amount || 0),
-            operadoraMargin: (varGroups.tarifaPix?.amount || 0) + (varGroups.tarifaCartao?.amount || 0),
+            commissions: (varGroups[params.cashback_group_id]?.amount || 0),
+            cardFees: (varGroups[params.card_fee_group_id]?.amount || 0),
+            pixFees: (varGroups[params.pix_fee_group_id]?.amount || 0),
+            royalties: (varGroups[params.royalty_group_id]?.amount || 0),
+            operadoraMargin: (varGroups[params.pix_fee_group_id]?.amount || 0) + (varGroups[params.card_fee_group_id]?.amount || 0),
             rl,
             cmv,
             grossMargin,
@@ -840,57 +857,120 @@ const DRE: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-1 duration-200">
                             <div className="space-y-1">
                                 <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Impostos (Geral %)</label>
-                                <div className="relative">
-                                    <input
-                                        type="number" step="0.01" value={params.tax_rate}
-                                        onChange={(e) => setParams({ ...params, tax_rate: Number(e.target.value) })}
-                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                    />
-                                    <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <input
+                                            type="number" step="0.01" value={params.tax_rate}
+                                            onChange={(e) => setParams({ ...params, tax_rate: Number(e.target.value) })}
+                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                    </div>
+                                    <select 
+                                        value={params.tax_group_id} 
+                                        onChange={e => setParams({...params, tax_group_id: e.target.value})}
+                                        className="bg-[#0f172a] border border-[#334155] rounded-xl px-2 text-[10px] font-black uppercase text-amber-500 outline-none w-1/2"
+                                    >
+                                        <option value="">Destino DRE...</option>
+                                        {dreGroups.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                                    </select>
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Royalties (% Faturamento)</label>
-                                <div className="relative">
-                                    <input
-                                        type="number" step="0.1" value={params.royalty_rate}
-                                        onChange={(e) => setParams({ ...params, royalty_rate: Number(e.target.value) })}
-                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                    />
-                                    <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <input
+                                            type="number" step="0.1" value={params.royalty_rate}
+                                            onChange={(e) => setParams({ ...params, royalty_rate: Number(e.target.value) })}
+                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                    </div>
+                                    <select 
+                                        value={params.royalty_group_id} 
+                                        onChange={e => setParams({...params, royalty_group_id: e.target.value})}
+                                        className="bg-[#0f172a] border border-[#334155] rounded-xl px-2 text-[10px] font-black uppercase text-amber-500 outline-none w-1/2"
+                                    >
+                                        <option value="">Destino DRE...</option>
+                                        {dreGroups.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                                    </select>
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa PIX (% sobre PIX)</label>
-                                <div className="relative">
-                                    <input
-                                        type="number" step="0.01" value={params.pix_fee_rate}
-                                        onChange={(e) => setParams({ ...params, pix_fee_rate: Number(e.target.value) })}
-                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                    />
-                                    <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <input
+                                            type="number" step="0.01" value={params.pix_fee_rate}
+                                            onChange={(e) => setParams({ ...params, pix_fee_rate: Number(e.target.value) })}
+                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                    </div>
+                                    <select 
+                                        value={params.pix_fee_group_id} 
+                                        onChange={e => setParams({...params, pix_fee_group_id: e.target.value})}
+                                        className="bg-[#0f172a] border border-[#334155] rounded-xl px-2 text-[10px] font-black uppercase text-amber-500 outline-none w-1/2"
+                                    >
+                                        <option value="">Destino DRE...</option>
+                                        {dreGroups.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                                    </select>
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Perdas (% Faturamento)</label>
-                                <div className="relative">
-                                    <input
-                                        type="number" step="0.1" value={params.loss_rate}
-                                        onChange={(e) => setParams({ ...params, loss_rate: Number(e.target.value) })}
-                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                    />
-                                    <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <input
+                                            type="number" step="0.1" value={params.loss_rate}
+                                            onChange={(e) => setParams({ ...params, loss_rate: Number(e.target.value) })}
+                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                    </div>
+                                    <select 
+                                        value={params.loss_group_id} 
+                                        onChange={e => setParams({...params, loss_group_id: e.target.value})}
+                                        className="bg-[#0f172a] border border-[#334155] rounded-xl px-2 text-[10px] font-black uppercase text-amber-500 outline-none w-1/2"
+                                    >
+                                        <option value="">Destino DRE...</option>
+                                        {dreGroups.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                                    </select>
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tarifa Cartão (% Crédito+Débito)</label>
-                                <div className="relative">
-                                    <input
-                                        type="number" step="0.000001" value={params.card_fee_rate}
-                                        onChange={(e) => setParams({ ...params, card_fee_rate: Number(e.target.value) })}
-                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
-                                    />
-                                    <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <input
+                                            type="number" step="0.000001" value={params.card_fee_rate}
+                                            onChange={(e) => setParams({ ...params, card_fee_rate: Number(e.target.value) })}
+                                            className="w-full bg-[#0f172a] border border-[#334155] rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <span className="absolute right-3 top-2 text-slate-500 font-black">%</span>
+                                    </div>
+                                    <select 
+                                        value={params.card_fee_group_id} 
+                                        onChange={e => setParams({...params, card_fee_group_id: e.target.value})}
+                                        className="bg-[#0f172a] border border-[#334155] rounded-xl px-2 text-[10px] font-black uppercase text-amber-500 outline-none w-1/2"
+                                    >
+                                        <option value="">Destino DRE...</option>
+                                        {dreGroups.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Comissão/Cashback (Grupo DRE)</label>
+                                <div className="flex gap-2">
+                                    <select 
+                                        value={params.cashback_group_id} 
+                                        onChange={e => setParams({...params, cashback_group_id: e.target.value})}
+                                        className="w-full bg-[#0f172a] border border-[#334155] rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500/50"
+                                    >
+                                        <option value="">Selecione o grupo para Cashback...</option>
+                                        {dreGroups.filter(g => g.type === 'variable').map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                                    </select>
                                 </div>
                             </div>
 
@@ -1115,7 +1195,7 @@ const DRE: React.FC = () => {
                                                         <button onClick={() => setEditingGroup(group)} className="text-slate-500 hover:text-amber-500 transition-colors">
                                                             <span className="material-symbols-outlined text-sm">edit</span>
                                                         </button>
-                                                        {!group.isSystem && (
+                                                        {(!group.isSystem || group.id !== 'vendas') && (
                                                             <button onClick={async () => {
                                                                 const newGroups = dreGroups.filter(g => g.id !== group.id);
                                                                 setDreGroups(newGroups);
@@ -1182,7 +1262,7 @@ const DRE: React.FC = () => {
                 />
 
                 <Row
-                    label="Impostos sobre faturamento"
+                    label={dreGroups.find(g => g.id === params.tax_group_id)?.label || "Impostos sobre faturamento"}
                     value={metrics.impostos}
                     percentage={metrics.totalRev > 0 ? (metrics.impostos / metrics.totalRev) * 100 : 0}
                     isNegative
@@ -1208,7 +1288,7 @@ const DRE: React.FC = () => {
                 />
 
                 <Row
-                    label={activeCompany?.business_type === 'services' ? "Perdas ou cancelamentos" : "Perda do estoque (Furto, vencido, danificado)"}
+                    label={dreGroups.find(g => g.id === params.loss_group_id)?.label || (activeCompany?.business_type === 'services' ? "Perdas ou cancelamentos" : "Perda do estoque (Furto, vencido, danificado)")}
                     value={metrics.perdaEstoque}
                     percentage={metrics.totalRev > 0 ? (metrics.perdaEstoque / metrics.totalRev) * 100 : 0}
                     isNegative
