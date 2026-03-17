@@ -45,10 +45,12 @@ export const useAIAdvisor = () => {
                 categoryTotal[cat] = (categoryTotal[cat] || 0) + Number(t.amount);
             });
 
+            const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
             const topExpenses = Object.entries(categoryTotal)
                 .sort(([, a], [, b]) => b - a)
                 .slice(0, 3)
-                .map(([name, amount]) => `${name}: R$ ${amount.toFixed(2)}`);
+                .map(([name, amount]) => `${name}: ${formatBRL(amount)}`);
 
             const overBudgets = budgets
                 .map(b => {
@@ -83,7 +85,7 @@ export const useAIAdvisor = () => {
                 mockedInsights.push({
                     type: 'warning',
                     title: 'Déficit Mensal Detectado',
-                    description: `Suas despesas (R$ ${totalExpenses.toFixed(2)}) superaram suas receitas (R$ ${totalIncome.toFixed(2)}).`,
+                    description: `Suas despesas (${formatBRL(totalExpenses)}) superaram suas receitas (${formatBRL(totalIncome)}).`,
                     impact: 'Redução de reservas financeiras.'
                 });
             }
@@ -93,7 +95,7 @@ export const useAIAdvisor = () => {
                     type: 'saving',
                     title: 'Ajuste de Orçamento Necessário',
                     description: `Você ultrapassou o orçamento em ${overBudgets.length} categorias, especialmente em ${overBudgets[0].name}.`,
-                    impact: 'Excesso de gastos de R$ ' + (overBudgets[0].spent - overBudgets[0].limit).toFixed(2)
+                    impact: `Excesso de gastos de ${formatBRL(overBudgets[0].spent - overBudgets[0].limit)}`
                 });
             }
 
