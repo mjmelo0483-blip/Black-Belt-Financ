@@ -1211,20 +1211,17 @@ const DRE: React.FC = () => {
                         />
                         {/* Se for o grupo de vendas, mostra o detalhamento por método se houver vendas */}
                         {group.label.toLowerCase().includes('venda') && metrics.totalRev > 0 && (
-                            <div className="bg-[#0f172a]/30 border-b border-[#1e293b]">
+                            <div className="bg-[#0f172a]/20">
                                 {(Object.entries(metrics.revByMethod) as [string, number][])
                                     .filter(([_, value]) => value > 0)
                                     .sort((a, b) => b[1] - a[1])
                                     .map(([method, value]) => (
-                                        <div key={method} className="flex items-center justify-between px-8 py-1 text-[10px] text-slate-400">
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                                                {method}
-                                            </div>
-                                            <div className="font-medium">
-                                                R$ {Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </div>
-                                        </div>
+                                        <Row 
+                                            key={method}
+                                            label={`  • ${method}`}
+                                            value={value}
+                                            percentage={(value / metrics.totalRev) * 100}
+                                        />
                                     ))}
                             </div>
                         )}
