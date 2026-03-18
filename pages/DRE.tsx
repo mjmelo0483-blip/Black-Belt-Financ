@@ -684,9 +684,9 @@ const DRE: React.FC = () => {
         const netProfit = marginAfterLoss - totalVar - totalFix;
 
         // Marginal Contribution calculation
-        // Total Var includes everything in varGroups (mapped taxes, royalties, etc.)
-        // We just need to add CMV and any calculated variables NOT in groups (though we try to keep them in groups now)
-        const totalVariableExpenses = cmv + totalVar + (params.tax_group_id ? 0 : impostos) + (params.loss_group_id ? 0 : perdaEstoque);
+        // totalVar already excludes tax_group and loss_group due to our previous filter
+        // So we must add cmv, impostos (calculated or manual) and perdaEstoque (calculated or manual)
+        const totalVariableExpenses = cmv + totalVar + impostos + perdaEstoque;
         const margemContribuicao = totalRev - totalVariableExpenses;
         
         const IMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
