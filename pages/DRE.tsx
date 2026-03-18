@@ -1202,13 +1202,33 @@ const DRE: React.FC = () => {
 
                 <div className="bg-[#1e293b]/50 px-4 py-2 text-[10px] font-black text-indigo-400 uppercase tracking-widest border-b border-[#334155]/30">RECEITAS</div>
                 {Object.values(metrics.revGroups).map((group: any, i) => (
-                    <Row
-                        key={i}
-                        label={group.label}
-                        value={group.amount}
-                        percentage={metrics.totalRev > 0 ? (group.amount / metrics.totalRev) * 100 : 0}
-                        onClick={group.items.length > 0 ? () => { setDetailingItems(group.items); setDetailingTitle(group.label); setShowDetailModal(true); } : undefined}
-                    />
+                    <React.Fragment key={i}>
+                        <Row
+                            label={group.label}
+                            value={group.amount}
+                            percentage={metrics.totalRev > 0 ? (group.amount / metrics.totalRev) * 100 : 0}
+                            onClick={group.items.length > 0 ? () => { setDetailingItems(group.items); setDetailingTitle(group.label); setShowDetailModal(true); } : undefined}
+                        />
+                        {/* Se for o grupo de vendas, mostra o detalhamento por método se houver vendas */}
+                        {group.label.toLowerCase().includes('venda') && metrics.totalRev > 0 && (
+                            <div className="bg-[#0f172a]/30 border-b border-[#1e293b]">
+                                {(Object.entries(metrics.revByMethod) as [string, number][])
+                                    .filter(([_, value]) => value > 0)
+                                    .sort((a, b) => b[1] - a[1])
+                                    .map(([method, value]) => (
+                                        <div key={method} className="flex items-center justify-between px-8 py-1 text-[10px] text-slate-400">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                                                {method}
+                                            </div>
+                                            <div className="font-medium">
+                                                R$ {Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </div>
+                                        </div>
+                                    ))}
+                            </div>
+                        )}
+                    </React.Fragment>
                 ))}
                 
                 <div className="h-2"></div>
