@@ -49,6 +49,13 @@ const SalesDashboard: React.FC = () => {
                     pQuery = pQuery.eq('user_id', session.user.id).is('company_id', null);
                 }
 
+                const { data: groupsData } = await supabase
+                    .from('dre_structure')
+                    .select('*')
+                    .eq('company_id', activeCompany?.id || '')
+                    .order('order_index');
+                if (groupsData) setDreGroups(groupsData);
+
                 const { data: pData } = await pQuery.maybeSingle();
 
                 if (pData) {
