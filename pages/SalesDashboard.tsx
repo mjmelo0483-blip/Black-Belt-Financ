@@ -392,11 +392,25 @@ const SalesDashboard: React.FC = () => {
                 else { return; }
             }
 
+            const expToPush = (selectedStore !== 'Todas' && isGeralItem) ? { ...exp, amount, is_prorated: true } : exp;
+
             if (isIncome) {
+                const isProductCompany = activeCompany?.business_type === 'products';
+                const hasSalesData = salesOnlyRev > 0;
                 const isSalesGroup = !dreGroup || dreGroup === 'vendas';
-                if (activeCompany?.business_type === 'products' && salesOnlyRev > 0 && isSalesGroup) return;
-                if (dreGroup && revGroups[dreGroup]) revGroups[dreGroup].amount += amount;
-                else if (revGroups.vendas) revGroups.vendas.amount += amount;
+                
+                if (isProductCompany && hasSalesData && isSalesGroup) return;
+
+                if (dreGroup && revGroups[dreGroup]) {
+                    revGroups[dreGroup].amount += amount;
+                    revGroups[dreGroup].items.push(expToPush);
+                } else {
+                    const defaultRevGroup = revGroups.vendas || Object.values(revGroups)[0];
+                    if (defaultRevGroup) {
+                        defaultRevGroup.amount += amount;
+                        defaultRevGroup.items.push(expToPush);
+                    }
+                }
                 totalRev += amount;
                 return;
             }
@@ -404,42 +418,65 @@ const SalesDashboard: React.FC = () => {
             if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
 
             if (dreGroup) {
-                if (varGroups[dreGroup]) varGroups[dreGroup].amount += amount;
-                else if (fixGroups[dreGroup]) fixGroups[dreGroup].amount += amount;
-                else if (revGroups[dreGroup]) revGroups[dreGroup].amount += amount;
+                if (varGroups[dreGroup]) { varGroups[dreGroup].amount += amount; varGroups[dreGroup].items.push(expToPush); }
+                else if (fixGroups[dreGroup]) { fixGroups[dreGroup].amount += amount; fixGroups[dreGroup].items.push(expToPush); }
+                else if (revGroups[dreGroup]) { revGroups[dreGroup].amount += amount; revGroups[dreGroup].items.push(expToPush); }
                 return;
             }
-            if (catName.includes('imposto')) { if (varGroups[(params as any).tax_group_id]) varGroups[(params as any).tax_group_id].amount += amount; return; }
-            if (fixGroups.outros) fixGroups.outros.amount += amount;
+
+            const isTaxCategory = catName.includes('imposto') || catName.includes('das') || catName.includes('simples nacional');
+            if (isTaxCategory && (params as any).tax_group_id && varGroups[(params as any).tax_group_id]) {
+                varGroups[(params as any).tax_group_id].amount += amount;
+                varGroups[(params as any).tax_group_id].items.push(expToPush);
+                return;
+            }
+
+            if (fixGroups.outros) {
+                fixGroups.outros.amount += amount;
+                fixGroups.outros.items.push(expToPush);
+            } else {
+                const firstFix = Object.values(fixGroups)[0];
+                if (firstFix) {
+                    firstFix.amount += amount;
+                    firstFix.items.push(expToPush);
+                }
+            }
         });
 
-        const autoImpostos = (totalRev * (params.tax_rate / 100));
-        const autoPerdaEstoque = (totalRev * (params.loss_rate / 100));
-        const currentImpostos = (params as any).tax_group_id && varGroups[(params as any).tax_group_id] && varGroups[(params as any).tax_group_id].amount > 0 ? varGroups[(params as any).tax_group_id].amount : autoImpostos;
-        const currentPerdaEstoque = (params as any).loss_group_id && varGroups[(params as any).loss_group_id] && varGroups[(params as any).loss_group_id].amount > 0 ? varGroups[(params as any).loss_group_id].amount : autoPerdaEstoque;
+        const impostos = (params as any).tax_group_id && varGroups[(params as any).tax_group_id] && varGroups[(params as any).tax_group_id].amount > 0 
+            ? varGroups[(params as any).tax_group_id].amount 
+            : (totalRev * (params.tax_rate / 100));
+
+        const perdaEstoque = (params as any).loss_group_id && varGroups[(params as any).loss_group_id] && varGroups[(params as any).loss_group_id].amount > 0 
+            ? varGroups[(params as any).loss_group_id].amount 
+            : (totalRev * (params.loss_rate / 100));
 
         if (selectedStore !== 'Todas') {
-            const key = Object.keys(storeManualCashback).find(k => normalizeS(k) === sNorm);
-            if (key && storeManualCashback[key].amount > 0) { if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += storeManualCashback[key].amount; }
-            else { 
+            activeStores.forEach(s => {
+                if (normalizeS(s) !== sNorm) return;
                 const rates = params.cashback_rates as Record<string, number>;
-                const rate = rates[Object.keys(rates).find(rk => normalizeS(rk) === sNorm) || ''] || 0;
-                if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += (totalRev * (rate / 100));
-            }
+                const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === normalizeS(s));
+                const rate = rateKey ? rates[rateKey] : 0;
+                if (varGroups[(params as any).cashback_group_id] && varGroups[(params as any).cashback_group_id].amount === 0) {
+                    varGroups[(params as any).cashback_group_id].amount += (totalRev * (rate / 100));
+                }
+            });
         }
 
         if (revGroups.vendas) revGroups.vendas.amount += salesOnlyRev; 
 
-        const totalVar = Object.entries(varGroups).filter(([id]) => id !== (params as any).tax_group_id && id !== (params as any).loss_group_id).reduce((acc, [_, g]) => acc + g.amount, 0);
+        const totalVar = Object.entries(varGroups)
+            .filter(([id]) => id !== (params as any).tax_group_id && id !== (params as any).loss_group_id)
+            .reduce((acc, [_, g]) => acc + g.amount, 0);
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
         const cmv = cmvCents / 100;
-        const totalVariableExpenses = cmv + totalVar + currentImpostos + currentPerdaEstoque;
+        const totalVariableExpenses = cmv + totalVar + impostos + perdaEstoque;
         const margemContribuicao = totalRev - totalVariableExpenses;
         const currentIMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
         const currentBreakEven = totalFix / Math.max(0.01, currentIMC);
 
         return { breakEven: currentBreakEven, totalRev, totalFix, IMC: currentIMC, fixedCosts: totalFix };
-    }, [salesData, expensesData, params, selectedStore, dreGroups, filteredSales]);
+    }, [salesData, expensesData, params, selectedStore, dreGroups, filteredSales, activeCompany]);
 
 
     const targetRevenue = isNaN(dreMetrics.breakEven) || !isFinite(dreMetrics.breakEven) ? 0 : dreMetrics.breakEven;
