@@ -613,10 +613,10 @@ const SalesDashboard: React.FC = () => {
         };
 
         const hourMap: Record<string, { block: string, revenue: number, count: number }> = {
-            '00-06': { block: 'Madrugada (00h-06h)', revenue: 0, count: 0 },
-            '06-12': { block: 'Manhã (06h-12h)', revenue: 0, count: 0 },
-            '12-18': { block: 'Tarde (12h-18h)', revenue: 0, count: 0 },
-            '18-24': { block: 'Noite (18h-24h)', revenue: 0, count: 0 },
+            '00-06': { block: 'Madrugada (00h às 06h)', revenue: 0, count: 0 },
+            '06-12': { block: 'Manhã (06h às 12h)', revenue: 0, count: 0 },
+            '12-18': { block: 'Tarde (12h às 18h)', revenue: 0, count: 0 },
+            '18-24': { block: 'Noite (18h às 24h)', revenue: 0, count: 0 },
         };
 
         const storeMap: Record<string, { name: string, revenue: number, count: number }> = {};
@@ -1039,7 +1039,7 @@ const SalesDashboard: React.FC = () => {
                             <div className="h-[250px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={advancedAnalytics.byHour}>
-                                        <XAxis dataKey="block" stroke="#94a3b8" fontSize={9} axisLine={false} tickLine={false} tickFormatter={(val) => val.split(' ')[0]} />
+                                        <XAxis dataKey="block" stroke="#94a3b8" fontSize={8} axisLine={false} tickLine={false} />
                                         <YAxis hide />
                                         <Tooltip 
                                             cursor={{fill: 'transparent'}}
@@ -1048,7 +1048,7 @@ const SalesDashboard: React.FC = () => {
                                                     const data = payload[0].payload;
                                                     return (
                                                         <div className="bg-[#1e293b] p-3 border border-[#334155] rounded-xl shadow-xl z-50">
-                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{data.block.split(' (')[0]}</p>
+                                                            <p className="text-[10px] font-bold text-slate-400 mb-1">{data.block}</p>
                                                             <p className="text-sm font-black text-white">
                                                                 R$ {data.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                             </p>
