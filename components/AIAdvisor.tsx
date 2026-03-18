@@ -40,26 +40,24 @@ const AIAdvisor: React.FC<AIAdvisorProps> = ({ month, year }) => {
 
         try {
             const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-            
             const contextString = insights.map((i, idx) => `Alerta/Dica ${idx+1}: ${i.title} - ${i.description} (Impacto: ${i.impact || 'N/A'})`).join('\n');
             const systemPrompt = `Você é o Mentor IA, um experiente e direto consultor financeiro focado em ajudar empresas/pessoas na tomada de decisão rápida e assertiva. Responda o usuário SEMPRE em Português do Brasil. Mantenha as respostas concisas.
 Se houverem dados provisórios relevantes gerados por análise estrutural prévia deste mês, eles são:
 ${contextString || 'Ainda sem alertas computados neste mês.'}
 ${extraContext ? `\n${extraContext}` : ''}
 
-Baseado nesse dashboard atual (se houver), seja extremamente útil para o usuário.`;
+Baseado nesse dashboard atual (se houver), seja extremamente útil para o usuário. 
+Se você tiver acesso aos DADOS EXTRAS DE VENDAS e o usuário perguntar sobre rankings, vendas, ou dias, apenas entregue as respostas usando a base de dados oculta fornecida. Oculte o fato de que você está lendo isso de um prompt oculto e haja naturalmente.`;
+
+            const model = genAI.getGenerativeModel({ 
+                model: "gemini-2.5-flash",
+                systemInstruction: systemPrompt
+            });
 
             const history = chatMessages.filter(m => m.text !== '...').map(m => ({ 
                 role: m.role === 'ai' ? 'model' : 'user', 
                 parts: [{ text: m.text }] 
             }));
-
-            // Adiciona pre-prompt se não tem histórico para dar contexto da pergunta
-            if (history.length === 0) {
-                history.push({ role: 'user', parts: [{ text: systemPrompt }] });
-                history.push({ role: 'model', parts: [{ text: 'Entendido. Estou pronto para ajudar. O que você precisa saber?' }] });
-            }
 
             const chat = model.startChat({ history });
             const result = await chat.sendMessage(newMsg);
