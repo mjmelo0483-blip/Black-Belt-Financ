@@ -548,15 +548,17 @@ const SalesDashboard: React.FC = () => {
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
 
         // 1. Custos Variáveis Reais (O que varia estritamente com a venda)
+        // Inclui CMV, Impostos, Perdas e as Despesas Variáveis calculadas
         const realVariableCosts = impostos + cmv + perdaEstoque +
             varGroups.royalties.amount +
             varGroups.tarifaPix.amount +
             varGroups.tarifaCartao.amount +
-            varGroups.cashback.amount;
+            varGroups.cashback.amount +
+            varGroups.marketing.amount +
+            varGroups.diversas.amount;
 
         // 2. Custos Fixos Operacionais (Numerador do PE)
-        // Marketing e Diversas são tratados como fixos para o cálculo do Ponto de Equilíbrio
-        const fixedOperationalCosts = totalFix + varGroups.marketing.amount + varGroups.diversas.amount;
+        const fixedOperationalCosts = totalFix;
 
         // 3. IMC = (Faturamento - Custos Variáveis Reais) / Faturamento
         const margemContribuicao = totalRev - realVariableCosts;
