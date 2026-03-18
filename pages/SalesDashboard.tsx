@@ -372,7 +372,17 @@ const SalesDashboard: React.FC = () => {
             if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
 
             if (dreGroup) {
-                if (varGroups[dreGroup]) { varGroups[dreGroup].amount += amount; varGroups[dreGroup].items.push(expToPush); }
+                if (dreGroup === (params as any).cashback_group_id) {
+                    const sNameNorm = exp.store_name ? normalizeS(exp.store_name) : null;
+                    const cashbackKey = activeStores.find(as => normalizeS(as) === sNameNorm);
+
+                    if (cashbackKey && storeManualCashback[cashbackKey]) {
+                        storeManualCashback[cashbackKey].amount += amount;
+                    } else if (varGroups[dreGroup]) {
+                        varGroups[dreGroup].amount += amount;
+                        varGroups[dreGroup].items.push(expToPush);
+                    }
+                } else if (varGroups[dreGroup]) { varGroups[dreGroup].amount += amount; varGroups[dreGroup].items.push(expToPush); }
                 else if (fixGroups[dreGroup]) { fixGroups[dreGroup].amount += amount; fixGroups[dreGroup].items.push(expToPush); }
                 else if (revGroups[dreGroup]) { revGroups[dreGroup].amount += amount; revGroups[dreGroup].items.push(expToPush); }
                 return;
@@ -392,22 +402,67 @@ const SalesDashboard: React.FC = () => {
             }
         });
 
-        const impostos = (params as any).tax_group_id && varGroups[(params as any).tax_group_id] && varGroups[(params as any).tax_group_id].amount > 0 
-            ? varGroups[(params as any).tax_group_id].amount 
-            : (totalRev * (params.tax_rate / 100));
+        // Calculate automatic values
+        const autoImpostos = (totalRev * (params.tax_rate / 100));
+        const autoPerdaEstoque = (totalRev * (params.loss_rate / 100));
+        const autoRoyalties = (totalRev * (params.royalty_rate / 100));
+        const autoPixFee = ((revByMethod['PIX'] || 0) * (params.pix_fee_rate / 100));
+        const autoCardFee = (((revByMethod['Crédito'] || 0) + (revByMethod['Débito'] || 0)) * (params.card_fee_rate / 100));
 
-        const perdaEstoque = (params as any).loss_group_id && varGroups[(params as any).loss_group_id] && varGroups[(params as any).loss_group_id].amount > 0 
-            ? varGroups[(params as any).loss_group_id].amount 
-            : (totalRev * (params.loss_rate / 100));
+        if ((params as any).tax_group_id && varGroups[(params as any).tax_group_id]) {
+            if (varGroups[(params as any).tax_group_id].amount === 0) {
+                varGroups[(params as any).tax_group_id].amount = autoImpostos;
+            }
+        }
+        if ((params as any).loss_group_id && varGroups[(params as any).loss_group_id]) {
+            if (varGroups[(params as any).loss_group_id].amount === 0) {
+                varGroups[(params as any).loss_group_id].amount = autoPerdaEstoque;
+            }
+        }
+        if ((params as any).royalty_group_id && varGroups[(params as any).royalty_group_id] && varGroups[(params as any).royalty_group_id].amount === 0) {
+            varGroups[(params as any).royalty_group_id].amount = autoRoyalties;
+        }
+        if ((params as any).pix_fee_group_id && varGroups[(params as any).pix_fee_group_id] && varGroups[(params as any).pix_fee_group_id].amount === 0) {
+            varGroups[(params as any).pix_fee_group_id].amount = autoPixFee;
+        }
+        if ((params as any).card_fee_group_id && varGroups[(params as any).card_fee_group_id] && varGroups[(params as any).card_fee_group_id].amount === 0) {
+            varGroups[(params as any).card_fee_group_id].amount = autoCardFee;
+        }
+
+        const impostos = (params as any).tax_group_id && varGroups[(params as any).tax_group_id] ? varGroups[(params as any).tax_group_id].amount : autoImpostos;
+        const perdaEstoque = (params as any).loss_group_id && varGroups[(params as any).loss_group_id] ? varGroups[(params as any).loss_group_id].amount : autoPerdaEstoque;
 
         if (selectedStore !== 'Todas') {
-            activeStores.forEach(s => {
-                if (normalizeS(s) !== sNorm) return;
+            const manualKey = Object.keys(storeManualCashback).find(k => normalizeS(k) === sNorm);
+            const manual = manualKey ? storeManualCashback[manualKey] : null;
+
+            if (manual && manual.amount > 0) {
+                if (varGroups[(params as any).cashback_group_id]) {
+                    varGroups[(params as any).cashback_group_id].amount += manual.amount;
+                }
+            } else {
                 const rates = params.cashback_rates as Record<string, number>;
-                const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === normalizeS(s));
+                const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === sNorm);
                 const rate = rateKey ? rates[rateKey] : 0;
                 if (varGroups[(params as any).cashback_group_id] && varGroups[(params as any).cashback_group_id].amount === 0) {
                     varGroups[(params as any).cashback_group_id].amount += (totalRev * (rate / 100));
+                }
+            }
+        } else {
+            activeStores.forEach(s => {
+                const manual = storeManualCashback[s];
+                if (manual && manual.amount > 0) {
+                    if (varGroups[(params as any).cashback_group_id]) {
+                        varGroups[(params as any).cashback_group_id].amount += manual.amount;
+                    }
+                } else {
+                    const rates = params.cashback_rates as Record<string, number>;
+                    const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === normalizeS(s));
+                    const rate = rateKey ? rates[rateKey] : 0;
+                    const sRev = storeRevMapTotal[normalizeS(s)] || 0;
+                    if (varGroups[(params as any).cashback_group_id] && varGroups[(params as any).cashback_group_id].amount === 0) {
+                        varGroups[(params as any).cashback_group_id].amount += (sRev * (rate / 100));
+                    }
                 }
             });
         }
