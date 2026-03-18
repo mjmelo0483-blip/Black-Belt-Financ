@@ -573,11 +573,25 @@ const SalesDashboard: React.FC = () => {
         const autoCardFee = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
 
         // Override se o grupo estiver vazio (Lógica DRE)
-        if ((params as any).tax_group_id && varGroups[(params as any).tax_group_id]?.amount === 0) varGroups[(params as any).tax_group_id].amount = autoImpostos;
-        if ((params as any).loss_group_id && varGroups[(params as any).loss_group_id]?.amount === 0) varGroups[(params as any).loss_group_id].amount = autoPerdaEstoque;
-        if ((params as any).royalty_group_id && varGroups[(params as any).royalty_group_id]?.amount === 0) varGroups[(params as any).royalty_group_id].amount = autoRoyalties;
-        if ((params as any).pix_fee_group_id && varGroups[(params as any).pix_fee_group_id]?.amount === 0) varGroups[(params as any).pix_fee_group_id].amount = autoPixFee;
-        if ((params as any).card_fee_group_id && varGroups[(params as any).card_fee_group_id]?.amount === 0) varGroups[(params as any).card_fee_group_id].amount = autoCardFee;
+        if ((params as any).tax_group_id && varGroups[(params as any).tax_group_id]) {
+            if (varGroups[(params as any).tax_group_id].amount === 0) varGroups[(params as any).tax_group_id].amount = autoImpostos;
+        }
+        if ((params as any).loss_group_id && varGroups[(params as any).loss_group_id]) {
+            if (varGroups[(params as any).loss_group_id].amount === 0) varGroups[(params as any).loss_group_id].amount = autoPerdaEstoque;
+        }
+        if ((params as any).royalty_group_id && varGroups[(params as any).royalty_group_id] && varGroups[(params as any).royalty_group_id].amount === 0) {
+            varGroups[(params as any).royalty_group_id].amount = autoRoyalties;
+        }
+        if ((params as any).pix_fee_group_id && varGroups[(params as any).pix_fee_group_id] && varGroups[(params as any).pix_fee_group_id].amount === 0) {
+            varGroups[(params as any).pix_fee_group_id].amount = autoPixFee;
+        }
+        if ((params as any).card_fee_group_id && varGroups[(params as any).card_fee_group_id] && varGroups[(params as any).card_fee_group_id].amount === 0) {
+            varGroups[(params as any).card_fee_group_id].amount = autoCardFee;
+        }
+
+        // Parâmetros Finais para Sincronização
+        const currentImpostos = (params as any).tax_group_id && varGroups[(params as any).tax_group_id] ? varGroups[(params as any).tax_group_id].amount : autoImpostos;
+        const currentPerdaEstoque = (params as any).loss_group_id && varGroups[(params as any).loss_group_id] ? varGroups[(params as any).loss_group_id].amount : autoPerdaEstoque;
 
         // Cálculos de Cashback por loja
         if (selectedStore !== 'Todas') {
@@ -589,7 +603,9 @@ const SalesDashboard: React.FC = () => {
                 const rates = params.cashback_rates as Record<string, number>;
                 const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === sNorm);
                 const rate = rateKey ? rates[rateKey] : 0;
-                if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += (totalRev * (rate / 100));
+                if (varGroups[(params as any).cashback_group_id] && varGroups[(params as any).cashback_group_id].amount === 0) {
+                    varGroups[(params as any).cashback_group_id].amount += (totalRev * (rate / 100));
+                }
             }
         } else {
             activeStores.forEach(s => {
@@ -601,22 +617,27 @@ const SalesDashboard: React.FC = () => {
                     const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === normalizeS(s));
                     const rate = rateKey ? rates[rateKey] : 0;
                     const sRev = storeRevMap[normalizeS(s)] || 0;
-                    if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += (sRev * (rate / 100));
+                    if (varGroups[(params as any).cashback_group_id] && varGroups[(params as any).cashback_group_id].amount === 0) {
+                        varGroups[(params as any).cashback_group_id].amount += (sRev * (rate / 100));
+                    }
                 }
             });
         }
 
-        const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
+        // Agregação Final (IDÊNTICA à DRE.tsx linha 676-694)
+        const totalVar = Object.entries(varGroups)
+            .filter(([id]) => id !== (params as any).tax_group_id && id !== (params as any).loss_group_id)
+            .reduce((acc, [_, g]) => acc + g.amount, 0);
+        
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
 
-        const realVariableCosts = cmv + totalVar;
-        const fixedOperationalCosts = totalFix;
+        const totalVariableExpenses = cmv + totalVar + currentImpostos + currentPerdaEstoque;
+        const margemContribuicao = totalRev - totalVariableExpenses;
 
-        const margemContribuicao = totalRev - realVariableCosts;
         const IMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
-        const breakEven = fixedOperationalCosts / Math.max(0.01, IMC);
+        const breakEven = totalFix / Math.max(0.01, IMC);
 
-        return { breakEven, totalRev, totalFix, IMC, fixedCosts: fixedOperationalCosts };
+        return { breakEven, totalRev, totalFix, IMC, fixedCosts: totalFix };
     }, [filteredSales, salesData, expensesData, params, selectedStore, dreGroups]);
 
     const targetRevenue = isNaN(dreMetrics.breakEven) || !isFinite(dreMetrics.breakEven) ? 0 : dreMetrics.breakEven;
