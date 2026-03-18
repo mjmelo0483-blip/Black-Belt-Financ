@@ -25,10 +25,10 @@ export const useSales = () => {
                 let query = supabase
                     .from('sales')
                     .select(`
-                    id, date, store_name, payment_method, total_amount,
+                    id, date, time, store_name, payment_method, total_amount,
                     sale_items (
                         total_price, unit_price, quantity, unit_cost,
-                        products (name, code, category, cost)
+                        products (name, code, category, sub_category, cost)
                     )
                 `);
 
@@ -146,6 +146,7 @@ export const useSales = () => {
             const productNameKeys = ['K', 'Item', 'Nome do Produto', 'Produto', 'Descricao', 'Description', 'Nome Produto', 'Rotulos de Linha'];
             const categoryKeys = ['Categoria', 'Grupo', 'Familia', 'Categoria do Produto', 'Departamento', 'Setor'];
             const costKeys = ['P', 'Custo', 'Custo Un.', 'Custo Unitário', 'Vlr. Custo', 'Preço de Custo', 'Markup Cost', 'Cost', 'Vlr Custo', 'Preco Custo', 'Preço Custo'];
+            const subCategoryKeys = ['Sub-Categoria', 'Sub-categoria', 'Subcategoria', 'Sub Categoria', 'Sub_Categoria', 'Tipo Produto', 'Classificação', 'Classificacao'];
 
             const normalizeCode = (c: string) => {
                 const s = String(c || '').trim();
@@ -177,6 +178,8 @@ export const useSales = () => {
                 const customerCpf = getVal(row, customerCpfKeys);
                 const rawCategory = getVal(row, categoryKeys);
                 const category = rawCategory ? String(rawCategory).trim() : null; // null = no category in spreadsheet
+                const rawSubCategory = getVal(row, subCategoryKeys);
+                const subCategory = rawSubCategory ? String(rawSubCategory).trim() : null;
                 const cost = parseNumber(getVal(row, costKeys));
 
                 if (customerName && customerName !== '-' && !uniqueCustomerKeys.has(customerCpf || customerName)) {
@@ -195,6 +198,7 @@ export const useSales = () => {
                         code: productLookupKey,
                         name: productName || 'Produto sem nome',
                         category: category, // null if not provided by spreadsheet
+                        sub_category: subCategory, // null if not provided by spreadsheet
                         cost: cost || 0,
                         company_id: activeCompany?.id || null
                     });

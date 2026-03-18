@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSales } from '../hooks/useSales';
 import { useCompany } from '../contexts/CompanyContext';
 import ServiceProposalsView from '../components/ServiceProposalsView';
+import SalesReportView from '../components/SalesReportView';
 import * as XLSX from 'xlsx';
 
 const Sales: React.FC = () => {
@@ -9,6 +10,7 @@ const Sales: React.FC = () => {
     const { activeCompany } = useCompany();
     const [importStatus, setImportStatus] = useState<string>('');
     const [history, setHistory] = useState<any[]>([]);
+    const [activeTab, setActiveTab] = useState<'import' | 'report'>('import');
 
     const loadHistory = useCallback(async () => {
         const { data } = await fetchImports();
@@ -137,16 +139,43 @@ const Sales: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-6xl mx-auto space-y-8">
+        <div className="p-6 max-w-7xl mx-auto space-y-8">
             <header className="flex flex-col gap-2">
                 <h1 className="text-3xl font-black text-white tracking-tight uppercase">
-                    {activeCompany?.business_type === 'services' ? 'Importação de Pedidos' : 'Importação de Vendas'}
+                    {activeCompany?.business_type === 'services' ? 'Pedidos' : 'Vendas'}
                 </h1>
                 <p className="text-[#92adc9] text-sm">
-                    {activeCompany?.business_type === 'services' ? 'Gerencie o histórico de pedidos importados do seu sistema.' : 'Gerencie o histórico de vendas importadas do seu sistema.'}
+                    {activeCompany?.business_type === 'services' ? 'Gerencie pedidos e propostas do seu sistema.' : 'Importe dados e gere relatórios de vendas.'}
                 </p>
             </header>
 
+            {/* Tab Navigation */}
+            <div className="flex items-center gap-1 bg-[#111a22] p-1 rounded-xl border border-[#324d67]/30 w-fit">
+                <button
+                    onClick={() => setActiveTab('import')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                        activeTab === 'import'
+                            ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                            : 'text-[#92adc9] hover:text-white hover:bg-white/5'
+                    }`}
+                >
+                    <span className="material-symbols-outlined text-[18px]">upload</span>
+                    Importação
+                </button>
+                <button
+                    onClick={() => setActiveTab('report')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                        activeTab === 'report'
+                            ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                            : 'text-[#92adc9] hover:text-white hover:bg-white/5'
+                    }`}
+                >
+                    <span className="material-symbols-outlined text-[18px]">assessment</span>
+                    Relatório de Vendas
+                </button>
+            </div>
+
+            {activeTab === 'import' ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Upload Section */}
                 <div className="lg:col-span-1 space-y-6">
@@ -269,6 +298,9 @@ const Sales: React.FC = () => {
                     </div>
                 </div>
             </div>
+            ) : (
+                <SalesReportView />
+            )}
         </div>
     );
 };
