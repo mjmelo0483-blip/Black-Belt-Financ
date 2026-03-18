@@ -117,62 +117,130 @@ const SalesDashboard: React.FC = () => {
     }, [fetchSales, selectedMonth, selectedYear, activeCompany]);
 
     const [allPeriods, setAllPeriods] = useState<string[]>([]);
+    const DEFAULT_DRE_GROUPS = [
+        { id: 'vendas', label: 'Venda de mercadoria (Bruto)', type: 'revenue', isSystem: true },
+        { id: 'impostos', label: 'Impostos sobre faturamento', type: 'variable', isSystem: true },
+        { id: 'cashback', label: 'Comissão paga ao condominio (cashback)', type: 'variable' },
+        { id: 'royalties', label: 'Royalties', type: 'variable' },
+        { id: 'tarifaCartao', label: 'Tarifa de cartão', type: 'variable' },
+        { id: 'tarifaPix', label: 'Tarifa de Pix', type: 'variable' },
+        { id: 'marketing', label: 'Investimento Marketing da loja', type: 'variable' },
+        { id: 'diversas', label: 'Despesas diversas da loja', type: 'variable' },
+        { id: 'funcionarios', label: 'Funcionários', type: 'fixed' },
+        { id: 'manutencaoVeiculo', label: 'Manutenção de veículo', type: 'fixed' },
+        { id: 'taxaSistema', label: 'Taxa de uso do sistema', type: 'fixed' },
+        { id: 'aluguelContainer', label: 'Aluguel de container', type: 'fixed' },
+        { id: 'combustivel', label: 'Despesa com combustível', type: 'fixed' },
+        { id: 'aluguelEscritorio', label: 'Aluguel de Escritório', type: 'fixed' },
+        { id: 'tef', label: 'Elgin+TEF+LgoPass', type: 'fixed' },
+        { id: 'despesasFinanceiras', label: 'Despesas financeiras', type: 'fixed' },
+        { id: 'contabilidade', label: 'Despesa com contabilidade', type: 'fixed' },
+        { id: 'internet', label: 'Despesa com internet', type: 'fixed' },
+        { id: 'energia', label: 'Despesa com energia elétrica', type: 'fixed' },
+        { id: 'outros', label: 'Outros', type: 'fixed' },
+        { id: 'perda', label: 'Perda do estoque', type: 'variable' },
+    ];
+    const [dreGroups, setDreGroups] = useState<any[]>(DEFAULT_DRE_GROUPS);
+
+    // Initial load: Periods and DRE Structure
     useEffect(() => {
-        const loadPeriods = async () => {
+        const init = async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return;
 
-            let allDates: any[] = [];
-            let page = 0;
-            const pageSize = 1000;
-            let hasMore = true;
-
-            while (hasMore) {
-                let q = supabase
-                    .from('sales')
-                    .select('date');
-
-                if (activeCompany) {
-                    q = q.eq('company_id', activeCompany.id);
-                } else {
-                    q = q.eq('user_id', session.user.id).is('company_id', null);
+            // Fetch DRE structure
+            if (activeCompany) {
+                const { data: compData } = await supabase
+                    .from('companies')
+                    .select('dre_structure')
+                    .eq('id', activeCompany.id)
+                    .single();
+                if (compData?.dre_structure && Array.isArray(compData.dre_structure) && compData.dre_structure.length > 0) {
+                    setDreGroups(compData.dre_structure);
                 }
-
-                const { data, error } = await q
-                    .order('date', { ascending: false })
-                    .range(page * pageSize, (page + 1) * pageSize - 1);
-
-                if (error) break;
-                if (!data || data.length === 0) {
-                    hasMore = false;
-                } else {
-                    allDates = [...allDates, ...data];
-                    if (data.length < pageSize) hasMore = false;
-                    else page++;
-                }
-                if (page > 50) break;
             }
 
+            // Fetch periods
+            let allDates: any[] = [];
+            let page = 0;
+            while (page < 20) {
+                let q = supabase.from('sales').select('date');
+                if (activeCompany) q = q.eq('company_id', activeCompany.id);
+                else q = q.eq('user_id', session.user.id).is('company_id', null);
+                const { data } = await q.order('date', { ascending: false }).range(page * 1000, (page + 1) * 1000 - 1);
+                if (!data || data.length === 0) break;
+                allDates = [...allDates, ...data];
+                if (data.length < 1000) break;
+                page++;
+            }
             if (allDates.length > 0) {
                 const p = new Set<string>();
                 allDates.forEach((s: any) => {
                     const parts = s.date?.split('-');
-                    if (parts?.length === 3) {
-                        p.add(`${parseInt(parts[1]) - 1}-${parts[0]}`);
-                    }
+                    if (parts?.length === 3) p.add(`${parseInt(parts[1]) - 1}-${parts[0]}`);
                 });
-
-                const sortedPeriods = Array.from(p).sort((a, b) => {
+                setAllPeriods(Array.from(p).sort((a, b) => {
                     const [am, ay] = a.split('-').map(Number);
                     const [bm, by] = b.split('-').map(Number);
                     return ay !== by ? ay - by : am - bm;
-                });
-
-                setAllPeriods(sortedPeriods);
+                }));
             }
         };
-        loadPeriods();
-    }, []);
+        init();
+    }, [activeCompany]);
+
+    // Data load: Sales and Expenses for the selected period
+    useEffect(() => {
+        const loadData = async () => {
+            setSalesData([]);
+            setExpensesData([]);
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) return;
+
+            // Load Params
+            let pQuery = supabase.from('dre_parameters').select('*').eq('month', selectedMonth).eq('year', selectedYear);
+            if (activeCompany) pQuery = pQuery.eq('company_id', activeCompany.id);
+            else pQuery = pQuery.eq('user_id', session.user.id).is('company_id', null);
+            const { data: pData } = await pQuery.maybeSingle();
+
+            if (pData) {
+                setParams({
+                    tax_rate: Number(pData.tax_rate || 3.24),
+                    tax_group_id: pData.tax_group_id || 'impostos',
+                    royalty_rate: Number(pData.royalty_rate || 6.00),
+                    royalty_group_id: pData.royalty_group_id || 'royalties',
+                    pix_fee_rate: Number(pData.pix_fee_rate || 0.80),
+                    pix_fee_group_id: pData.pix_fee_group_id || 'tarifaPix',
+                    loss_rate: Number(pData.loss_rate || 2.00),
+                    loss_group_id: pData.loss_group_id || 'perda',
+                    card_fee_rate: Number(pData.card_fee_rate || 1.110284),
+                    card_fee_group_id: pData.card_fee_group_id || 'tarifaCartao',
+                    cashback_group_id: pData.cashback_group_id || 'cashback',
+                    cashback_rates: pData.cashback_rates || {}
+                });
+            }
+
+            // Load Sales
+            const { data: sData } = await fetchSales({ month: selectedMonth, year: selectedYear });
+            if (sData) setSalesData(sData);
+
+            // Load Expenses
+            const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
+            const endDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${new Date(selectedYear, selectedMonth + 1, 0).getDate()}`;
+            let expQuery = supabase.from('transactions')
+                .select('amount, type, description, date, due_date, category_id, store_name, categories(name, parent_id, dre_group)')
+                .eq('is_business', true).is('transfer_id', null).is('investment_id', null)
+                .or('payment_method.not.ilike.transferencia,payment_method.is.null')
+                .not('type', 'ilike', 'transfer').not('type', 'ilike', 'investment').ilike('type', 'expense')
+                .gte('date', startDate).lte('date', endDate);
+            if (activeCompany) expQuery = expQuery.eq('company_id', activeCompany.id);
+            else expQuery = expQuery.is('company_id', null);
+
+            const { data: expData } = await expQuery;
+            if (expData) setExpensesData(expData);
+        };
+        loadData();
+    }, [fetchSales, selectedMonth, selectedYear, activeCompany]);
 
     const periods = allPeriods;
 
@@ -437,32 +505,18 @@ const SalesDashboard: React.FC = () => {
 
         const storeRevMap = storeRevMapTotal;
         const cmv = cmvCents / 100;
-        let impostos = 0;
-        let perdaEstoque = 0;
 
-        const varGroups: Record<string, { label: string; amount: number, items: any[] }> = {
-            cashback: { label: 'Comissão paga ao condominio (cashback)', amount: 0, items: [] },
-            royalties: { label: 'Royalties', amount: 0, items: [] },
-            tarifaCartao: { label: 'Tarifa de cartão', amount: 0, items: [] },
-            tarifaPix: { label: 'Tarifa de Pix', amount: 0, items: [] },
-            marketing: { label: 'Investimento Marketing da loja', amount: 0, items: [] },
-            diversas: { label: 'Despesas diversas da loja', amount: 0, items: [] },
-        };
+        // Initialize Groups exactly like DRE using the loaded dreGroups
+        const varGroups: Record<string, { label: string; amount: number, items: any[] }> = {};
+        const fixGroups: Record<string, { label: string; amount: number, items: any[] }> = {};
+        const revGroups: Record<string, { label: string; amount: number, items: any[] }> = {};
 
-        const fixGroups: Record<string, { label: string; amount: number, items: any[] }> = {
-            funcionarios: { label: 'Funcionários', amount: 0, items: [] },
-            manutencaoVeiculo: { label: 'Manutenção de veículo', amount: 0, items: [] },
-            taxaSistema: { label: 'Taxa de uso do sistema', amount: 0, items: [] },
-            aluguelContainer: { label: 'Aluguel de container', amount: 0, items: [] },
-            combustivel: { label: 'Despesa com combustível', amount: 0, items: [] },
-            aluguelEscritorio: { label: 'Aluguel de Escritório', amount: 0, items: [] },
-            tef: { label: 'Elgin+TEF+LgoPass', amount: 0, items: [] },
-            despesasFinanceiras: { label: 'Despesas financeiras', amount: 0, items: [] },
-            contabilidade: { label: 'Despesa com contabilidade', amount: 0, items: [] },
-            internet: { label: 'Despesa com internet', amount: 0, items: [] },
-            energia: { label: 'Despesa com energia elétrica', amount: 0, items: [] },
-            outros: { label: 'Outros', amount: 0, items: [] },
-        };
+        dreGroups.forEach(g => {
+            const groupData = { label: g.label, amount: 0, items: [] };
+            if (g.type === 'variable') varGroups[g.id] = groupData;
+            else if (g.type === 'fixed') fixGroups[g.id] = groupData;
+            else if (g.type === 'revenue') revGroups[g.id] = groupData;
+        });
 
         expensesData.forEach(exp => {
             const catName = (exp.categories?.name || 'Geral').toLowerCase();
@@ -479,79 +533,75 @@ const SalesDashboard: React.FC = () => {
                 } else { return; }
             }
 
-            const pushToGroup = (group: any) => { group.amount += amount; };
+            const pushToGroup = (group: any) => { if (group) group.amount += amount; };
             if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
-
-            const isCalculated =
-                desc.includes('royalties') ||
-                desc.includes('imposto') ||
-                desc.includes('tarifa de pix') ||
-                desc.includes('tarifa pix') ||
-                desc.includes('tarifa de cartao') ||
-                desc.includes('taxa de cartao') ||
-                desc.includes('perda');
-
-            if (isCalculated && !dreGroup) return;
 
             if (dreGroup) {
                 if (dreGroup === 'cashback') {
                     const cashbackKey = activeStores.find(as => normalizeS(as) === expNorm);
                     if (cashbackKey && storeManualCashback[cashbackKey]) {
                         storeManualCashback[cashbackKey].amount += amount;
-                    } else { varGroups.cashback.amount += amount; }
-                } else if (varGroups[dreGroup]) { varGroups[dreGroup].amount += amount; }
-                else if (fixGroups[dreGroup]) { fixGroups[dreGroup].amount += amount; }
-                else if (dreGroup === 'perda') { perdaEstoque += amount; }
+                    } else { pushToGroup(varGroups[(params as any).cashback_group_id || 'cashback']); }
+                } 
+                else if (varGroups[dreGroup]) { pushToGroup(varGroups[dreGroup]); }
+                else if (fixGroups[dreGroup]) { pushToGroup(fixGroups[dreGroup]); }
                 return;
             }
 
-            if (catName.includes('internet') || catName.includes('celular') || desc.includes('internet')) { pushToGroup(fixGroups.internet); }
-            else if (catName.includes('energia') || desc.includes('luz') || desc.includes('equatorial') || desc.includes('enel') || desc.includes('celpa')) { pushToGroup(fixGroups.energia); }
-            else if (catName.includes('combustivel') || desc.includes('gasolina') || desc.includes('diesel') || desc.includes('etanol') || (desc.includes('posto ') && !desc.includes('imposto'))) { pushToGroup(fixGroups.combustivel); }
-            else if (catName.includes('funcionario') || catName.includes('salario') || catName.includes('pro-labore') || desc.includes('salario') || desc.includes('folha pgto') || desc.includes('pro-labore')) { pushToGroup(fixGroups.funcionarios); }
-            else if (catName.includes('contabil') || desc.includes('contador') || desc.includes('contabilidade')) { pushToGroup(fixGroups.contabilidade); }
-            else if (catName.includes('escritorio') && (catName.includes('aluguel') || desc.includes('aluguel'))) { pushToGroup(fixGroups.aluguelEscritorio); }
-            else if (catName.includes('container')) { pushToGroup(fixGroups.aluguelContainer); }
-            else if (catName.includes('comissão') || desc.includes('cashback') || desc.includes('comissão condomínio')) {
-                const cashbackKey = activeStores.find(as => normalizeS(as) === expNorm);
-                if (cashbackKey && storeManualCashback[cashbackKey]) { storeManualCashback[cashbackKey].amount += amount; }
-                else { pushToGroup(varGroups.cashback); }
+            // Heurística de Imposto
+            const isTaxCategory = catName.includes('imposto') || catName.includes('das') || catName.includes('simples nacional');
+            if (isTaxCategory && (params as any).tax_group_id && varGroups[(params as any).tax_group_id]) {
+                pushToGroup(varGroups[(params as any).tax_group_id]);
+                return;
             }
-            else if (catName.includes('marketing') || desc.includes('marketing') || desc.includes('propaganda') || desc.includes('facebook ads') || desc.includes('google ads')) { pushToGroup(varGroups.marketing); }
-            else if (catName.includes('veiculo') || desc.includes('carro') || desc.includes('moto') || desc.includes('oficina') || desc.includes('pneu')) { pushToGroup(fixGroups.manutencaoVeiculo); }
-            else if (catName.includes('taxa de uso do sistema') || (catName.includes('sistema') && (desc.includes('taxa') || desc.includes('mensalidade')))) { pushToGroup(fixGroups.taxaSistema); }
-            else if (catName.includes('elgin') || catName.includes('tef') || catName.includes('igopass') || catName.includes('lgopass')) { pushToGroup(fixGroups.tef); }
-            else if (catName.includes('despesas financeiras') || catName.includes('aluguel do espaco') || desc.includes('aluguel da loja') || desc.includes('aluguel sala')) { pushToGroup(fixGroups.despesasFinanceiras); }
-            else if (catName.includes('diversas') || catName.includes('loja') || desc.includes('loja')) { if (!isCalculated) pushToGroup(varGroups.diversas); }
-            else if (!isCalculated) { pushToGroup(fixGroups.outros); }
+
+            // Categorização Manual Replicando Heurística DRE
+            if (catName.includes('internet') || desc.includes('internet')) { pushToGroup(fixGroups.internet || fixGroups.outros); }
+            else if (catName.includes('energia') || desc.includes('luz')) { pushToGroup(fixGroups.energia || fixGroups.outros); }
+            else if (catName.includes('combustivel')) { pushToGroup(fixGroups.combustivel || fixGroups.outros); }
+            else if (catName.includes('funcionario') || catName.includes('salario') || catName.includes('pro-labore')) { pushToGroup(fixGroups.funcionarios || fixGroups.outros); }
+            else if (catName.includes('contabil') || desc.includes('contabilidades')) { pushToGroup(fixGroups.contabilidade || fixGroups.outros); }
+            else if (catName.includes('marketing')) { pushToGroup(varGroups.marketing || varGroups.diversas); }
+            else { pushToGroup(fixGroups.outros); }
         });
 
-        impostos = (totalRev * (params.tax_rate / 100));
-        perdaEstoque = (totalRev * (params.loss_rate / 100));
-        varGroups.royalties.amount = (totalRev * (params.royalty_rate / 100));
-        varGroups.tarifaPix.amount = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
-        varGroups.tarifaCartao.amount = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
+        // Valores Automáticos
+        const autoImpostos = (totalRev * (params.tax_rate / 100));
+        const autoPerdaEstoque = (totalRev * (params.loss_rate / 100));
+        const autoRoyalties = (totalRev * (params.royalty_rate / 100));
+        const autoPixFee = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
+        const autoCardFee = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
 
+        // Override se o grupo estiver vazio (Lógica DRE)
+        if ((params as any).tax_group_id && varGroups[(params as any).tax_group_id]?.amount === 0) varGroups[(params as any).tax_group_id].amount = autoImpostos;
+        if ((params as any).loss_group_id && varGroups[(params as any).loss_group_id]?.amount === 0) varGroups[(params as any).loss_group_id].amount = autoPerdaEstoque;
+        if ((params as any).royalty_group_id && varGroups[(params as any).royalty_group_id]?.amount === 0) varGroups[(params as any).royalty_group_id].amount = autoRoyalties;
+        if ((params as any).pix_fee_group_id && varGroups[(params as any).pix_fee_group_id]?.amount === 0) varGroups[(params as any).pix_fee_group_id].amount = autoPixFee;
+        if ((params as any).card_fee_group_id && varGroups[(params as any).card_fee_group_id]?.amount === 0) varGroups[(params as any).card_fee_group_id].amount = autoCardFee;
+
+        // Cálculos de Cashback por loja
         if (selectedStore !== 'Todas') {
             const key = Object.keys(storeManualCashback).find(k => normalizeS(k) === sNorm);
             const manual = key ? storeManualCashback[key] : null;
-            if (manual && manual.amount > 0) { varGroups.cashback.amount += manual.amount; }
-            else {
+            if (manual && manual.amount > 0) { 
+                if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += manual.amount;
+            } else {
                 const rates = params.cashback_rates as Record<string, number>;
                 const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === sNorm);
                 const rate = rateKey ? rates[rateKey] : 0;
-                varGroups.cashback.amount += (totalRev * (rate / 100));
+                if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += (totalRev * (rate / 100));
             }
         } else {
             activeStores.forEach(s => {
                 const manual = storeManualCashback[s];
-                if (manual && manual.amount > 0) { varGroups.cashback.amount += manual.amount; }
-                else {
+                if (manual && manual.amount > 0) { 
+                    if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += manual.amount;
+                } else {
                     const rates = params.cashback_rates as Record<string, number>;
                     const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === normalizeS(s));
                     const rate = rateKey ? rates[rateKey] : 0;
                     const sRev = storeRevMap[normalizeS(s)] || 0;
-                    varGroups.cashback.amount += (sRev * (rate / 100));
+                    if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += (sRev * (rate / 100));
                 }
             });
         }
@@ -559,22 +609,15 @@ const SalesDashboard: React.FC = () => {
         const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
 
-        // 1. Custos Variáveis Reais (CMV + Todos os grupos mapeados como variáveis)
-        // Isso inclui Impostos, Perdas, Royalties, Taxas e Cashback que já foram processados acima
         const realVariableCosts = cmv + totalVar;
-
-        // 2. Custos Fixos Operacionais (Somente grupos fixos)
         const fixedOperationalCosts = totalFix;
 
-        // 3. IMC = (Faturamento - Custos Variáveis Reais) / Faturamento
         const margemContribuicao = totalRev - realVariableCosts;
         const IMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
-
-        // 4. Ponto de Equilíbrio = Custos Fixos / IMC
         const breakEven = fixedOperationalCosts / Math.max(0.01, IMC);
 
         return { breakEven, totalRev, totalFix, IMC, fixedCosts: fixedOperationalCosts };
-    }, [filteredSales, salesData, expensesData, params, selectedStore]);
+    }, [filteredSales, salesData, expensesData, params, selectedStore, dreGroups]);
 
     const targetRevenue = isNaN(dreMetrics.breakEven) || !isFinite(dreMetrics.breakEven) ? 0 : dreMetrics.breakEven;
     const balancePercentage = targetRevenue > 0 ? Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100) : (totalRevenue > 0 ? 100 : 0);
