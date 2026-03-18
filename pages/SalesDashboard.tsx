@@ -559,17 +559,11 @@ const SalesDashboard: React.FC = () => {
         const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
 
-        // 1. Custos Variáveis Reais (O que varia estritamente com a venda)
-        // Inclui CMV, Impostos, Perdas e as Despesas Variáveis calculadas
-        const realVariableCosts = impostos + cmv + perdaEstoque +
-            varGroups.royalties.amount +
-            varGroups.tarifaPix.amount +
-            varGroups.tarifaCartao.amount +
-            varGroups.cashback.amount +
-            varGroups.marketing.amount +
-            varGroups.diversas.amount;
+        // 1. Custos Variáveis Reais (CMV + Todos os grupos mapeados como variáveis)
+        // Isso inclui Impostos, Perdas, Royalties, Taxas e Cashback que já foram processados acima
+        const realVariableCosts = cmv + totalVar;
 
-        // 2. Custos Fixos Operacionais (Numerador do PE)
+        // 2. Custos Fixos Operacionais (Somente grupos fixos)
         const fixedOperationalCosts = totalFix;
 
         // 3. IMC = (Faturamento - Custos Variáveis Reais) / Faturamento
