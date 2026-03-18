@@ -654,7 +654,8 @@ const SalesDashboard: React.FC = () => {
             });
         }
 
-        // Agregação Final (IDÊNTICA à DRE.tsx linha 676-694)
+        if (revGroups.vendas) revGroups.vendas.amount += salesOnlyRev; 
+
         const totalVar = Object.entries(varGroups)
             .filter(([id]) => id !== (params as any).tax_group_id && id !== (params as any).loss_group_id)
             .reduce((acc, [_, g]) => acc + g.amount, 0);
@@ -668,7 +669,7 @@ const SalesDashboard: React.FC = () => {
         const breakEven = totalFix / Math.max(0.01, IMC);
 
         return { breakEven, totalRev, totalFix, IMC, fixedCosts: totalFix };
-    }, [filteredSales, salesData, expensesData, params, selectedStore, dreGroups]);
+    }, [salesData, expensesData, params, selectedStore, dreGroups]);
 
     const targetRevenue = isNaN(dreMetrics.breakEven) || !isFinite(dreMetrics.breakEven) ? 0 : dreMetrics.breakEven;
     const balancePercentage = targetRevenue > 0 ? Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100) : (totalRevenue > 0 ? 100 : 0);
