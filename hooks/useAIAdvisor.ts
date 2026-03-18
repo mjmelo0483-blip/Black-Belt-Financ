@@ -96,9 +96,24 @@ export const useAIAdvisor = () => {
                     storeMap[stName] = (storeMap[stName] || 0) + rev;
 
                     if (sale.time) {
-                        let hourStr = sale.time || '12:00';
-                        let hour = parseInt(hourStr.split(':')[0], 10);
-                        if (isNaN(hour)) hour = 12;
+                        const timeStr = String(sale.time).trim();
+                        const isPM = timeStr.toLowerCase().includes('pm');
+                        const isAM = timeStr.toLowerCase().includes('am');
+                        let hour = 12;
+
+                        let hourPart = "";
+                        if (timeStr.includes(':')) {
+                            const segments = timeStr.split(':');
+                            const match = segments[0].match(/(\d{1,2})$/);
+                            if (match) hourPart = match[1];
+                        }
+
+                        if (hourPart) {
+                            hour = parseInt(hourPart, 10);
+                            if (isPM && hour < 12) hour += 12;
+                            if (isAM && hour === 12) hour = 0;
+                        }
+
                         let block = 'Madrugada (00h-06h)';
                         if (hour >= 6 && hour < 12) block = 'Manhã (06h-12h)';
                         else if (hour >= 12 && hour < 18) block = 'Tarde (12h-18h)';

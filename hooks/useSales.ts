@@ -132,6 +132,28 @@ export const useSales = () => {
                 }
                 return parseFloat(str) || 0;
             };
+            const formatTime = (val: any) => {
+                if (!val) return null;
+                if (typeof val === 'number') {
+                    // Excel time values (0 to 1)
+                    const totalSeconds = Math.round(val * 86400);
+                    const hours = Math.floor(totalSeconds / 3600);
+                    const minutes = Math.floor((totalSeconds % 3600) / 60);
+                    const seconds = totalSeconds % 60;
+                    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                }
+                let str = String(val).trim();
+                // If it's something like "18:30:00", it's fine.
+                // If it's a full ISO string (from JS Date), extract the time
+                if (str.includes('T')) return str.split('T')[1].split('.')[0];
+                // If it has spaces (like "16/03/2026 18:30"), take the last part
+                if (str.includes(' ')) {
+                    const parts = str.split(' ');
+                    const last = parts[parts.length - 1];
+                    if (last.includes(':')) return last;
+                }
+                return str;
+            };
             // ------------------------------
 
             // 1. Process Customers and Products in bulk to avoid duplicates
@@ -388,7 +410,7 @@ export const useSales = () => {
                         customer_id: customersMap.get(getVal(row, customerCpfKeys)) ||
                             customersMap.get(getVal(row, customerValueKeys)) || null,
                         date: date,
-                        time: getVal(row, ['Hora da Compra', 'Hora', 'Horário', 'Hora Saída']),
+                        time: formatTime(getVal(row, ['Hora da Compra', 'Hora', 'Horário', 'Hora Saída', 'Horario'])),
                         payment_method: getVal(row, paymentKeys),
                         store_name: store,
                         device: getVal(row, deviceKeys),

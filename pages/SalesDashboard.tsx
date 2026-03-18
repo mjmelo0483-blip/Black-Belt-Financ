@@ -626,9 +626,28 @@ const SalesDashboard: React.FC = () => {
                 const dateObj = new Date(sale.date + 'T12:00:00');
                 const dayOfWeek = dateObj.getDay();
 
-                let hourStr = sale.time || '12:00';
-                let hour = parseInt(hourStr.split(':')[0], 10);
-                if (isNaN(hour)) hour = 12;
+                let hour = 12;
+                if (sale.time) {
+                    const timeStr = String(sale.time).trim();
+                    const isPM = timeStr.toLowerCase().includes('pm');
+                    const isAM = timeStr.toLowerCase().includes('am');
+                    
+                    // Extrair apenas os dígitos da hora (lidando com "2024-03-18 21:00" ou "21:00")
+                    let hourPart = "";
+                    if (timeStr.includes(':')) {
+                        const segments = timeStr.split(':');
+                        const beforeFirstColon = segments[0];
+                        // Pega os últimos 1 ou 2 números antes do dois pontos
+                        const match = beforeFirstColon.match(/(\d{1,2})$/);
+                        if (match) hourPart = match[1];
+                    }
+
+                    if (hourPart) {
+                        hour = parseInt(hourPart, 10);
+                        if (isPM && hour < 12) hour += 12;
+                        if (isAM && hour === 12) hour = 0;
+                    }
+                }
 
                 let block = '00-06';
                 if (hour >= 6 && hour < 12) block = '06-12';
