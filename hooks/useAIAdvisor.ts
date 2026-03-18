@@ -286,16 +286,23 @@ export const useAIAdvisor = () => {
                     const dailyAverage = totalSalesRevenue / Math.max(1, daysElapsed);
                     const projectedTotal = totalSalesRevenue + (dailyAverage * daysRemaining);
                     
-                    // Calculo mais refinado de Resultado Projetado baseado no Fluxo de Caixa Atual
-                    const burnoutExpenses = totalExpenses; // Gastos já ocorridos
-                    const projectedRawProfit = (projectedTotal * 0.40); // Margem de contribuição simulada realista (40%)
-                    const finalProjectedResult = projectedRawProfit - burnoutExpenses;
+                    // Calculo de Margem Estimada (Aproximada em 45% IMC Médio para Condomínios)
+                    const estimatedIMC = 0.45; 
+                    const totalFixedExpenses = totalExpenses; // Gastos já registrados
+                    
+                    // Meta de Faturamento para Breakeven: Gastos / IMC
+                    const breakevenTarget = totalFixedExpenses / estimatedIMC;
+                    const remainingToBreakeven = Math.max(0, breakevenTarget - totalSalesRevenue);
+                    const dailyTargetNeeded = daysRemaining > 0 ? remainingToBreakeven / daysRemaining : 0;
+                    
+                    const projectedRawProfit = (projectedTotal * estimatedIMC);
+                    const finalProjectedResult = projectedRawProfit - totalFixedExpenses;
                     
                     generatedInsights.push({
-                        type: finalProjectedResult > 0 ? 'saving' : 'warning',
-                        title: 'Projeção Estratégica 2M',
-                        description: `Com média diária de ${formatBRL(dailyAverage)}, você tende a fechar o mês com ${formatBRL(projectedTotal)} de faturamento. Considerando seus gastos fixos e variáveis projetados, a estimativa do Resultado Final é de ${formatBRL(finalProjectedResult)}. ${daysRemaining > 0 ? `Temos ${daysRemaining} dias para acelerar as vendas e garantir um lucro maior.` : 'O mês está em fechamento.'}`,
-                        impact: finalProjectedResult > 0 ? 'Caminho sólido para fechar no lucro.' : 'Necessidade de aumento imediato de ticket ou volume.'
+                        type: finalProjectedResult > 0 ? 'saving' : 'opportunity',
+                        title: 'Planejamento de Reta Final 2M',
+                        description: `Faltam ${daysRemaining} dias para o fechamento. Sua média atual é ${formatBRL(dailyAverage)}, mas sua Meta Diária de Equilíbrio (Breakeven) é de ${formatBRL(dailyTargetNeeded)} para cobrir todos os custos fixos atuais. Se mantiver o ritmo, a projeção é de um resultado de ${formatBRL(finalProjectedResult)}.`,
+                        impact: finalProjectedResult > 0 ? 'Monitorar manutenção do ticket médio.' : 'Focar em promoções de giro rápido nos próximos dias.'
                     });
                 }
             }
