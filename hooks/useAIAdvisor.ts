@@ -82,7 +82,9 @@ export const useAIAdvisor = () => {
                 generatedInsights.push({
                     type: 'warning',
                     title: 'Alerta de Fluxo de Caixa Negativo',
-                    description: `Suas despesas (${formatBRL(totalExpenses)}) superaram suas entradas (${formatBRL(realIncome)}) neste mês. Você está operando com um déficit de ${formatBRL(totalExpenses - realIncome)}.`,
+                    description: isBusiness 
+                        ? `A operação teve despesas (${formatBRL(totalExpenses)}) maiores que as receitas (${formatBRL(realIncome)}) neste mês. A empresa fechou com déficit de ${formatBRL(totalExpenses - realIncome)}.`
+                        : `Seus gastos pessoais (${formatBRL(totalExpenses)}) superaram sua renda (${formatBRL(realIncome)}) neste mês. Você fechou no vermelho em ${formatBRL(totalExpenses - realIncome)}.`,
                     impact: 'Corrosão acelerada da sua margem de liquidez.'
                 });
             } else if (realIncome > totalExpenses && realIncome > 0) {
@@ -91,8 +93,12 @@ export const useAIAdvisor = () => {
                     type: margin > 20 ? 'saving' : 'tip',
                     title: margin > 20 ? 'Excelente Geração de Caixa' : 'Margem Positiva, mas Apertada',
                     description: margin > 20 
-                        ? `Você operou com uma margem de segurança de ${margin.toFixed(1)}%. Sobraram ${formatBRL(realIncome - totalExpenses)} que podem ser direcionados para reserva de oportunidade.`
-                        : `Sua margem livre foi de apenas ${margin.toFixed(1)}%. Você tem um superávit de ${formatBRL(realIncome - totalExpenses)}. Aumentar o faturamento ou cortar gastos não essenciais é recomendado.`,
+                        ? (isBusiness 
+                            ? `A empresa operou com uma margem de segurança de ${margin.toFixed(1)}%. Sobraram ${formatBRL(realIncome - totalExpenses)} de lucro que podem ser direcionados para caixa e investimentos.`
+                            : `Você operou com uma taxa de poupança (saving rate) de ${margin.toFixed(1)}%. Sobrou ${formatBRL(realIncome - totalExpenses)} de renda livre para investimentos.`)
+                        : (isBusiness
+                            ? `O lucro da operação foi de apenas ${margin.toFixed(1)}% (${formatBRL(realIncome - totalExpenses)}). É recomendado aumentar o faturamento ou cortar despesas operacionais não essenciais.`
+                            : `Sua sobra livre de caixa foi de apenas ${margin.toFixed(1)}% (${formatBRL(realIncome - totalExpenses)}). Crie fontes extras de renda ou reduza custos supérfluos.`),
                     impact: margin > 20 ? 'Crescimento de patrimônio garantido.' : 'Aumento incremental do caixa livre.'
                 });
             }
@@ -103,17 +109,21 @@ export const useAIAdvisor = () => {
                 if (concentration > 35) {
                     generatedInsights.push({
                         type: 'warning',
-                        title: 'Alta Concentração de Despesas',
-                        description: `A categoria "${topExpense[0]}" representa ${concentration.toFixed(1)}% de todas as suas despesas (${formatBRL(topExpense[1]!)}). Qualquer reajuste nesta linha afetará dramaticamente seus custos totais.`,
-                        impact: 'Risco de dependência de fornecedor ou ineficiência estrutural.'
+                        title: 'Alta Concentração de Gastos',
+                        description: isBusiness
+                            ? `A rubrica "${topExpense[0]}" consome ${concentration.toFixed(1)}% de todas as despesas da empresa (${formatBRL(topExpense[1]!)}). Qualquer reajuste aqui afeta os custos enormemente.`
+                            : `Sua categoria "${topExpense[0]}" consome ${concentration.toFixed(1)}% de todo o seu custo de vida (${formatBRL(topExpense[1]!)}). Cuidado com o desequilíbrio no padrão de vida.`,
+                        impact: isBusiness ? 'Risco de dependência estrutural na empresa.' : 'Comprometimento excessivo do orçamento pessoal.'
                     });
                 } else {
                     const savingsImpact = topExpense[1]! * 0.05;
                     generatedInsights.push({
                         type: 'opportunity',
                         title: `Foco Estratégico em ${topExpense[0]}`,
-                        description: `Como "${topExpense[0]}" é seu maior custo (${formatBRL(topExpense[1]!)}), renegociar contratos para uma redução de apenas 5% geraria uma economia direta de ${formatBRL(savingsImpact)} ao mês.`,
-                        impact: 'Aumento imediato do Lucro Líquido sem impacto em vendas.'
+                        description: isBusiness
+                            ? `Como "${topExpense[0]}" é a maior despesa da empresa (${formatBRL(topExpense[1]!)}), renegociar contratos ou processos para cortar 5% geraria economia de ${formatBRL(savingsImpact)}/mês.`
+                            : `Como "${topExpense[0]}" é seu maior gasto pessoal (${formatBRL(topExpense[1]!)}), cortar 5% no consumo geraria economia livre de ${formatBRL(savingsImpact)}/mês.`,
+                        impact: isBusiness ? 'Aumento imediato do Lucro Líquido na operação.' : 'Mais dinheiro sobrando no bolso ao final do mês.'
                     });
                 }
             }
@@ -125,16 +135,20 @@ export const useAIAdvisor = () => {
             if (monthsRunway < 1.5 && balance > 0) {
                 generatedInsights.push({
                     type: 'warning',
-                    title: 'Reserva de Emergência Crítica',
-                    description: `Seu saldo líquido atual garante apenas ${Math.floor(monthsRunway * 30)} dias de operação. É vital aumentar as reservas para evitar tomada de crédito emergencial (empréstimos) nos próximos ciclos.`,
-                    impact: 'Alto risco de insolvência a curto prazo.'
+                    title: isBusiness ? 'Caixa Operacional Crítico' : 'Fundo de Emergência Crítico',
+                    description: isBusiness
+                        ? `Seu saldo líquido atual garante apenas ${Math.floor(monthsRunway * 30)} dias de sobrevivência da operação do negócio. É prioridade 1 reter lucro ou captar capital barato.`
+                        : `Suas economias cobrem apenas ${Math.floor(monthsRunway * 30)} dias do seu custo de vida atual. Monte com urgência uma reserva equivalente a 6 meses de gastos.`,
+                    impact: isBusiness ? 'Alto risco de insolvência na empresa.' : 'Vulnerabilidade absoluta a imprevistos.'
                 });
             } else if (monthsRunway >= 6) {
                 generatedInsights.push({
                     type: 'opportunity',
-                    title: 'Capital Custo-Zero Estagnado',
-                    description: `Sua empresa / conta possui ${monthsRunway.toFixed(1)} meses de capital imobilizado no saldo. Mantenha 3 a 4 meses como segurança e aplique o restante em investimentos com liquidez diária.`,
-                    impact: 'Geração de renda passiva que atenua a inflação.'
+                    title: 'Capital Ocioso Detectado',
+                    description: isBusiness
+                        ? `Sua empresa possui ${monthsRunway.toFixed(1)} meses de capital estacionado no caixa. Mantenha 3 meses de segurança e aplique o resto para mitigar inflação.`
+                        : `Você atingiu notáveis ${monthsRunway.toFixed(1)} meses de custos de vida como reserva. Estude fazer aplicações de rendimento de maior liquidez e retorno.`,
+                    impact: 'Perda do poder de compra pela desvalorização do dinheiro parado.'
                 });
             }
 
@@ -143,9 +157,11 @@ export const useAIAdvisor = () => {
                 const totalOver = overBudgets.reduce((acc, b) => acc + (b.spent - b.limit), 0);
                 generatedInsights.push({
                     type: 'warning',
-                    title: 'Rompimento de Limites de Orçamento',
-                    description: `Excedeu o teto previsto em ${overBudgets.length} categorias (ex: ${overBudgets[0].name}). O estouro combinado soma ${formatBRL(totalOver)}.`,
-                    impact: 'Desvio no planejamento financeiro anual.'
+                    title: 'Rompimento de Orçamento',
+                    description: isBusiness
+                        ? `Cuidado! A empresa estourou limites traçados em ${overBudgets.length} contas de despesas (ex: ${overBudgets[0].name}). O estouro somado é de ${formatBRL(totalOver)}.`
+                        : `Atenção: Você gastou a mais do que orçou originalmente em ${overBudgets.length} categorias (ex: ${overBudgets[0].name}). Estouro de ${formatBRL(totalOver)}.`,
+                    impact: isBusiness ? 'Desvio fatal do planejamento de resultados anuais da empresa.' : 'Dificuldade de atingir as metas financeiras estabelecidas.'
                 });
             }
 
