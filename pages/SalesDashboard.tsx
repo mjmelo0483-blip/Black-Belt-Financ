@@ -632,17 +632,19 @@ const SalesDashboard: React.FC = () => {
                     const isPM = timeStr.toLowerCase().includes('pm');
                     const isAM = timeStr.toLowerCase().includes('am');
                     
-                    // Extrair apenas os dígitos da hora (lidando com "2024-03-18 21:00" ou "21:00")
                     let hourPart = "";
                     if (timeStr.includes(':')) {
                         const segments = timeStr.split(':');
-                        const beforeFirstColon = segments[0];
-                        // Pega os últimos 1 ou 2 números antes do dois pontos
-                        const match = beforeFirstColon.match(/(\d{1,2})$/);
+                        const match = segments[0].match(/(\d{1,2})$/);
                         if (match) hourPart = match[1];
+                    } else if (!isNaN(Number(timeStr)) && Number(timeStr) > 0 && Number(timeStr) < 1) {
+                        // Tratar números decimais do Excel (ex: 0.75 = 18h)
+                        const totalSeconds = Math.round(Number(timeStr) * 86400);
+                        hour = Math.floor(totalSeconds / 3600);
+                        hourPart = "SET"; // flag to skip the next block
                     }
 
-                    if (hourPart) {
+                    if (hourPart && hourPart !== "SET") {
                         hour = parseInt(hourPart, 10);
                         if (isPM && hour < 12) hour += 12;
                         if (isAM && hour === 12) hour = 0;
@@ -1058,7 +1060,25 @@ const SalesDashboard: React.FC = () => {
                             <div className="h-[250px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={advancedAnalytics.byHour}>
-                                        <XAxis dataKey="block" stroke="#94a3b8" fontSize={8} axisLine={false} tickLine={false} />
+                                        <XAxis 
+                                            dataKey="block" 
+                                            stroke="#94a3b8" 
+                                            fontSize={10} 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            interval={0}
+                                            tick={(props) => {
+                                                const { x, y, payload } = props;
+                                                const label = payload.value.split(' (')[0];
+                                                const detail = payload.value.split('(')[1]?.replace(')','');
+                                                return (
+                                                    <g transform={`translate(${x},${y})`}>
+                                                        <text x={0} y={12} textAnchor="middle" fill="#94a3b8" fontSize={9} fontWeight="bold">{label}</text>
+                                                        <text x={0} y={24} textAnchor="middle" fill="#64748b" fontSize={7}>{detail}</text>
+                                                    </g>
+                                                );
+                                            }}
+                                        />
                                         <YAxis hide />
                                         <Tooltip 
                                             cursor={{fill: 'transparent'}}

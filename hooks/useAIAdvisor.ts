@@ -106,9 +106,13 @@ export const useAIAdvisor = () => {
                             const segments = timeStr.split(':');
                             const match = segments[0].match(/(\d{1,2})$/);
                             if (match) hourPart = match[1];
+                        } else if (!isNaN(Number(timeStr)) && Number(timeStr) > 0 && Number(timeStr) < 1) {
+                            const totalSeconds = Math.round(Number(timeStr) * 86400);
+                            hour = Math.floor(totalSeconds / 3600);
+                            hourPart = "SET";
                         }
 
-                        if (hourPart) {
+                        if (hourPart && hourPart !== "SET") {
                             hour = parseInt(hourPart, 10);
                             if (isPM && hour < 12) hour += 12;
                             if (isAM && hour === 12) hour = 0;
