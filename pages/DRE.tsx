@@ -1261,7 +1261,9 @@ const DRE: React.FC = () => {
 
                 <div className="h-4 bg-[#0f172a]/20"></div>
 
-                {Object.values(metrics.varGroups).map((group: any, i) => (
+                {Object.entries(metrics.varGroups)
+                    .filter(([id]) => id !== params.tax_group_id && id !== params.loss_group_id)
+                    .map(([id, group]: [string, any], i) => (
                     <Row
                         key={i}
                         label={group.label}
