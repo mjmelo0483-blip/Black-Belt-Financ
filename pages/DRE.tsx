@@ -582,10 +582,10 @@ const DRE: React.FC = () => {
                 return;
             }
 
-            // --- Prioridade 1: Mapeamento Inteligente (Heurística) ---
-            // Se o nome da categoria ou descrição sugere impostos, move para o grupo de impostos
-            const isTaxRelated = catName.includes('imposto') || catName.includes('das') || catName.includes('simples nacional') || desc.includes('das - imposto');
-            if (isTaxRelated && params.tax_group_id && varGroups[params.tax_group_id]) {
+            // --- Prioridade 1: Mapeamento Inteligente (Heurística de Categoria) ---
+            // Se o NOME DA CATEGORIA sugere impostos, move para o grupo de impostos
+            const isTaxCategory = catName.includes('imposto') || catName.includes('das') || catName.includes('simples nacional');
+            if (isTaxCategory && params.tax_group_id && varGroups[params.tax_group_id]) {
                 pushToGroup(varGroups[params.tax_group_id]);
                 return;
             }
