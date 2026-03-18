@@ -376,6 +376,7 @@ const DRE: React.FC = () => {
 
     const metrics = useMemo<DREMetrics>(() => {
         const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Dinheiro': 0, 'Outros': 0 };
+        let salesOnlyRev = 0; // Revenue from sales table only (product sales)
         let totalRev = 0;
         let cmvCents = 0;
 
@@ -412,6 +413,7 @@ const DRE: React.FC = () => {
 
             const saleTotal = Math.max(sTotal, itemSum);
             revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
+            salesOnlyRev += saleTotal;
             totalRev += saleTotal;
         });
 
@@ -523,9 +525,29 @@ const DRE: React.FC = () => {
             const expToPush = (selectedStore !== 'Todas' && isGeralItem) ? { ...exp, amount, is_prorated: true } : exp;
             
             if (isIncome) {
+                // Determine if we should count this income transaction to avoid duplication with 'sales' table
+                // For product companies, if we have sales data, we shouldn't count generic income from bank/cashflow
+                const isProductCompany = activeCompany?.business_type === 'products';
+                const hasSalesData = salesOnlyRev > 0;
+                
+                // Group is 'vendas' or not mapped (which defaults to 'vendas')
+                const isSalesGroup = !dreGroup || dreGroup === 'vendas';
+                
+                // Skip if it's a product company, we HAVE sales data, and this transaction is also trying to be 'sales'
+                if (isProductCompany && hasSalesData && isSalesGroup) {
+                    return;
+                }
+
                 if (dreGroup && revGroups[dreGroup]) {
                     revGroups[dreGroup].amount += amount;
                     revGroups[dreGroup].items.push(expToPush);
+                } else {
+                    // Income without a specific DRE group mapping goes to 'vendas' or first revenue group
+                    const defaultRevGroup = revGroups.vendas || Object.values(revGroups)[0];
+                    if (defaultRevGroup) {
+                        defaultRevGroup.amount += amount;
+                        defaultRevGroup.items.push(expToPush);
+                    }
                 }
                 totalRev += amount;
                 return;
@@ -636,8 +658,8 @@ const DRE: React.FC = () => {
             });
         }
 
-        if (revGroups.vendas && revGroups.vendas.amount === 0) {
-            revGroups.vendas.amount = totalRev; 
+        if (revGroups.vendas) {
+            revGroups.vendas.amount += salesOnlyRev; 
         }
 
         const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
