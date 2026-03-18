@@ -100,7 +100,6 @@ const SalesDashboard: React.FC = () => {
                 .or('payment_method.not.ilike.transferencia,payment_method.is.null')
                 .not('type', 'ilike', 'transfer')
                 .not('type', 'ilike', 'investment')
-                .ilike('type', 'expense')
                 .gte('date', startDate)
                 .lte('date', endDate);
 
@@ -427,7 +426,8 @@ const SalesDashboard: React.FC = () => {
     }, [filteredSales, filteredItems, selectedCategory]);
 
     const dreMetrics = useMemo(() => {
-        const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Outros': 0 };
+        const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Dinheiro': 0, 'Outros': 0 };
+        let salesOnlyRev = 0;
         let totalRev = 0;
         let cmvCents = 0;
 
@@ -442,6 +442,7 @@ const SalesDashboard: React.FC = () => {
             if (normMethod.includes('credito')) method = 'Crédito';
             else if (normMethod.includes('debito')) method = 'Débito';
             else if (normMethod.includes('pix')) method = 'PIX';
+            else if (normMethod.includes('dinheiro')) method = 'Dinheiro';
             else method = 'Outros';
 
             const sTotal = Number(sale.total_amount || 0);
@@ -460,6 +461,7 @@ const SalesDashboard: React.FC = () => {
 
             const saleRev = Math.max(sTotal, itemSum);
             revByMethod[method] = (revByMethod[method] || 0) + saleRev;
+            salesOnlyRev += saleRev;
             totalRev += saleRev;
         });
 
@@ -522,7 +524,9 @@ const SalesDashboard: React.FC = () => {
             const catName = (exp.categories?.name || 'Geral').toLowerCase();
             const dreGroup = exp.categories?.dre_group;
             const desc = (exp.description || '').toLowerCase();
+            const isIncome = exp.type?.toLowerCase().includes('income');
             let amount = Number(exp.amount || 0);
+
             const expNorm = normalizeS(exp.store_name);
             const isGeralItem = !exp.store_name || expNorm === 'geral' || expNorm === 'administrativo';
 
@@ -533,46 +537,60 @@ const SalesDashboard: React.FC = () => {
                 } else { return; }
             }
 
-            const pushToGroup = (group: any) => { if (group) group.amount += amount; };
-            if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
+            if (isIncome) {
+                // Determine if we should count this income transaction to avoid duplication with 'sales' table
+                const isProductCompany = activeCompany?.business_type === 'products';
+                const hasSalesData = salesOnlyRev > 0;
+                const isSalesGroup = !dreGroup || dreGroup === 'vendas';
+                
+                if (isProductCompany && hasSalesData && isSalesGroup) return;
 
-            if (dreGroup) {
-                if (dreGroup === 'cashback') {
-                    const cashbackKey = activeStores.find(as => normalizeS(as) === expNorm);
-                    if (cashbackKey && storeManualCashback[cashbackKey]) {
-                        storeManualCashback[cashbackKey].amount += amount;
-                    } else { pushToGroup(varGroups[(params as any).cashback_group_id || 'cashback']); }
-                } 
-                else if (varGroups[dreGroup]) { pushToGroup(varGroups[dreGroup]); }
-                else if (fixGroups[dreGroup]) { pushToGroup(fixGroups[dreGroup]); }
+                if (dreGroup && revGroups[dreGroup]) {
+                    revGroups[dreGroup].amount += amount;
+                } else {
+                    const defaultRevGroup = revGroups.vendas || Object.values(revGroups)[0];
+                    if (defaultRevGroup) defaultRevGroup.amount += amount;
+                }
+                totalRev += amount;
                 return;
             }
 
-            // Heurística de Imposto
+            const pushToGroup = (group: any) => { if (group) group.amount += amount; };
+            if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
+
+            // Mapping Priority
+            if (dreGroup) {
+                if (dreGroup === (params as any).cashback_group_id) {
+                    const cashbackKey = activeStores.find(as => normalizeS(as) === expNorm);
+                    if (cashbackKey && storeManualCashback[cashbackKey]) {
+                        storeManualCashback[cashbackKey].amount += amount;
+                    } else if (varGroups[dreGroup]) { pushToGroup(varGroups[dreGroup]); }
+                } 
+                else if (varGroups[dreGroup]) { pushToGroup(varGroups[dreGroup]); }
+                else if (fixGroups[dreGroup]) { pushToGroup(fixGroups[dreGroup]); }
+                else if (revGroups[dreGroup]) { pushToGroup(revGroups[dreGroup]); }
+                return;
+            }
+
             const isTaxCategory = catName.includes('imposto') || catName.includes('das') || catName.includes('simples nacional');
             if (isTaxCategory && (params as any).tax_group_id && varGroups[(params as any).tax_group_id]) {
                 pushToGroup(varGroups[(params as any).tax_group_id]);
                 return;
             }
 
-            // Categorização Manual Replicando Heurística DRE
-            if (catName.includes('internet') || desc.includes('internet')) { pushToGroup(fixGroups.internet || fixGroups.outros); }
-            else if (catName.includes('energia') || desc.includes('luz')) { pushToGroup(fixGroups.energia || fixGroups.outros); }
-            else if (catName.includes('combustivel')) { pushToGroup(fixGroups.combustivel || fixGroups.outros); }
-            else if (catName.includes('funcionario') || catName.includes('salario') || catName.includes('pro-labore')) { pushToGroup(fixGroups.funcionarios || fixGroups.outros); }
-            else if (catName.includes('contabil') || desc.includes('contabilidades')) { pushToGroup(fixGroups.contabilidade || fixGroups.outros); }
-            else if (catName.includes('marketing')) { pushToGroup(varGroups.marketing || varGroups.diversas); }
-            else { pushToGroup(fixGroups.outros); }
+            // Fallback: 'Outros' (Fixed) matching DRE.tsx line 593-599
+            if (fixGroups.outros) pushToGroup(fixGroups.outros);
+            else { const firstFix = Object.values(fixGroups)[0]; if (firstFix) pushToGroup(firstFix); }
         });
 
-        // Valores Automáticos
+        // Calculate automatic values
         const autoImpostos = (totalRev * (params.tax_rate / 100));
         const autoPerdaEstoque = (totalRev * (params.loss_rate / 100));
         const autoRoyalties = (totalRev * (params.royalty_rate / 100));
         const autoPixFee = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
         const autoCardFee = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
 
-        // Override se o grupo estiver vazio (Lógica DRE)
+        // Apply automatic values ONLY if the group is still empty (manual override matching DRE)
         if ((params as any).tax_group_id && varGroups[(params as any).tax_group_id]) {
             if (varGroups[(params as any).tax_group_id].amount === 0) varGroups[(params as any).tax_group_id].amount = autoImpostos;
         }
@@ -589,16 +607,16 @@ const SalesDashboard: React.FC = () => {
             varGroups[(params as any).card_fee_group_id].amount = autoCardFee;
         }
 
-        // Parâmetros Finais para Sincronização
+        // Final values for synchronization (matching DRE metrics structure)
         const currentImpostos = (params as any).tax_group_id && varGroups[(params as any).tax_group_id] ? varGroups[(params as any).tax_group_id].amount : autoImpostos;
         const currentPerdaEstoque = (params as any).loss_group_id && varGroups[(params as any).loss_group_id] ? varGroups[(params as any).loss_group_id].amount : autoPerdaEstoque;
 
-        // Cálculos de Cashback por loja
         if (selectedStore !== 'Todas') {
             const key = Object.keys(storeManualCashback).find(k => normalizeS(k) === sNorm);
             const manual = key ? storeManualCashback[key] : null;
-            if (manual && manual.amount > 0) { 
-                if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += manual.amount;
+
+            if (manual && (manual as any).amount > 0) {
+                if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += (manual as any).amount;
             } else {
                 const rates = params.cashback_rates as Record<string, number>;
                 const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === sNorm);
@@ -610,7 +628,7 @@ const SalesDashboard: React.FC = () => {
         } else {
             activeStores.forEach(s => {
                 const manual = storeManualCashback[s];
-                if (manual && manual.amount > 0) { 
+                if (manual && manual.amount > 0) {
                     if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += manual.amount;
                 } else {
                     const rates = params.cashback_rates as Record<string, number>;
