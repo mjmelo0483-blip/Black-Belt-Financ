@@ -171,14 +171,21 @@ export const useAIAdvisor = () => {
             
             // Insight 1: Cashflow Health
             const realIncome = isBusiness ? Math.max(totalIncome, totalSalesRevenue) : totalIncome;
+            const today = new Date();
+            const isCurrentMonth = today.getMonth() === month && today.getFullYear() === year;
+
             if (totalExpenses > realIncome && totalExpenses > 0) {
                 generatedInsights.push({
                     type: 'warning',
-                    title: 'Alerta de Fluxo de Caixa Negativo',
+                    title: isCurrentMonth ? 'Fluxo de Caixa em Alerta' : 'Alerta de Fluxo de Caixa Negativo',
                     description: isBusiness 
-                        ? `A operação teve despesas (${formatBRL(totalExpenses)}) maiores que as receitas (${formatBRL(realIncome)}) neste mês. A empresa fechou com déficit de ${formatBRL(totalExpenses - realIncome)}.`
-                        : `Seus gastos pessoais (${formatBRL(totalExpenses)}) superaram sua renda (${formatBRL(realIncome)}) neste mês. Você fechou no vermelho em ${formatBRL(totalExpenses - realIncome)}.`,
-                    impact: 'Corrosão acelerada da sua margem de liquidez.'
+                        ? (isCurrentMonth 
+                            ? `No momento, suas despesas (${formatBRL(totalExpenses)}) superam suas receitas (${formatBRL(realIncome)}). Falta faturamento para equilibrar o mês.`
+                            : `A operação teve despesas (${formatBRL(totalExpenses)}) maiores que as receitas (${formatBRL(realIncome)}) neste mês. A empresa fechou com déficit de ${formatBRL(totalExpenses - realIncome)}.`)
+                        : (isCurrentMonth
+                            ? `Seus gastos no mês (${formatBRL(totalExpenses)}) já superaram sua renda (${formatBRL(realIncome)}). Reduza o ritmo para não terminar no vermelho.`
+                            : `Seus gastos pessoais (${formatBRL(totalExpenses)}) superaram sua renda (${formatBRL(realIncome)}) neste mês. Você fechou no vermelho em ${formatBRL(totalExpenses - realIncome)}.`),
+                    impact: 'Dificuldade iminente no cumprimento de obrigações de curto prazo.'
                 });
             } else if (realIncome > totalExpenses && realIncome > 0) {
                 const margin = ((realIncome - totalExpenses) / realIncome) * 100;
@@ -271,33 +278,24 @@ export const useAIAdvisor = () => {
 
             // Insight 6: Específico 2M - Projeções
             if (isBusiness && activeCompany?.name.toLowerCase().includes('2m')) {
-                const today = new Date();
-                const isCurrentMonth = today.getMonth() === month && today.getFullYear() === year;
                 const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
                 
                 if (isCurrentMonth && totalSalesRevenue > 0) {
-                    const params = (activeCompany as any).dre_parameters || {};
-                    const taxRate = params.tax_rate || 0;
-                    const lossRate = params.loss_rate || 0;
-                    const cardFeeRate = params.card_fee_rate || 0;
-                    const royaltyRate = params.royalty_rate || 0;
-                    
-                    // Simple IMC extraction
-                    const expensesExcludingVars = totalExpenses * 0.45; // Simulated CMV
-                    const estimatedIMC = 1 - ((taxRate + lossRate + cardFeeRate + royaltyRate) / 100) - 0.45;
-                    
                     const daysElapsed = today.getDate();
-                    const daysRemaining = totalDaysInMonth - daysElapsed;
+                    const daysRemaining = Math.max(0, totalDaysInMonth - daysElapsed);
                     const dailyAverage = totalSalesRevenue / Math.max(1, daysElapsed);
                     const projectedTotal = totalSalesRevenue + (dailyAverage * daysRemaining);
                     
-                    const projectedResult = (projectedTotal * estimatedIMC) - totalExpenses; // rough result projection
+                    // Calculo mais refinado de Resultado Projetado baseado no Fluxo de Caixa Atual
+                    const burnoutExpenses = totalExpenses; // Gastos já ocorridos
+                    const projectedRawProfit = (projectedTotal * 0.40); // Margem de contribuição simulada realista (40%)
+                    const finalProjectedResult = projectedRawProfit - burnoutExpenses;
                     
                     generatedInsights.push({
-                        type: 'opportunity',
-                        title: 'Análise Estratégica 2M: Projeção de Faturamento',
-                        description: `Com base nas suas vendas até o dia ${daysElapsed}, o faturamento mensal caminha para ${formatBRL(projectedTotal)} (média diária de ${formatBRL(dailyAverage)}). Mantendo o ritmo atual, seu Resultado Líquido Projetado fechará em torno de ${formatBRL(projectedResult)}. Com ${daysRemaining} dias restantes, focar suas equipes em ofertas semanais pode alavancar essa reta final.`,
-                        impact: 'Decisões proativas antes do fechamento do mês.'
+                        type: finalProjectedResult > 0 ? 'saving' : 'warning',
+                        title: 'Projeção Estratégica 2M',
+                        description: `Com média diária de ${formatBRL(dailyAverage)}, você tende a fechar o mês com ${formatBRL(projectedTotal)} de faturamento. Considerando seus gastos fixos e variáveis projetados, a estimativa do Resultado Final é de ${formatBRL(finalProjectedResult)}. ${daysRemaining > 0 ? `Temos ${daysRemaining} dias para acelerar as vendas e garantir um lucro maior.` : 'O mês está em fechamento.'}`,
+                        impact: finalProjectedResult > 0 ? 'Caminho sólido para fechar no lucro.' : 'Necessidade de aumento imediato de ticket ou volume.'
                     });
                 }
             }

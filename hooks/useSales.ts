@@ -387,13 +387,16 @@ export const useSales = () => {
                 const date = formatDate(rawDate) || lastDate;
                 if (!date) { diagNoDate++; return; } // Skip rows without date (and no previous date to carry over)
                 
-                let rawTime = getVal(row, ['Hora da Compra', 'Hora', 'Horário', 'Hora Saída', 'Horario', 'Time']);
+                let rawTime = getVal(row, ['Hora da Compra', 'Hora', 'Horário', 'Hora Saída', 'Horario', 'Time', 'Horário Venda', 'Hora Venda']);
                 // Se a hora estiver vazia na coluna própria, tenta extrair da coluna de Data (comum em novas planilhas)
                 if ((!rawTime || String(rawTime).trim() === '') && rawDate) {
                     if (rawDate instanceof Date) {
-                        const h = rawDate.getHours();
-                        const m = rawDate.getMinutes();
+                        const h = rawDate.getUTCHours();
+                        const m = rawDate.getUTCMinutes();
                         rawTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                    } else if (typeof rawDate === 'number') {
+                        // Excel serial number (ex: 45123.75). A parte decimal (.75) é o horário.
+                        rawTime = rawDate; // formatTime já sabe lidar com números decimais do Excel
                     } else if (typeof rawDate === 'string' && rawDate.includes(':')) {
                         rawTime = rawDate; // formatTime vai extrair a parte da hora depois
                     }
