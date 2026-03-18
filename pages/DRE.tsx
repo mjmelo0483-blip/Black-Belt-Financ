@@ -673,7 +673,9 @@ const DRE: React.FC = () => {
             revGroups.vendas.amount += salesOnlyRev; 
         }
 
-        const totalVar = Object.values(varGroups).reduce((acc, g) => acc + g.amount, 0);
+        const totalVar = Object.entries(varGroups)
+            .filter(([id]) => id !== params.tax_group_id && id !== params.loss_group_id)
+            .reduce((acc, [_, g]) => acc + g.amount, 0);
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
 
         const rl = totalRev - impostos;
