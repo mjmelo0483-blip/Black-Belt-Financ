@@ -385,8 +385,21 @@ export const useSales = () => {
                 const rawCode = String(getVal(row, codeKeys) || '');
                 const rawDate = getVal(row, dateKeys);
                 const date = formatDate(rawDate) || lastDate;
-
                 if (!date) { diagNoDate++; return; } // Skip rows without date (and no previous date to carry over)
+                
+                let rawTime = getVal(row, ['Hora da Compra', 'Hora', 'Horário', 'Hora Saída', 'Horario', 'Time']);
+                // Se a hora estiver vazia na coluna própria, tenta extrair da coluna de Data (comum em novas planilhas)
+                if ((!rawTime || String(rawTime).trim() === '') && rawDate) {
+                    if (rawDate instanceof Date) {
+                        const h = rawDate.getHours();
+                        const m = rawDate.getMinutes();
+                        rawTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                    } else if (typeof rawDate === 'string' && rawDate.includes(':')) {
+                        rawTime = rawDate; // formatTime vai extrair a parte da hora depois
+                    }
+                }
+                const time = formatTime(rawTime);
+
                 lastDate = date;
 
                 let store = String(getVal(row, storeKeys) || lastStore || 'Unica').trim();
@@ -410,7 +423,7 @@ export const useSales = () => {
                         customer_id: customersMap.get(getVal(row, customerCpfKeys)) ||
                             customersMap.get(getVal(row, customerValueKeys)) || null,
                         date: date,
-                        time: formatTime(getVal(row, ['Hora da Compra', 'Hora', 'Horário', 'Hora Saída', 'Horario'])),
+                        time: time,
                         payment_method: getVal(row, paymentKeys),
                         store_name: store,
                         device: getVal(row, deviceKeys),
