@@ -54,86 +54,90 @@ const SalesDashboard: React.FC = () => {
     ];
     const [dreGroups, setDreGroups] = useState<any[]>(DEFAULT_DRE_GROUPS);
 
+    // Unified Data Load: Parameters, Structure, Sales and Expenses
     useEffect(() => {
-        const load = async () => {
+        const loadEverything = async () => {
             setSalesData([]);
             setExpensesData([]);
-
             const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                let pQuery = supabase
-                    .from('dre_parameters')
-                    .select('*')
-                    .eq('month', selectedMonth)
-                    .eq('year', selectedYear);
+            if (!session?.user) return;
 
-                if (activeCompany) {
-                    pQuery = pQuery.eq('company_id', activeCompany.id);
-                } else {
-                    pQuery = pQuery.eq('user_id', session.user.id).is('company_id', null);
-                }
-
-                const { data: groupsData } = await supabase
-                    .from('dre_structure')
-                    .select('*')
-                    .eq('company_id', activeCompany?.id || '')
-                    .order('order_index');
-                if (groupsData) setDreGroups(groupsData);
-
-                const { data: pData } = await pQuery.maybeSingle();
-
-                if (pData) {
-                    setParams({
-                        tax_rate: Number(pData.tax_rate || 3.24),
-                        tax_group_id: pData.tax_group_id || 'impostos',
-                        royalty_rate: Number(pData.royalty_rate || 6.00),
-                        royalty_group_id: pData.royalty_group_id || 'royalties',
-                        pix_fee_rate: Number(pData.pix_fee_rate || 0.80),
-                        pix_fee_group_id: pData.pix_fee_group_id || 'tarifaPix',
-                        loss_rate: Number(pData.loss_rate || 2.00),
-                        loss_group_id: pData.loss_group_id || 'perda',
-                        card_fee_rate: Number(pData.card_fee_rate || 1.110284),
-                        card_fee_group_id: pData.card_fee_group_id || 'tarifaCartao',
-                        cashback_group_id: pData.cashback_group_id || 'cashback',
-                        cashback_rates: pData.cashback_rates || {}
-                    });
-                } else {
-                    setParams({
-                        tax_rate: 3.24,
-                        tax_group_id: 'impostos',
-                        royalty_rate: 6.00,
-                        royalty_group_id: 'royalties',
-                        pix_fee_rate: 0.80,
-                        pix_fee_group_id: 'tarifaPix',
-                        loss_rate: 2.00,
-                        loss_group_id: 'perda',
-                        card_fee_rate: 1.110284,
-                        card_fee_group_id: 'tarifaCartao',
-                        cashback_group_id: 'cashback',
-                        cashback_rates: {}
-                    });
+            // 1. Fetch DRE structure from Company
+            if (activeCompany) {
+                const { data: compData } = await supabase
+                    .from('companies')
+                    .select('dre_structure')
+                    .eq('id', activeCompany.id)
+                    .single();
+                if (compData?.dre_structure && Array.isArray(compData.dre_structure) && compData.dre_structure.length > 0) {
+                    setDreGroups(compData.dre_structure);
                 }
             }
 
+            // 2. Fetch Parameters for the selected period
+            let pQuery = supabase.from('dre_parameters').select('*').eq('month', selectedMonth).eq('year', selectedYear);
+            if (activeCompany) pQuery = pQuery.eq('company_id', activeCompany.id);
+            else pQuery = pQuery.eq('user_id', session.user.id).is('company_id', null);
+            const { data: pData } = await pQuery.maybeSingle();
+
+            if (pData) {
+                setParams({
+                    tax_rate: Number(pData.tax_rate || 3.24),
+                    tax_group_id: pData.tax_group_id || 'impostos',
+                    royalty_rate: Number(pData.royalty_rate || 6.00),
+                    royalty_group_id: pData.royalty_group_id || 'royalties',
+                    pix_fee_rate: Number(pData.pix_fee_rate || 0.80),
+                    pix_fee_group_id: pData.pix_fee_group_id || 'tarifaPix',
+                    loss_rate: Number(pData.loss_rate || 2.00),
+                    loss_group_id: pData.loss_group_id || 'perda',
+                    card_fee_rate: Number(pData.card_fee_rate || 1.110284),
+                    card_fee_group_id: pData.card_fee_group_id || 'tarifaCartao',
+                    cashback_group_id: pData.cashback_group_id || 'cashback',
+                    cashback_rates: pData.cashback_rates || {}
+                });
+            } else {
+                setParams({
+                    tax_rate: 3.24,
+                    tax_group_id: 'impostos',
+                    royalty_rate: 6.00,
+                    royalty_group_id: 'royalties',
+                    pix_fee_rate: 0.80,
+                    pix_fee_group_id: 'tarifaPix',
+                    loss_rate: 2.00,
+                    loss_group_id: 'perda',
+                    card_fee_rate: 1.110284,
+                    card_fee_group_id: 'tarifaCartao',
+                    cashback_group_id: 'cashback',
+                    cashback_rates: {}
+                });
+            }
+
+            // 3. Fetch Sales
             const { data: sData } = await fetchSales({ month: selectedMonth, year: selectedYear });
             if (sData) setSalesData(sData);
 
+            // 4. Fetch Expenses with correct date range
             const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
-            const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-            const endDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
-            const { data: expData } = await supabase.from('transactions')
+            const endDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${new Date(selectedYear, selectedMonth + 1, 0).getDate()}`;
+            
+            let expQuery = supabase.from('transactions')
                 .select('amount, type, description, date, due_date, category_id, store_name, categories(name, parent_id, dre_group)')
                 .eq('is_business', true).is('transfer_id', null).is('investment_id', null)
                 .or('payment_method.not.ilike.transferencia,payment_method.is.null')
                 .not('type', 'ilike', 'transfer').not('type', 'ilike', 'investment')
                 .gte('date', startDate).lte('date', endDate);
+            
+            if (activeCompany) expQuery = expQuery.eq('company_id', activeCompany.id);
+            else expQuery = expQuery.is('company_id', null);
+
+            const { data: expData } = await expQuery;
             if (expData) setExpensesData(expData);
         };
-        load();
+        loadEverything();
     }, [fetchSales, selectedMonth, selectedYear, activeCompany]);
 
     const [allPeriods, setAllPeriods] = useState<string[]>([]);
+
 
 
 
@@ -184,60 +188,8 @@ const SalesDashboard: React.FC = () => {
         init();
     }, [activeCompany]);
 
-    // Data load: Sales and Expenses for the selected period
-    useEffect(() => {
-        const loadData = async () => {
-            setSalesData([]);
-            setExpensesData([]);
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) return;
-
-            // Load Params
-            let pQuery = supabase.from('dre_parameters').select('*').eq('month', selectedMonth).eq('year', selectedYear);
-            if (activeCompany) pQuery = pQuery.eq('company_id', activeCompany.id);
-            else pQuery = pQuery.eq('user_id', session.user.id).is('company_id', null);
-            const { data: pData } = await pQuery.maybeSingle();
-
-            if (pData) {
-                setParams({
-                    tax_rate: Number(pData.tax_rate || 3.24),
-                    tax_group_id: pData.tax_group_id || 'impostos',
-                    royalty_rate: Number(pData.royalty_rate || 6.00),
-                    royalty_group_id: pData.royalty_group_id || 'royalties',
-                    pix_fee_rate: Number(pData.pix_fee_rate || 0.80),
-                    pix_fee_group_id: pData.pix_fee_group_id || 'tarifaPix',
-                    loss_rate: Number(pData.loss_rate || 2.00),
-                    loss_group_id: pData.loss_group_id || 'perda',
-                    card_fee_rate: Number(pData.card_fee_rate || 1.110284),
-                    card_fee_group_id: pData.card_fee_group_id || 'tarifaCartao',
-                    cashback_group_id: pData.cashback_group_id || 'cashback',
-                    cashback_rates: pData.cashback_rates || {}
-                });
-            }
-
-            // Load Sales
-            const { data: sData } = await fetchSales({ month: selectedMonth, year: selectedYear });
-            if (sData) setSalesData(sData);
-
-            // Load Expenses
-            const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
-            const endDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${new Date(selectedYear, selectedMonth + 1, 0).getDate()}`;
-            let expQuery = supabase.from('transactions')
-                .select('amount, type, description, date, due_date, category_id, store_name, categories(name, parent_id, dre_group)')
-                .eq('is_business', true).is('transfer_id', null).is('investment_id', null)
-                .or('payment_method.not.ilike.transferencia,payment_method.is.null')
-                .not('type', 'ilike', 'transfer').not('type', 'ilike', 'investment')
-                .gte('date', startDate).lte('date', endDate);
-            if (activeCompany) expQuery = expQuery.eq('company_id', activeCompany.id);
-            else expQuery = expQuery.is('company_id', null);
-
-            const { data: expData } = await expQuery;
-            if (expData) setExpensesData(expData);
-        };
-        loadData();
-    }, [fetchSales, selectedMonth, selectedYear, activeCompany]);
-
     const periods = allPeriods;
+
 
     const categories = useMemo(() => {
         const c = new Set<string>();
