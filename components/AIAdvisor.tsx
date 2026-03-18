@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAIAdvisor, AIInsight } from '../hooks/useAIAdvisor';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface AIAdvisorProps {
     month: number;
@@ -13,6 +14,10 @@ const AIAdvisor: React.FC<AIAdvisorProps> = ({ month, year }) => {
     const [chatInput, setChatInput] = useState('');
     const chatEndRef = React.useRef<HTMLDivElement>(null);
 
+    // Gemini API Setup
+    const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
+    const [isConfiguringApi, setIsConfiguringApi] = useState(false);
+
     useEffect(() => {
         if (chatEndRef.current) {
             chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -23,24 +28,60 @@ const AIAdvisor: React.FC<AIAdvisorProps> = ({ month, year }) => {
         if (e) e.preventDefault();
         if (!chatInput.trim()) return;
 
+        if (!apiKey) {
+            setIsConfiguringApi(true);
+            return;
+        }
+
         const newMsg = chatInput.trim();
         setChatMessages(prev => [...prev, { role: 'user', text: newMsg }]);
         setChatInput('');
+        setChatMessages(prev => [...prev, { role: 'ai', text: '...' }]);
 
-        // Mock AI Loading state
-        setChatMessages(prev => [...prev, { role: 'ai', text: '...' }]); 
-        
-        await new Promise(r => setTimeout(r, 1500));
-        
-        setChatMessages(prev => {
-            const temp = [...prev];
-            temp.pop(); // remove '...'
-            temp.push({ 
-                role: 'ai', 
-                text: 'Para interagir com essas dicas em tempo real e tirar dúvidas livres, você precisará conectar uma chave de API (OpenAI/Google Gemini) futuramente nas configurações. Por enquanto, atuo como um Analista Estrutural, focando nos alertas acima de forma analítica e pré-computada!'
+        try {
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+            
+            const contextString = insights.map((i, idx) => `Alerta/Dica ${idx+1}: ${i.title} - ${i.description} (Impacto: ${i.impact || 'N/A'})`).join('\n');
+            const systemPrompt = `Você é o Mentor IA, um experiente e direto consultor financeiro focado em ajudar empresas/pessoas na tomada de decisão rápida e assertiva. Responda o usuário SEMPRE em Português do Brasil. Mantenha as respostas concisas.
+Se houverem dados provisórios relevantes gerados por análise estrutural prévia deste mês, eles são:
+${contextString || 'Ainda sem alertas computados neste mês.'}
+
+Baseado nesse dashboard atual (se houver), seja extremamente útil para o usuário.`;
+
+            const history = chatMessages.filter(m => m.text !== '...').map(m => ({ 
+                role: m.role === 'ai' ? 'model' : 'user', 
+                parts: [{ text: m.text }] 
+            }));
+
+            // Adiciona pre-prompt se não tem histórico para dar contexto da pergunta
+            if (history.length === 0) {
+                history.push({ role: 'user', parts: [{ text: systemPrompt }] });
+                history.push({ role: 'model', parts: [{ text: 'Entendido. Estou pronto para ajudar. O que você precisa saber?' }] });
+            }
+
+            const chat = model.startChat({ history });
+            const result = await chat.sendMessage(newMsg);
+            const textResponse = result.response.text();
+
+            setChatMessages(prev => {
+                const temp = [...prev];
+                temp.pop(); // remove '...'
+                temp.push({ role: 'ai', text: textResponse });
+                return temp;
             });
-            return temp;
-        });
+        } catch (error: any) {
+            setChatMessages(prev => {
+                const temp = [...prev];
+                temp.pop(); // remove '...'
+                temp.push({ role: 'ai', text: `Erro de conexão com Gemini: verifique se sua chave API é válida. (${error.message})` });
+                return temp;
+            });
+            if (error.message.includes('API key not valid')) {
+                localStorage.removeItem('gemini_api_key');
+                setApiKey('');
+            }
+        }
     };
 
     useEffect(() => {
@@ -173,22 +214,63 @@ const AIAdvisor: React.FC<AIAdvisorProps> = ({ month, year }) => {
 
                 <footer className="bg-[#111a22] border-t border-[#324d67]/30 flex flex-col">
                     {!loading && insights.length > 0 && (
-                        <form onSubmit={handleSendMessage} className="p-4 border-b border-[#324d67]/30 flex items-center gap-2">
-                            <input 
-                                type="text" 
-                                value={chatInput}
-                                onChange={(e) => setChatInput(e.target.value)}
-                                placeholder="Dúvidas sobre os insights? Pergunte aqui..." 
-                                className="flex-1 bg-[#1e293b] text-white text-xs font-medium rounded-xl px-4 py-3 outline-none border border-[#334155] focus:border-primary transition-colors placeholder:text-slate-500"
-                            />
-                            <button 
-                                type="submit" 
-                                disabled={!chatInput.trim()}
-                                className="size-10 bg-primary rounded-xl flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/80 transition-colors"
-                            >
-                                <span className="material-symbols-outlined text-sm font-bold">send</span>
-                            </button>
-                        </form>
+                        <div className="flex flex-col border-b border-[#324d67]/30">
+                            {isConfiguringApi ? (
+                                <div className="p-4 bg-[#1e293b]/50 flex flex-col gap-2">
+                                    <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider mb-1">
+                                        <span className="material-symbols-outlined text-sm align-middle mr-1">key</span>
+                                        Conectar Gemini API
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <input 
+                                            type="password"
+                                            value={apiKey}
+                                            onChange={(e) => setApiKey(e.target.value)}
+                                            placeholder="Cole sua Chave do Google Gemini (AI Studio)" 
+                                            className="flex-1 bg-[#0f172a] text-white text-xs font-medium rounded-xl px-4 py-3 outline-none border border-[#334155] focus:border-amber-500 transition-colors"
+                                        />
+                                        <button 
+                                            onClick={() => {
+                                                localStorage.setItem('gemini_api_key', apiKey);
+                                                setIsConfiguringApi(false);
+                                            }}
+                                            disabled={!apiKey.trim()}
+                                            className="h-10 px-4 bg-amber-600 rounded-xl flex items-center justify-center text-white text-[10px] font-black uppercase disabled:opacity-50 disabled:cursor-not-allowed hover:bg-amber-500 transition-colors"
+                                        >
+                                            Salvar
+                                        </button>
+                                    </div>
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[9px] text-primary hover:underline self-end">Gerar chave gratuita &rarr;</a>
+                                </div>
+                            ) : (
+                                <form onSubmit={handleSendMessage} className="p-4 flex items-center gap-2">
+                                    <input 
+                                        type="text" 
+                                        value={chatInput}
+                                        onChange={(e) => setChatInput(e.target.value)}
+                                        placeholder={apiKey ? "Dúvidas sobre os insights? Pergunte aqui..." : "Configure a API para interagir com a IA"} 
+                                        className="flex-1 bg-[#1e293b] text-white text-xs font-medium rounded-xl px-4 py-3 outline-none border border-[#334155] focus:border-primary transition-colors placeholder:text-slate-500"
+                                    />
+                                    {apiKey ? (
+                                        <button 
+                                            type="submit" 
+                                            disabled={!chatInput.trim()}
+                                            className="size-10 bg-primary rounded-xl flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/80 transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-sm font-bold">send</span>
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsConfiguringApi(true)}
+                                            className="size-10 border border-primary text-primary rounded-xl flex items-center justify-center hover:bg-primary/20 transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-sm font-bold">settings</span>
+                                        </button>
+                                    )}
+                                </form>
+                            )}
+                        </div>
                     )}
                     
                     <div className="p-6">
