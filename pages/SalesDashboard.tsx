@@ -973,8 +973,26 @@ const SalesDashboard: React.FC = () => {
                                             return s.length > 18 ? s.substring(0,18)+'...' : s;
                                         }} />
                                         <Tooltip 
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
-                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Faturamento']}
+                                            cursor={{fill: 'transparent'}}
+                                            content={({ active, payload }) => {
+                                                if (active && payload && payload.length) {
+                                                    const data = payload[0].payload;
+                                                    return (
+                                                        <div className="bg-[#1e293b] p-3 border border-[#334155] rounded-xl shadow-xl z-50 max-w-[160px]">
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 leading-tight break-words whitespace-normal">{data.name}</p>
+                                                            <div className="space-y-1">
+                                                                <p className="text-sm font-black text-white">
+                                                                    R$ {data.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </p>
+                                                                <p className="text-xs font-bold text-blue-400">
+                                                                    {data.count} vendas
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
                                         />
                                         <Bar dataKey="revenue" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                                     </BarChart>
@@ -992,9 +1010,21 @@ const SalesDashboard: React.FC = () => {
                                         <XAxis dataKey="dayName" stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(val) => val.substring(0,3)} />
                                         <YAxis hide />
                                         <Tooltip 
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
-                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Faturamento Total']}
                                             cursor={{fill: 'transparent'}}
+                                            content={({ active, payload }) => {
+                                                if (active && payload && payload.length) {
+                                                    const data = payload[0].payload;
+                                                    return (
+                                                        <div className="bg-[#1e293b] p-3 border border-[#334155] rounded-xl shadow-xl z-50">
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{data.dayName}</p>
+                                                            <p className="text-sm font-black text-white">
+                                                                R$ {data.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
                                         />
                                         <Bar dataKey="revenue" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                                     </BarChart>
@@ -1012,9 +1042,21 @@ const SalesDashboard: React.FC = () => {
                                         <XAxis dataKey="block" stroke="#94a3b8" fontSize={9} axisLine={false} tickLine={false} tickFormatter={(val) => val.split(' ')[0]} />
                                         <YAxis hide />
                                         <Tooltip 
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
-                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Faturamento Total']}
                                             cursor={{fill: 'transparent'}}
+                                            content={({ active, payload }) => {
+                                                if (active && payload && payload.length) {
+                                                    const data = payload[0].payload;
+                                                    return (
+                                                        <div className="bg-[#1e293b] p-3 border border-[#334155] rounded-xl shadow-xl z-50">
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{data.block.split(' (')[0]}</p>
+                                                            <p className="text-sm font-black text-white">
+                                                                R$ {data.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
                                         />
                                         <Bar dataKey="revenue" fill="#ec4899" radius={[4, 4, 0, 0]} />
                                     </BarChart>
