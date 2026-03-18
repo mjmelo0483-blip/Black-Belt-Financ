@@ -54,19 +54,31 @@ const SalesDashboard: React.FC = () => {
                 if (pData) {
                     setParams({
                         tax_rate: Number(pData.tax_rate || 3.24),
+                        tax_group_id: pData.tax_group_id || 'impostos',
                         royalty_rate: Number(pData.royalty_rate || 6.00),
+                        royalty_group_id: pData.royalty_group_id || 'royalties',
                         pix_fee_rate: Number(pData.pix_fee_rate || 0.80),
+                        pix_fee_group_id: pData.pix_fee_group_id || 'tarifaPix',
                         loss_rate: Number(pData.loss_rate || 2.00),
+                        loss_group_id: pData.loss_group_id || 'perda',
                         card_fee_rate: Number(pData.card_fee_rate || 1.110284),
+                        card_fee_group_id: pData.card_fee_group_id || 'tarifaCartao',
+                        cashback_group_id: pData.cashback_group_id || 'cashback',
                         cashback_rates: pData.cashback_rates || {}
                     });
                 } else {
                     setParams({
                         tax_rate: 3.24,
+                        tax_group_id: 'impostos',
                         royalty_rate: 6.00,
+                        royalty_group_id: 'royalties',
                         pix_fee_rate: 0.80,
+                        pix_fee_group_id: 'tarifaPix',
                         loss_rate: 2.00,
+                        loss_group_id: 'perda',
                         card_fee_rate: 1.110284,
+                        card_fee_group_id: 'tarifaCartao',
+                        cashback_group_id: 'cashback',
                         cashback_rates: {}
                     });
                 }
