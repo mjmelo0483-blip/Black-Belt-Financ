@@ -29,6 +29,30 @@ const SalesDashboard: React.FC = () => {
     });
 
     const [cache, setCache] = useState<Record<string, any[]>>({});
+    const DEFAULT_DRE_GROUPS = [
+        { id: 'vendas', label: 'Venda de mercadoria (Bruto)', type: 'revenue', isSystem: true },
+        { id: 'impostos', label: 'Impostos sobre faturamento', type: 'variable', isSystem: true },
+        { id: 'cashback', label: 'Comissão paga ao condominio (cashback)', type: 'variable' },
+        { id: 'royalties', label: 'Royalties', type: 'variable' },
+        { id: 'tarifaCartao', label: 'Tarifa de cartão', type: 'variable' },
+        { id: 'tarifaPix', label: 'Tarifa de Pix', type: 'variable' },
+        { id: 'marketing', label: 'Investimento Marketing da loja', type: 'variable' },
+        { id: 'diversas', label: 'Despesas diversas da loja', type: 'variable' },
+        { id: 'funcionarios', label: 'Funcionários', type: 'fixed' },
+        { id: 'manutencaoVeiculo', label: 'Manutenção de veículo', type: 'fixed' },
+        { id: 'taxaSistema', label: 'Taxa de uso do sistema', type: 'fixed' },
+        { id: 'aluguelContainer', label: 'Aluguel de container', type: 'fixed' },
+        { id: 'combustivel', label: 'Despesa com combustível', type: 'fixed' },
+        { id: 'aluguelEscritorio', label: 'Aluguel de Escritório', type: 'fixed' },
+        { id: 'tef', label: 'Elgin+TEF+LgoPass', type: 'fixed' },
+        { id: 'despesasFinanceiras', label: 'Despesas financeiras', type: 'fixed' },
+        { id: 'contabilidade', label: 'Despesa com contabilidade', type: 'fixed' },
+        { id: 'internet', label: 'Despesa com internet', type: 'fixed' },
+        { id: 'energia', label: 'Despesa com energia elétrica', type: 'fixed' },
+        { id: 'outros', label: 'Outros', type: 'fixed' },
+        { id: 'perda', label: 'Perda do estoque', type: 'variable' },
+    ];
+    const [dreGroups, setDreGroups] = useState<any[]>(DEFAULT_DRE_GROUPS);
 
     useEffect(() => {
         const load = async () => {
@@ -98,55 +122,20 @@ const SalesDashboard: React.FC = () => {
             const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
             const endDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-            let expQuery = supabase
-                .from('transactions')
+            const { data: expData } = await supabase.from('transactions')
                 .select('amount, type, description, date, due_date, category_id, store_name, categories(name, parent_id, dre_group)')
-                .eq('is_business', true)
-                .is('transfer_id', null)
-                .is('investment_id', null)
+                .eq('is_business', true).is('transfer_id', null).is('investment_id', null)
                 .or('payment_method.not.ilike.transferencia,payment_method.is.null')
-                .not('type', 'ilike', 'transfer')
-                .not('type', 'ilike', 'investment')
-                .gte('date', startDate)
-                .lte('date', endDate);
-
-            if (activeCompany) {
-                expQuery = expQuery.eq('company_id', activeCompany.id);
-            } else {
-                expQuery = expQuery.is('company_id', null);
-            }
-
-            const { data: expData } = await expQuery;
+                .not('type', 'ilike', 'transfer').not('type', 'ilike', 'investment')
+                .gte('date', startDate).lte('date', endDate);
             if (expData) setExpensesData(expData);
         };
         load();
     }, [fetchSales, selectedMonth, selectedYear, activeCompany]);
 
     const [allPeriods, setAllPeriods] = useState<string[]>([]);
-    const DEFAULT_DRE_GROUPS = [
-        { id: 'vendas', label: 'Venda de mercadoria (Bruto)', type: 'revenue', isSystem: true },
-        { id: 'impostos', label: 'Impostos sobre faturamento', type: 'variable', isSystem: true },
-        { id: 'cashback', label: 'Comissão paga ao condominio (cashback)', type: 'variable' },
-        { id: 'royalties', label: 'Royalties', type: 'variable' },
-        { id: 'tarifaCartao', label: 'Tarifa de cartão', type: 'variable' },
-        { id: 'tarifaPix', label: 'Tarifa de Pix', type: 'variable' },
-        { id: 'marketing', label: 'Investimento Marketing da loja', type: 'variable' },
-        { id: 'diversas', label: 'Despesas diversas da loja', type: 'variable' },
-        { id: 'funcionarios', label: 'Funcionários', type: 'fixed' },
-        { id: 'manutencaoVeiculo', label: 'Manutenção de veículo', type: 'fixed' },
-        { id: 'taxaSistema', label: 'Taxa de uso do sistema', type: 'fixed' },
-        { id: 'aluguelContainer', label: 'Aluguel de container', type: 'fixed' },
-        { id: 'combustivel', label: 'Despesa com combustível', type: 'fixed' },
-        { id: 'aluguelEscritorio', label: 'Aluguel de Escritório', type: 'fixed' },
-        { id: 'tef', label: 'Elgin+TEF+LgoPass', type: 'fixed' },
-        { id: 'despesasFinanceiras', label: 'Despesas financeiras', type: 'fixed' },
-        { id: 'contabilidade', label: 'Despesa com contabilidade', type: 'fixed' },
-        { id: 'internet', label: 'Despesa com internet', type: 'fixed' },
-        { id: 'energia', label: 'Despesa com energia elétrica', type: 'fixed' },
-        { id: 'outros', label: 'Outros', type: 'fixed' },
-        { id: 'perda', label: 'Perda do estoque', type: 'variable' },
-    ];
-    const [dreGroups, setDreGroups] = useState<any[]>(DEFAULT_DRE_GROUPS);
+
+
 
     // Initial load: Periods and DRE Structure
     useEffect(() => {
@@ -452,6 +441,7 @@ const SalesDashboard: React.FC = () => {
         return { breakEven: currentBreakEven, totalRev, totalFix, IMC: currentIMC, fixedCosts: totalFix };
     }, [salesData, expensesData, params, selectedStore, dreGroups, filteredSales]);
 
+
     const targetRevenue = isNaN(dreMetrics.breakEven) || !isFinite(dreMetrics.breakEven) ? 0 : dreMetrics.breakEven;
     const totalRevenue = dreMetrics.totalRev; 
     const balancePercentage = targetRevenue > 0 ? Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100) : (totalRevenue > 0 ? 100 : 0);
@@ -496,8 +486,9 @@ const SalesDashboard: React.FC = () => {
         return { totalRevenue: rev, totalUnits: units, relevantSalesCount: saleIds.size };
     }, [filteredSales, filteredItems, selectedCategory]);
 
-    const averageTicket = relevantSalesCount > 0 ? (totalRevenue / relevantSalesCount) : 0;
-    const safeTotalRevenue = isNaN(totalRevenue) ? 0 : totalRevenue;
+    const safeTotalRevenue = dreMetrics.totalRev;
+    const averageTicket = relevantSalesCount > 0 ? (dreMetrics.totalRev / relevantSalesCount) : 0;
+
 
     // 4. Product Ranking (Improved Grouping with Accent Normalization)
     const topProductsByRevenue = useMemo(() => {
@@ -666,7 +657,7 @@ const SalesDashboard: React.FC = () => {
                         <div className="size-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4">
                             <span className="material-symbols-outlined text-indigo-400 text-3xl">api</span>
                         </div>
-                        <p className="text-xl font-black text-white whitespace-nowrap">R$ {(safeTotalRevenue).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <p className="text-xl font-black text-white whitespace-nowrap">R$ {(totalRevenue).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Total Faturado</p>
                     </div>
 
