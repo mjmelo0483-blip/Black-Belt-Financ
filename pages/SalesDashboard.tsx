@@ -968,7 +968,10 @@ const SalesDashboard: React.FC = () => {
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart layout="vertical" data={advancedAnalytics.byStore.slice(0, 5)}>
                                         <XAxis type="number" hide />
-                                        <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={10} width={80} axisLine={false} tickLine={false} tickFormatter={(val) => val.length > 10 ? val.substring(0,10)+'...' : val} />
+                                        <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={10} width={130} axisLine={false} tickLine={false} tickFormatter={(val) => {
+                                            let s = val.replace(/Condomínio /gi, 'Cond. ').replace(/Associação /gi, 'Assoc. ');
+                                            return s.length > 18 ? s.substring(0,18)+'...' : s;
+                                        }} />
                                         <Tooltip 
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
                                             formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Faturamento']}
