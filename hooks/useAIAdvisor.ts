@@ -176,6 +176,39 @@ export const useAIAdvisor = () => {
                 });
             }
 
+            // Insight 6: Específico 2M - Projeções
+            if (isBusiness && activeCompany?.name.toLowerCase().includes('2m')) {
+                const today = new Date();
+                const isCurrentMonth = today.getMonth() === month && today.getFullYear() === year;
+                const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+                
+                if (isCurrentMonth && totalSalesRevenue > 0) {
+                    const params = (activeCompany as any).dre_parameters || {};
+                    const taxRate = params.tax_rate || 0;
+                    const lossRate = params.loss_rate || 0;
+                    const cardFeeRate = params.card_fee_rate || 0;
+                    const royaltyRate = params.royalty_rate || 0;
+                    
+                    // Simple IMC extraction
+                    const expensesExcludingVars = totalExpenses * 0.45; // Simulated CMV
+                    const estimatedIMC = 1 - ((taxRate + lossRate + cardFeeRate + royaltyRate) / 100) - 0.45;
+                    
+                    const daysElapsed = today.getDate();
+                    const daysRemaining = totalDaysInMonth - daysElapsed;
+                    const dailyAverage = totalSalesRevenue / Math.max(1, daysElapsed);
+                    const projectedTotal = totalSalesRevenue + (dailyAverage * daysRemaining);
+                    
+                    const projectedResult = (projectedTotal * estimatedIMC) - totalExpenses; // rough result projection
+                    
+                    generatedInsights.push({
+                        type: 'opportunity',
+                        title: 'Análise Estratégica 2M: Projeção de Faturamento',
+                        description: `Com base nas suas vendas até o dia ${daysElapsed}, o faturamento mensal caminha para ${formatBRL(projectedTotal)} (média diária de ${formatBRL(dailyAverage)}). Mantendo o ritmo atual, seu Resultado Líquido Projetado fechará em torno de ${formatBRL(projectedResult)}. Com ${daysRemaining} dias restantes, focar suas equipes em ofertas semanais pode alavancar essa reta final.`,
+                        impact: 'Decisões proativas antes do fechamento do mês.'
+                    });
+                }
+            }
+
             // Fallback general tip if metrics are too small
             if (generatedInsights.length === 0) {
                 generatedInsights.push({

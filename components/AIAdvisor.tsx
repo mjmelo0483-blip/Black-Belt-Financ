@@ -9,6 +9,39 @@ interface AIAdvisorProps {
 const AIAdvisor: React.FC<AIAdvisorProps> = ({ month, year }) => {
     const { insights, loading, generateInsights } = useAIAdvisor();
     const [isOpen, setIsOpen] = useState(false);
+    const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
+    const [chatInput, setChatInput] = useState('');
+    const chatEndRef = React.useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [chatMessages]);
+
+    const handleSendMessage = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!chatInput.trim()) return;
+
+        const newMsg = chatInput.trim();
+        setChatMessages(prev => [...prev, { role: 'user', text: newMsg }]);
+        setChatInput('');
+
+        // Mock AI Loading state
+        setChatMessages(prev => [...prev, { role: 'ai', text: '...' }]); 
+        
+        await new Promise(r => setTimeout(r, 1500));
+        
+        setChatMessages(prev => {
+            const temp = [...prev];
+            temp.pop(); // remove '...'
+            temp.push({ 
+                role: 'ai', 
+                text: 'Para interagir com essas dicas em tempo real e tirar dúvidas livres, você precisará conectar uma chave de API (OpenAI/Google Gemini) futuramente nas configurações. Por enquanto, atuo como um Analista Estrutural, focando nos alertas acima de forma analítica e pré-computada!'
+            });
+            return temp;
+        });
+    };
 
     useEffect(() => {
         if (isOpen && insights.length === 0) {
@@ -105,7 +138,7 @@ const AIAdvisor: React.FC<AIAdvisorProps> = ({ month, year }) => {
                                 );
                             })}
                             
-                            <div className="pt-8 pb-4 text-center">
+                            <div className="pt-8 pb-4 text-center border-b border-[#324d67]/30">
                                 <button 
                                     onClick={() => generateInsights(month, year)}
                                     className="text-[9px] font-black text-primary uppercase tracking-widest hover:underline flex items-center justify-center gap-2 mx-auto"
@@ -114,19 +147,60 @@ const AIAdvisor: React.FC<AIAdvisorProps> = ({ month, year }) => {
                                     Recalcular Insights
                                 </button>
                             </div>
+
+                            {/* Chat interaction block */}
+                            {chatMessages.length > 0 && (
+                                <div className="space-y-4 pt-4">
+                                    {chatMessages.map((msg, idx) => (
+                                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`max-w-[85%] p-3 rounded-xl text-sm ${msg.role === 'user' ? 'bg-primary text-white rounded-br-none' : 'bg-[#1e293b] text-slate-300 border border-[#334155] rounded-bl-none'}`}>
+                                                {msg.text === '...' ? (
+                                                    <span className="animate-pulse flex items-center gap-1">
+                                                        <span className="size-1.5 bg-primary rounded-full animate-bounce"></span>
+                                                        <span className="size-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                                                        <span className="size-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></span>
+                                                    </span>
+                                                ) : msg.text}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div ref={chatEndRef} />
+                                </div>
+                            )}
                         </div>
                     )}
                 </main>
 
-                <footer className="p-6 bg-[#111a22] border-t border-[#324d67]/30">
-                    <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-xl">
-                        <p className="text-[9px] text-amber-500/60 font-black uppercase tracking-widest flex items-center gap-2 mb-1">
-                            <span className="material-symbols-outlined text-[14px]">info</span>
-                            Aviso Legal
-                        </p>
-                        <p className="text-[#526a81] text-[9px] leading-relaxed">
-                            Esta análise é gerada por inteligência artificial e deve ser usada apenas como suporte à decisão. Consulte sempre um profissional contábil.
-                        </p>
+                <footer className="bg-[#111a22] border-t border-[#324d67]/30 flex flex-col">
+                    {!loading && insights.length > 0 && (
+                        <form onSubmit={handleSendMessage} className="p-4 border-b border-[#324d67]/30 flex items-center gap-2">
+                            <input 
+                                type="text" 
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                placeholder="Dúvidas sobre os insights? Pergunte aqui..." 
+                                className="flex-1 bg-[#1e293b] text-white text-xs font-medium rounded-xl px-4 py-3 outline-none border border-[#334155] focus:border-primary transition-colors placeholder:text-slate-500"
+                            />
+                            <button 
+                                type="submit" 
+                                disabled={!chatInput.trim()}
+                                className="size-10 bg-primary rounded-xl flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/80 transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-sm font-bold">send</span>
+                            </button>
+                        </form>
+                    )}
+                    
+                    <div className="p-6">
+                        <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-xl">
+                            <p className="text-[9px] text-amber-500/60 font-black uppercase tracking-widest flex items-center gap-2 mb-1">
+                                <span className="material-symbols-outlined text-[14px]">info</span>
+                                Aviso Legal
+                            </p>
+                            <p className="text-[#526a81] text-[9px] leading-relaxed">
+                                Esta análise é gerada por inteligência artificial e deve ser usada apenas como suporte à decisão. Consulte sempre um profissional contábil.
+                            </p>
+                        </div>
                     </div>
                 </footer>
             </div>
