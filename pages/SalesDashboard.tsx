@@ -237,7 +237,7 @@ const SalesDashboard: React.FC = () => {
                 .select('amount, type, description, date, due_date, category_id, store_name, categories(name, parent_id, dre_group)')
                 .eq('is_business', true).is('transfer_id', null).is('investment_id', null)
                 .or('payment_method.not.ilike.transferencia,payment_method.is.null')
-                .not('type', 'ilike', 'transfer').not('type', 'ilike', 'investment').ilike('type', 'expense')
+                .not('type', 'ilike', 'transfer').not('type', 'ilike', 'investment')
                 .gte('date', startDate).lte('date', endDate);
             if (activeCompany) expQuery = expQuery.eq('company_id', activeCompany.id);
             else expQuery = expQuery.is('company_id', null);
@@ -321,8 +321,144 @@ const SalesDashboard: React.FC = () => {
         return items;
     }, [filteredSales, selectedCategory]);
 
-    // 3. Metrics (Revenue and Units)
-    const { totalRevenue, totalUnits, relevantSalesCount } = useMemo(() => {
+    const dreMetrics = useMemo(() => {
+        const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Dinheiro': 0, 'Outros': 0 };
+        let salesOnlyRev = 0;
+        let totalRev = 0;
+        let cmvCents = 0;
+
+        const normalizeS = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const sNorm = selectedStore === 'Todas' ? null : normalizeS(selectedStore);
+
+        filteredSales.forEach(sale => {
+            let method = sale.payment_method || 'Outros';
+            const normMethod = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            if (normMethod.includes('credito')) method = 'Crédito';
+            else if (normMethod.includes('debito')) method = 'Débito';
+            else if (normMethod.includes('pix')) method = 'PIX';
+            else if (normMethod.includes('dinheiro')) method = 'Dinheiro';
+            else method = 'Outros';
+
+            const sTotal = Number(sale.total_amount || 0);
+            let itemSum = 0;
+            if (sale.sale_items && sale.sale_items.length > 0) {
+                sale.sale_items.forEach((item: any) => {
+                    const lineTotal = Number(item.total_price || 0) || (Number(item.unit_price || 0) * Number(item.quantity || 1));
+                    itemSum += lineTotal;
+                    const itemQty = Number(item.quantity || 0);
+                    const itemCost = Number(item.unit_cost !== undefined && item.unit_cost !== null ? item.unit_cost : (item.products?.cost || 0));
+                    cmvCents += Math.round(itemCost * itemQty * 100);
+                });
+            } else { itemSum = sTotal; }
+            const saleTotal = sale.sale_items && sale.sale_items.length > 0 ? itemSum : sTotal;
+            revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
+            salesOnlyRev += saleTotal;
+            totalRev += saleTotal;
+        });
+
+        const storeMap = new Map<string, string>();
+        salesData.forEach(s => { if (s.store_name) { const norm = normalizeS(s.store_name); if (norm !== 'geral' && norm !== 'administrativo' && !storeMap.has(norm)) storeMap.set(norm, s.store_name); } });
+        const activeStores = Array.from(storeMap.values());
+
+        const storeRevMapTotal: Record<string, number> = {};
+        const storeManualCashback: Record<string, { amount: number }> = {};
+        activeStores.forEach(s => { storeRevMapTotal[normalizeS(s)] = 0; storeManualCashback[s] = { amount: 0 }; });
+
+        salesData.forEach(sale => {
+            if (sale.store_name) {
+                const norm = normalizeS(sale.store_name);
+                if (norm === 'geral' || norm === 'administrativo') return;
+                let saleTotal = 0;
+                if (sale.sale_items && sale.sale_items.length > 0) { sale.sale_items.forEach((item: any) => { saleTotal += Number(item.total_price || 0); }); }
+                else { saleTotal = Number(sale.total_amount || 0); }
+                storeRevMapTotal[norm] = (storeRevMapTotal[norm] || 0) + saleTotal;
+            }
+        });
+
+        const storesWithRevenue = activeStores.filter(s => (storeRevMapTotal[normalizeS(s)] || 0) > 0);
+        const storesWithRevenueCount = storesWithRevenue.length || 1;
+        const isCurrentStoreInRevenueList = selectedStore !== 'Todas' && storesWithRevenue.some(s => normalizeS(s) === sNorm);
+        const prorationFactor = selectedStore === 'Todas' ? 1 : (isCurrentStoreInRevenueList ? (1 / storesWithRevenueCount) : 0);
+
+        const varGroups: Record<string, { label: string; amount: number, items: any[] }> = {};
+        const fixGroups: Record<string, { label: string; amount: number, items: any[] }> = {};
+        const revGroups: Record<string, { label: string; amount: number, items: any[] }> = {};
+        dreGroups.forEach(g => {
+            const groupData = { label: g.label, amount: 0, items: [] };
+            if (g.type === 'variable') varGroups[g.id] = groupData;
+            else if (g.type === 'fixed') fixGroups[g.id] = groupData;
+            else if (g.type === 'revenue') revGroups[g.id] = groupData;
+        });
+
+        expensesData.forEach(exp => {
+            const catName = (exp.categories?.name || 'Geral').toLowerCase();
+            const dreGroup = exp.categories?.dre_group;
+            const isIncome = exp.type?.toLowerCase().includes('income');
+            let amount = Number(exp.amount || 0);
+            const expNorm = normalizeS(exp.store_name);
+            const isGeralItem = !exp.store_name || expNorm === 'geral' || expNorm === 'administrativo';
+
+            if (selectedStore !== 'Todas') {
+                if (expNorm === sNorm) {} else if (isGeralItem) { amount = amount * prorationFactor; } 
+                else { return; }
+            }
+
+            if (isIncome) {
+                const isSalesGroup = !dreGroup || dreGroup === 'vendas';
+                if (activeCompany?.business_type === 'products' && salesOnlyRev > 0 && isSalesGroup) return;
+                if (dreGroup && revGroups[dreGroup]) revGroups[dreGroup].amount += amount;
+                else if (revGroups.vendas) revGroups.vendas.amount += amount;
+                totalRev += amount;
+                return;
+            }
+
+            if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
+
+            if (dreGroup) {
+                if (varGroups[dreGroup]) varGroups[dreGroup].amount += amount;
+                else if (fixGroups[dreGroup]) fixGroups[dreGroup].amount += amount;
+                else if (revGroups[dreGroup]) revGroups[dreGroup].amount += amount;
+                return;
+            }
+            if (catName.includes('imposto')) { if (varGroups[(params as any).tax_group_id]) varGroups[(params as any).tax_group_id].amount += amount; return; }
+            if (fixGroups.outros) fixGroups.outros.amount += amount;
+        });
+
+        const autoImpostos = (totalRev * (params.tax_rate / 100));
+        const autoPerdaEstoque = (totalRev * (params.loss_rate / 100));
+        const currentImpostos = (params as any).tax_group_id && varGroups[(params as any).tax_group_id] && varGroups[(params as any).tax_group_id].amount > 0 ? varGroups[(params as any).tax_group_id].amount : autoImpostos;
+        const currentPerdaEstoque = (params as any).loss_group_id && varGroups[(params as any).loss_group_id] && varGroups[(params as any).loss_group_id].amount > 0 ? varGroups[(params as any).loss_group_id].amount : autoPerdaEstoque;
+
+        if (selectedStore !== 'Todas') {
+            const key = Object.keys(storeManualCashback).find(k => normalizeS(k) === sNorm);
+            if (key && storeManualCashback[key].amount > 0) { if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += storeManualCashback[key].amount; }
+            else { 
+                const rates = params.cashback_rates as Record<string, number>;
+                const rate = rates[Object.keys(rates).find(rk => normalizeS(rk) === sNorm) || ''] || 0;
+                if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += (totalRev * (rate / 100));
+            }
+        }
+
+        if (revGroups.vendas) revGroups.vendas.amount += salesOnlyRev; 
+
+        const totalVar = Object.entries(varGroups).filter(([id]) => id !== (params as any).tax_group_id && id !== (params as any).loss_group_id).reduce((acc, [_, g]) => acc + g.amount, 0);
+        const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
+        const cmv = cmvCents / 100;
+        const totalVariableExpenses = cmv + totalVar + currentImpostos + currentPerdaEstoque;
+        const margemContribuicao = totalRev - totalVariableExpenses;
+        const currentIMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
+        const currentBreakEven = totalFix / Math.max(0.01, currentIMC);
+
+        return { breakEven: currentBreakEven, totalRev, totalFix, IMC: currentIMC, fixedCosts: totalFix };
+    }, [salesData, expensesData, params, selectedStore, dreGroups, filteredSales]);
+
+    const targetRevenue = isNaN(dreMetrics.breakEven) || !isFinite(dreMetrics.breakEven) ? 0 : dreMetrics.breakEven;
+    const totalRevenue = dreMetrics.totalRev; 
+    const balancePercentage = targetRevenue > 0 ? Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100) : (totalRevenue > 0 ? 100 : 0);
+    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    // 3. Metrics (Base Revenue and Units)
+    const { totalRevenue: baseSalesRevenue, totalUnits, relevantSalesCount } = useMemo(() => {
         let rev = 0;
         let units = 0;
         const saleIds = new Set();
@@ -431,249 +567,6 @@ const SalesDashboard: React.FC = () => {
 
         return Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
     }, [filteredSales, filteredItems, selectedCategory]);
-
-    const dreMetrics = useMemo(() => {
-        const revByMethod: Record<string, number> = { 'Crédito': 0, 'Débito': 0, 'PIX': 0, 'Dinheiro': 0, 'Outros': 0 };
-        let salesOnlyRev = 0;
-        let totalRev = 0;
-        let cmvCents = 0;
-
-        const normalizeS = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const sNorm = selectedStore === 'Todas' ? null : normalizeS(selectedStore);
-
-        // Calculate metrics using ONLY the filteredSales to match top-level totals
-        filteredSales.forEach(sale => {
-            let method = sale.payment_method || 'Outros';
-            const normMethod = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-            if (normMethod.includes('credito')) method = 'Crédito';
-            else if (normMethod.includes('debito')) method = 'Débito';
-            else if (normMethod.includes('pix')) method = 'PIX';
-            else if (normMethod.includes('dinheiro')) method = 'Dinheiro';
-            else method = 'Outros';
-
-            const sTotal = Number(sale.total_amount || 0);
-            let itemSum = 0;
-
-            if (sale.sale_items && sale.sale_items.length > 0) {
-                sale.sale_items.forEach((item: any) => {
-                    const lineTotal = Number(item.total_price || 0) || (Number(item.unit_price || 0) * Number(item.quantity || 1));
-                    itemSum += lineTotal;
-
-                    const itemQty = Number(item.quantity || 0);
-                    const itemCost = Number(item.unit_cost !== undefined && item.unit_cost !== null ? item.unit_cost : (item.products?.cost || 0));
-                    cmvCents += Math.round(itemCost * itemQty * 100);
-                });
-            } else {
-                itemSum = sTotal;
-            }
-
-            const saleTotal = sale.sale_items && sale.sale_items.length > 0 ? itemSum : sTotal;
-            revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
-            salesOnlyRev += saleTotal;
-            totalRev += saleTotal;
-        });
-
-        // Store active stores list
-        const storeMap = new Map<string, string>();
-        salesData.forEach(s => {
-            if (s.store_name) {
-                const norm = normalizeS(s.store_name);
-                if (norm !== 'geral' && norm !== 'administrativo' && !storeMap.has(norm)) {
-                    storeMap.set(norm, s.store_name);
-                }
-            }
-        });
-        const activeStores = Array.from(storeMap.values());
-
-        // Recalculate store-specific revenue for proration
-        const storeRevMapTotal: Record<string, number> = {};
-        const storeManualCashback: Record<string, { amount: number }> = {};
-        activeStores.forEach(s => {
-            storeRevMapTotal[normalizeS(s)] = 0;
-            storeManualCashback[s] = { amount: 0 };
-        });
-
-        // Use ALL sales for proration baselines, consistently
-        salesData.forEach(sale => {
-            if (sale.store_name) {
-                const norm = normalizeS(sale.store_name);
-                if (norm === 'geral' || norm === 'administrativo') return;
-
-                let saleTotal = 0;
-                if (sale.sale_items && sale.sale_items.length > 0) {
-                    sale.sale_items.forEach((item: any) => {
-                        saleTotal += Number(item.total_price || 0);
-                    });
-                } else {
-                    saleTotal = Number(sale.total_amount || 0);
-                }
-                storeRevMapTotal[norm] = (storeRevMapTotal[norm] || 0) + saleTotal;
-            }
-        });
-
-        const storesWithRevenue = activeStores.filter(s => (storeRevMapTotal[normalizeS(s)] || 0) > 0);
-        const storesWithRevenueCount = storesWithRevenue.length || 1;
-        const isCurrentStoreInRevenueList = selectedStore !== 'Todas' && storesWithRevenue.some(s => normalizeS(s) === sNorm);
-        const prorationFactor = selectedStore === 'Todas' ? 1 : (isCurrentStoreInRevenueList ? (1 / storesWithRevenueCount) : 0);
-
-        const storeRevMap = storeRevMapTotal;
-        const cmv = cmvCents / 100;
-
-        // Initialize Groups exactly like DRE using the loaded dreGroups
-        const varGroups: Record<string, { label: string; amount: number, items: any[] }> = {};
-        const fixGroups: Record<string, { label: string; amount: number, items: any[] }> = {};
-        const revGroups: Record<string, { label: string; amount: number, items: any[] }> = {};
-
-        dreGroups.forEach(g => {
-            const groupData = { label: g.label, amount: 0, items: [] };
-            if (g.type === 'variable') varGroups[g.id] = groupData;
-            else if (g.type === 'fixed') fixGroups[g.id] = groupData;
-            else if (g.type === 'revenue') revGroups[g.id] = groupData;
-        });
-
-        expensesData.forEach(exp => {
-            const catName = (exp.categories?.name || 'Geral').toLowerCase();
-            const dreGroup = exp.categories?.dre_group;
-            const desc = (exp.description || '').toLowerCase();
-            const isIncome = exp.type?.toLowerCase().includes('income');
-            let amount = Number(exp.amount || 0);
-
-            const expNorm = normalizeS(exp.store_name);
-            const isGeralItem = !exp.store_name || expNorm === 'geral' || expNorm === 'administrativo';
-
-            if (selectedStore !== 'Todas') {
-                if (expNorm === sNorm) {
-                } else if (isGeralItem) {
-                    amount = amount * prorationFactor;
-                } else { return; }
-            }
-
-            if (isIncome) {
-                // Determine if we should count this income transaction to avoid duplication with 'sales' table
-                const isProductCompany = activeCompany?.business_type === 'products';
-                const hasSalesData = salesOnlyRev > 0;
-                const isSalesGroup = !dreGroup || dreGroup === 'vendas';
-                
-                if (isProductCompany && hasSalesData && isSalesGroup) return;
-
-                if (dreGroup && revGroups[dreGroup]) {
-                    revGroups[dreGroup].amount += amount;
-                } else {
-                    const defaultRevGroup = revGroups.vendas || Object.values(revGroups)[0];
-                    if (defaultRevGroup) defaultRevGroup.amount += amount;
-                }
-                totalRev += amount;
-                return;
-            }
-
-            const pushToGroup = (group: any) => { if (group) group.amount += amount; };
-            if (catName.includes('fornecedor') || catName.includes('retirada sócios') || catName.includes('retirada socios')) return;
-
-            // Mapping Priority
-            if (dreGroup) {
-                if (dreGroup === (params as any).cashback_group_id) {
-                    const cashbackKey = activeStores.find(as => normalizeS(as) === expNorm);
-                    if (cashbackKey && storeManualCashback[cashbackKey]) {
-                        storeManualCashback[cashbackKey].amount += amount;
-                    } else if (varGroups[dreGroup]) { pushToGroup(varGroups[dreGroup]); }
-                } 
-                else if (varGroups[dreGroup]) { pushToGroup(varGroups[dreGroup]); }
-                else if (fixGroups[dreGroup]) { pushToGroup(fixGroups[dreGroup]); }
-                else if (revGroups[dreGroup]) { pushToGroup(revGroups[dreGroup]); }
-                return;
-            }
-
-            const isTaxCategory = catName.includes('imposto') || catName.includes('das') || catName.includes('simples nacional');
-            if (isTaxCategory && (params as any).tax_group_id && varGroups[(params as any).tax_group_id]) {
-                pushToGroup(varGroups[(params as any).tax_group_id]);
-                return;
-            }
-
-            // Fallback: 'Outros' (Fixed) matching DRE.tsx line 593-599
-            if (fixGroups.outros) pushToGroup(fixGroups.outros);
-            else { const firstFix = Object.values(fixGroups)[0]; if (firstFix) pushToGroup(firstFix); }
-        });
-
-        // Calculate automatic values
-        const autoImpostos = (totalRev * (params.tax_rate / 100));
-        const autoPerdaEstoque = (totalRev * (params.loss_rate / 100));
-        const autoRoyalties = (totalRev * (params.royalty_rate / 100));
-        const autoPixFee = (revByMethod['PIX'] * (params.pix_fee_rate / 100));
-        const autoCardFee = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
-
-        // Apply automatic values ONLY if the group is still empty (manual override matching DRE)
-        if ((params as any).tax_group_id && varGroups[(params as any).tax_group_id]) {
-            if (varGroups[(params as any).tax_group_id].amount === 0) varGroups[(params as any).tax_group_id].amount = autoImpostos;
-        }
-        if ((params as any).loss_group_id && varGroups[(params as any).loss_group_id]) {
-            if (varGroups[(params as any).loss_group_id].amount === 0) varGroups[(params as any).loss_group_id].amount = autoPerdaEstoque;
-        }
-        if ((params as any).royalty_group_id && varGroups[(params as any).royalty_group_id] && varGroups[(params as any).royalty_group_id].amount === 0) {
-            varGroups[(params as any).royalty_group_id].amount = autoRoyalties;
-        }
-        if ((params as any).pix_fee_group_id && varGroups[(params as any).pix_fee_group_id] && varGroups[(params as any).pix_fee_group_id].amount === 0) {
-            varGroups[(params as any).pix_fee_group_id].amount = autoPixFee;
-        }
-        if ((params as any).card_fee_group_id && varGroups[(params as any).card_fee_group_id] && varGroups[(params as any).card_fee_group_id].amount === 0) {
-            varGroups[(params as any).card_fee_group_id].amount = autoCardFee;
-        }
-
-        // Final values for synchronization (matching DRE metrics structure)
-        const currentImpostos = (params as any).tax_group_id && varGroups[(params as any).tax_group_id] ? varGroups[(params as any).tax_group_id].amount : autoImpostos;
-        const currentPerdaEstoque = (params as any).loss_group_id && varGroups[(params as any).loss_group_id] ? varGroups[(params as any).loss_group_id].amount : autoPerdaEstoque;
-
-        if (selectedStore !== 'Todas') {
-            const key = Object.keys(storeManualCashback).find(k => normalizeS(k) === sNorm);
-            const manual = key ? storeManualCashback[key] : null;
-
-            if (manual && (manual as any).amount > 0) {
-                if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += (manual as any).amount;
-            } else {
-                const rates = params.cashback_rates as Record<string, number>;
-                const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === sNorm);
-                const rate = rateKey ? rates[rateKey] : 0;
-                if (varGroups[(params as any).cashback_group_id] && varGroups[(params as any).cashback_group_id].amount === 0) {
-                    varGroups[(params as any).cashback_group_id].amount += (totalRev * (rate / 100));
-                }
-            }
-        } else {
-            activeStores.forEach(s => {
-                const manual = storeManualCashback[s];
-                if (manual && manual.amount > 0) {
-                    if (varGroups[(params as any).cashback_group_id]) varGroups[(params as any).cashback_group_id].amount += manual.amount;
-                } else {
-                    const rates = params.cashback_rates as Record<string, number>;
-                    const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === normalizeS(s));
-                    const rate = rateKey ? rates[rateKey] : 0;
-                    const sRev = storeRevMap[normalizeS(s)] || 0;
-                    if (varGroups[(params as any).cashback_group_id] && varGroups[(params as any).cashback_group_id].amount === 0) {
-                        varGroups[(params as any).cashback_group_id].amount += (sRev * (rate / 100));
-                    }
-                }
-            });
-        }
-
-        if (revGroups.vendas) revGroups.vendas.amount += salesOnlyRev; 
-
-        const totalVar = Object.entries(varGroups)
-            .filter(([id]) => id !== (params as any).tax_group_id && id !== (params as any).loss_group_id)
-            .reduce((acc, [_, g]) => acc + g.amount, 0);
-        
-        const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
-
-        const totalVariableExpenses = cmv + totalVar + currentImpostos + currentPerdaEstoque;
-        const margemContribuicao = totalRev - totalVariableExpenses;
-
-        const IMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
-        const breakEven = totalFix / Math.max(0.01, IMC);
-
-        return { breakEven, totalRev, totalFix, IMC, fixedCosts: totalFix };
-    }, [salesData, expensesData, params, selectedStore, dreGroups]);
-
-    const targetRevenue = isNaN(dreMetrics.breakEven) || !isFinite(dreMetrics.breakEven) ? 0 : dreMetrics.breakEven;
-    const balancePercentage = targetRevenue > 0 ? Math.min(Math.round((totalRevenue / targetRevenue) * 100), 100) : (totalRevenue > 0 ? 100 : 0);
-    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
     // Projeção de Faturamento Mensal (Baseada na Data da Última Venda)
     const projection = useMemo(() => {
