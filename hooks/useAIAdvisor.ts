@@ -24,18 +24,44 @@ export const useAIAdvisor = () => {
             const startOfMonth = new Date(year, month, 1).toISOString().split('T')[0];
             const endOfMonth = new Date(year, month + 1, 0).toISOString().split('T')[0];
             
-            const [transactionsRes, budgetsRes, accountsRes, salesRes] = await Promise.all([
+            const [transactionsRes, budgetsRes, accountsRes] = await Promise.all([
                 supabase.from('transactions').select('*, categories(name)').eq('is_business', isBusiness).gte('due_date', startOfMonth).lte('due_date', endOfMonth).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
                 supabase.from('budgets').select('*, categories(name)').eq('is_business', isBusiness).eq('month', startOfMonth).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
-                supabase.from('accounts').select('*').eq('is_business', isBusiness).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
-                isBusiness ? supabase.from('sales').select('*, sale_items(total_price, quantity, products(name))').gte('date', startOfMonth).lte('date', endOfMonth).filter('company_id', 'eq', activeCompany?.id) : Promise.resolve({ data: [] })
+                supabase.from('accounts').select('*').eq('is_business', isBusiness).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null)
             ]);
+
+            let allSales: any[] = [];
+            if (isBusiness) {
+                let page = 0;
+                let hasMore = true;
+                while (hasMore) {
+                    const { data, error } = await supabase.from('sales')
+                        .select('*, sale_items(total_price, quantity, products(name))')
+                        .gte('date', startOfMonth)
+                        .lte('date', endOfMonth)
+                        .filter('company_id', 'eq', activeCompany?.id)
+                        .range(page * 1000, (page + 1) * 1000 - 1);
+                    
+                    if (error) {
+                        console.error("AI Advisor Sales Fetch Error:", error);
+                        break;
+                    }
+                    if (!data || data.length === 0) {
+                        hasMore = false;
+                    } else {
+                        allSales = [...allSales, ...data];
+                        if (data.length < 1000) hasMore = false;
+                        else page++;
+                    }
+                    if (page > 50) break; // Limit safely
+                }
+            }
 
             // 2. Prepare context for the AI
             const txs = transactionsRes.data || [];
             const budgets = budgetsRes.data || [];
             const accounts = accountsRes.data || [];
-            const sales = salesRes.data || [];
+            const sales = allSales;
 
             const totalIncome = txs.filter(t => t.type === 'income').reduce((acc, t) => acc + Number(t.amount), 0);
             const totalExpenses = txs.filter(t => t.type === 'expense').reduce((acc, t) => acc + Number(t.amount), 0);
