@@ -582,6 +582,14 @@ const DRE: React.FC = () => {
                 return;
             }
 
+            // --- Prioridade 1: Mapeamento Inteligente (Heurística) ---
+            // Se o nome da categoria ou descrição sugere impostos, move para o grupo de impostos
+            const isTaxRelated = catName.includes('imposto') || catName.includes('das') || catName.includes('simples nacional') || desc.includes('das - imposto');
+            if (isTaxRelated && params.tax_group_id && varGroups[params.tax_group_id]) {
+                pushToGroup(varGroups[params.tax_group_id]);
+                return;
+            }
+
             // Fallback: If not mapped to any group, send to 'Outros' (Fixed)
             if (fixGroups.outros) {
                 pushToGroup(fixGroups.outros);
@@ -599,12 +607,15 @@ const DRE: React.FC = () => {
         const autoCardFee = ((revByMethod['Crédito'] + revByMethod['Débito']) * (params.card_fee_rate / 100));
         
         // Apply automatic values ONLY if the group is still empty (manual override)
-        // or just add them if it's the intended way. User requested to prioritize manual entries.
-        if (params.tax_group_id && varGroups[params.tax_group_id] && varGroups[params.tax_group_id].amount === 0) {
-            varGroups[params.tax_group_id].amount = autoImpostos;
+        if (params.tax_group_id && varGroups[params.tax_group_id]) {
+            if (varGroups[params.tax_group_id].amount === 0) {
+                varGroups[params.tax_group_id].amount = autoImpostos;
+            }
         }
-        if (params.loss_group_id && varGroups[params.loss_group_id] && varGroups[params.loss_group_id].amount === 0) {
-            varGroups[params.loss_group_id].amount = autoPerdaEstoque;
+        if (params.loss_group_id && varGroups[params.loss_group_id]) {
+            if (varGroups[params.loss_group_id].amount === 0) {
+                varGroups[params.loss_group_id].amount = autoPerdaEstoque;
+            }
         }
         if (params.royalty_group_id && varGroups[params.royalty_group_id] && varGroups[params.royalty_group_id].amount === 0) {
             varGroups[params.royalty_group_id].amount = autoRoyalties;
