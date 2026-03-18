@@ -449,20 +449,22 @@ const SalesDashboard: React.FC = () => {
             let itemSum = 0;
 
             if (sale.sale_items && sale.sale_items.length > 0) {
-                sale.sale_items.forEach((it: any) => {
-                    const lineTotal = Number(it.total_price || 0) || (Number(it.unit_price || 0) * Number(it.quantity || 1));
+                sale.sale_items.forEach((item: any) => {
+                    const lineTotal = Number(item.total_price || 0) || (Number(item.unit_price || 0) * Number(item.quantity || 1));
                     itemSum += lineTotal;
 
-                    const itemQty = Number(it.quantity || 0);
-                    const itemCost = Number(it.unit_cost !== undefined && it.unit_cost !== null ? it.unit_cost : (it.products?.cost || 0));
+                    const itemQty = Number(item.quantity || 0);
+                    const itemCost = Number(item.unit_cost !== undefined && item.unit_cost !== null ? item.unit_cost : (item.products?.cost || 0));
                     cmvCents += Math.round(itemCost * itemQty * 100);
                 });
+            } else {
+                itemSum = sTotal;
             }
 
-            const saleRev = Math.max(sTotal, itemSum);
-            revByMethod[method] = (revByMethod[method] || 0) + saleRev;
-            salesOnlyRev += saleRev;
-            totalRev += saleRev;
+            const saleTotal = sale.sale_items && sale.sale_items.length > 0 ? itemSum : sTotal;
+            revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
+            salesOnlyRev += saleTotal;
+            totalRev += saleTotal;
         });
 
         // Store active stores list
@@ -487,17 +489,20 @@ const SalesDashboard: React.FC = () => {
 
         // Use ALL sales for proration baselines, consistently
         salesData.forEach(sale => {
-            if (!sale.store_name) return;
-            const norm = normalizeS(sale.store_name);
-            if (norm === 'geral' || norm === 'administrativo') return;
+            if (sale.store_name) {
+                const norm = normalizeS(sale.store_name);
+                if (norm === 'geral' || norm === 'administrativo') return;
 
-            const sTotal = Number(sale.total_amount || 0);
-            let itemSum = 0;
-            sale.sale_items?.forEach((it: any) => {
-                itemSum += Number(it.total_price || 0) || (Number(it.unit_price || 0) * Number(it.quantity || 1));
-            });
-            const saleRev = Math.max(sTotal, itemSum);
-            storeRevMapTotal[norm] = (storeRevMapTotal[norm] || 0) + saleRev;
+                let saleTotal = 0;
+                if (sale.sale_items && sale.sale_items.length > 0) {
+                    sale.sale_items.forEach((item: any) => {
+                        saleTotal += Number(item.total_price || 0);
+                    });
+                } else {
+                    saleTotal = Number(sale.total_amount || 0);
+                }
+                storeRevMapTotal[norm] = (storeRevMapTotal[norm] || 0) + saleTotal;
+            }
         });
 
         const storesWithRevenue = activeStores.filter(s => (storeRevMapTotal[normalizeS(s)] || 0) > 0);
