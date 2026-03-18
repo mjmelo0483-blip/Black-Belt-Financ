@@ -271,13 +271,14 @@ const SalesDashboard: React.FC = () => {
         const normalizeS = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const sNorm = selectedStore === 'Todas' ? null : normalizeS(selectedStore);
 
+        // 1. Calculate Initial Total Rev and CMV
         filteredSales.forEach(sale => {
             let method = sale.payment_method || 'Outros';
             const normMethod = method.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            if (normMethod.includes('credito')) method = 'Crédito';
-            else if (normMethod.includes('debito')) method = 'Débito';
+            if (normMethod.includes('credito') || normMethod.includes('credit')) method = 'Crédito';
+            else if (normMethod.includes('debito') || normMethod.includes('debit')) method = 'Débito';
             else if (normMethod.includes('pix')) method = 'PIX';
-            else if (normMethod.includes('dinheiro')) method = 'Dinheiro';
+            else if (normMethod.includes('dinheiro') || normMethod.includes('cash') || normMethod.includes('especie')) method = 'Dinheiro';
             else method = 'Outros';
 
             const sTotal = Number(sale.total_amount || 0);
@@ -291,15 +292,22 @@ const SalesDashboard: React.FC = () => {
                     cmvCents += Math.round(itemCost * itemQty * 100);
                 });
             } else { itemSum = sTotal; }
-            const saleTotal = sale.sale_items && sale.sale_items.length > 0 ? itemSum : sTotal;
+
+            const saleTotal = Math.max(sTotal, itemSum);
             revByMethod[method] = (revByMethod[method] || 0) + saleTotal;
             salesOnlyRev += saleTotal;
             totalRev += saleTotal;
         });
 
-        const storeMap = new Map<string, string>();
-        salesData.forEach(s => { if (s.store_name) { const norm = normalizeS(s.store_name); if (norm !== 'geral' && norm !== 'administrativo' && !storeMap.has(norm)) storeMap.set(norm, s.store_name); } });
-        const activeStores = Array.from(storeMap.values());
+        // 2. Identify active stores and proration
+        const activeStoreMap = new Map<string, string>();
+        salesData.forEach(s => {
+            if (s.store_name) {
+                const norm = normalizeS(s.store_name);
+                if (norm !== 'geral' && norm !== 'administrativo' && !activeStoreMap.has(norm)) activeStoreMap.set(norm, s.store_name);
+            }
+        });
+        const activeStores = Array.from(activeStoreMap.values());
 
         const storeRevMapTotal: Record<string, number> = {};
         const storeManualCashback: Record<string, { amount: number }> = {};
@@ -350,18 +358,12 @@ const SalesDashboard: React.FC = () => {
                 const isProductCompany = activeCompany?.business_type === 'products';
                 const hasSalesData = salesOnlyRev > 0;
                 const isSalesGroup = !dreGroup || dreGroup === 'vendas';
-                
                 if (isProductCompany && hasSalesData && isSalesGroup) return;
 
-                if (dreGroup && revGroups[dreGroup]) {
-                    revGroups[dreGroup].amount += amount;
-                    revGroups[dreGroup].items.push(expToPush);
-                } else {
+                if (dreGroup && revGroups[dreGroup]) { revGroups[dreGroup].amount += amount; revGroups[dreGroup].items.push(expToPush); }
+                else {
                     const defaultRevGroup = revGroups.vendas || Object.values(revGroups)[0];
-                    if (defaultRevGroup) {
-                        defaultRevGroup.amount += amount;
-                        defaultRevGroup.items.push(expToPush);
-                    }
+                    if (defaultRevGroup) { defaultRevGroup.amount += amount; defaultRevGroup.items.push(expToPush); }
                 }
                 totalRev += amount;
                 return;
@@ -383,15 +385,10 @@ const SalesDashboard: React.FC = () => {
                 return;
             }
 
-            if (fixGroups.outros) {
-                fixGroups.outros.amount += amount;
-                fixGroups.outros.items.push(expToPush);
-            } else {
+            if (fixGroups.outros) { fixGroups.outros.amount += amount; fixGroups.outros.items.push(expToPush); }
+            else {
                 const firstFix = Object.values(fixGroups)[0];
-                if (firstFix) {
-                    firstFix.amount += amount;
-                    firstFix.items.push(expToPush);
-                }
+                if (firstFix) { firstFix.amount += amount; firstFix.items.push(expToPush); }
             }
         });
 
@@ -422,12 +419,13 @@ const SalesDashboard: React.FC = () => {
             .reduce((acc, [_, g]) => acc + g.amount, 0);
         const totalFix = Object.values(fixGroups).reduce((acc, g) => acc + g.amount, 0);
         const cmv = cmvCents / 100;
+
         const totalVariableExpenses = cmv + totalVar + impostos + perdaEstoque;
         const margemContribuicao = totalRev - totalVariableExpenses;
         const currentIMC = totalRev > 0 ? margemContribuicao / totalRev : (1 - (params.tax_rate + params.royalty_rate + params.loss_rate + params.card_fee_rate) / 100 - 0.45);
-        const currentBreakEven = totalFix / Math.max(0.01, currentIMC);
+        const breakEven = totalFix / Math.max(0.01, currentIMC);
 
-        return { breakEven: currentBreakEven, totalRev, totalFix, IMC: currentIMC, fixedCosts: totalFix };
+        return { breakEven, totalRev, totalFix, IMC: currentIMC, fixedCosts: totalFix };
     }, [salesData, expensesData, params, selectedStore, dreGroups, filteredSales, activeCompany]);
 
 
