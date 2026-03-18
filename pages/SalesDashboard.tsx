@@ -601,6 +601,74 @@ const SalesDashboard: React.FC = () => {
         return Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
     }, [filteredSales, filteredItems, selectedCategory]);
 
+    const advancedAnalytics = useMemo(() => {
+        const dayMap: Record<number, { dayName: string, revenue: number, count: number }> = {
+            1: { dayName: 'Segunda', revenue: 0, count: 0 },
+            2: { dayName: 'Terça', revenue: 0, count: 0 },
+            3: { dayName: 'Quarta', revenue: 0, count: 0 },
+            4: { dayName: 'Quinta', revenue: 0, count: 0 },
+            5: { dayName: 'Sexta', revenue: 0, count: 0 },
+            6: { dayName: 'Sábado', revenue: 0, count: 0 },
+            0: { dayName: 'Domingo', revenue: 0, count: 0 },
+        };
+
+        const hourMap: Record<string, { block: string, revenue: number, count: number }> = {
+            '00-06': { block: 'Madrugada (00h-06h)', revenue: 0, count: 0 },
+            '06-12': { block: 'Manhã (06h-12h)', revenue: 0, count: 0 },
+            '12-18': { block: 'Tarde (12h-18h)', revenue: 0, count: 0 },
+            '18-24': { block: 'Noite (18h-24h)', revenue: 0, count: 0 },
+        };
+
+        const storeMap: Record<string, { name: string, revenue: number, count: number }> = {};
+
+        if (selectedCategory === 'Todas') {
+            filteredSales.forEach(sale => {
+                const dateObj = new Date(sale.date + 'T12:00:00');
+                const dayOfWeek = dateObj.getDay();
+
+                let hourStr = sale.time || '12:00';
+                let hour = parseInt(hourStr.split(':')[0], 10);
+                if (isNaN(hour)) hour = 12;
+
+                let block = '00-06';
+                if (hour >= 6 && hour < 12) block = '06-12';
+                else if (hour >= 12 && hour < 18) block = '12-18';
+                else if (hour >= 18) block = '18-24';
+
+                const sTotal = Number(sale.total_amount || 0);
+                let itemSum = 0;
+                if (sale.sale_items && sale.sale_items.length > 0) {
+                    sale.sale_items.forEach((it: any) => {
+                        const lineTotal = Number(it.total_price || 0) || (Number(it.unit_price || 0) * Number(it.quantity || 1));
+                        itemSum += lineTotal;
+                    });
+                }
+                const finalRev = Math.max(sTotal, itemSum);
+
+                if (dayMap[dayOfWeek]) {
+                    dayMap[dayOfWeek].revenue += finalRev;
+                    dayMap[dayOfWeek].count += 1;
+                }
+                
+                if (hourMap[block]) {
+                    hourMap[block].revenue += finalRev;
+                    hourMap[block].count += 1;
+                }
+
+                const stName = sale.store_name?.trim() || 'Principal';
+                if (!storeMap[stName]) storeMap[stName] = { name: stName, revenue: 0, count: 0 };
+                storeMap[stName].revenue += finalRev;
+                storeMap[stName].count += 1;
+            });
+        }
+
+        const byDay = Object.values(dayMap);
+        const byHour = Object.values(hourMap);
+        const byStore = Object.values(storeMap).sort((a,b) => b.revenue - a.revenue);
+
+        return { byDay, byHour, byStore };
+    }, [filteredSales, selectedCategory]);
+
     // Projeção de Faturamento Mensal (Baseada na Data da Última Venda)
     const projection = useMemo(() => {
         const today = new Date();
@@ -885,6 +953,68 @@ const SalesDashboard: React.FC = () => {
                                         />
                                         <Area type="monotone" dataKey="units" stroke="#818cf8" fillOpacity={1} fill="url(#colorUnits)" strokeWidth={3} />
                                     </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Inteligência de Vendas (Lojas, Horários, Dias) */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">storefront</span> Ranking de Lojas / PDVs
+                            </h3>
+                            <div className="h-[250px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart layout="vertical" data={advancedAnalytics.byStore.slice(0, 5)}>
+                                        <XAxis type="number" hide />
+                                        <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={10} width={80} axisLine={false} tickLine={false} tickFormatter={(val) => val.length > 10 ? val.substring(0,10)+'...' : val} />
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Faturamento']}
+                                        />
+                                        <Bar dataKey="revenue" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">calendar_month</span> Faturamento por Dia (Média)
+                            </h3>
+                            <div className="h-[250px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={advancedAnalytics.byDay}>
+                                        <XAxis dataKey="dayName" stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(val) => val.substring(0,3)} />
+                                        <YAxis hide />
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Faturamento Total']}
+                                            cursor={{fill: 'transparent'}}
+                                        />
+                                        <Bar dataKey="revenue" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        <div className="bg-[#1e293b] p-6 rounded-2xl border border-[#334155] shadow-xl">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">schedule</span> Vendas por Horário
+                            </h3>
+                            <div className="h-[250px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={advancedAnalytics.byHour}>
+                                        <XAxis dataKey="block" stroke="#94a3b8" fontSize={9} axisLine={false} tickLine={false} tickFormatter={(val) => val.split(' ')[0]} />
+                                        <YAxis hide />
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                                            formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Faturamento Total']}
+                                            cursor={{fill: 'transparent'}}
+                                        />
+                                        <Bar dataKey="revenue" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>

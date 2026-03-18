@@ -8,7 +8,7 @@ interface AIAdvisorProps {
 }
 
 const AIAdvisor: React.FC<AIAdvisorProps> = ({ month, year }) => {
-    const { insights, loading, generateInsights } = useAIAdvisor();
+    const { insights, loading, generateInsights, extraContext } = useAIAdvisor();
     const [isOpen, setIsOpen] = useState(false);
     const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -46,6 +46,7 @@ const AIAdvisor: React.FC<AIAdvisorProps> = ({ month, year }) => {
             const systemPrompt = `Você é o Mentor IA, um experiente e direto consultor financeiro focado em ajudar empresas/pessoas na tomada de decisão rápida e assertiva. Responda o usuário SEMPRE em Português do Brasil. Mantenha as respostas concisas.
 Se houverem dados provisórios relevantes gerados por análise estrutural prévia deste mês, eles são:
 ${contextString || 'Ainda sem alertas computados neste mês.'}
+${extraContext ? `\n${extraContext}` : ''}
 
 Baseado nesse dashboard atual (se houver), seja extremamente útil para o usuário.`;
 

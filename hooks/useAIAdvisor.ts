@@ -15,6 +15,7 @@ export const useAIAdvisor = () => {
     const { activeCompany } = useCompany();
     const [loading, setLoading] = useState(false);
     const [insights, setInsights] = useState<AIInsight[]>([]);
+    const [extraContext, setExtraContext] = useState<string>('');
 
     const generateInsights = useCallback(async (month: number, year: number) => {
         setLoading(true);
@@ -27,7 +28,7 @@ export const useAIAdvisor = () => {
                 supabase.from('transactions').select('*, categories(name)').eq('is_business', isBusiness).gte('due_date', startOfMonth).lte('due_date', endOfMonth).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
                 supabase.from('budgets').select('*, categories(name)').eq('is_business', isBusiness).eq('month', startOfMonth).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
                 supabase.from('accounts').select('*').eq('is_business', isBusiness).filter('company_id', isBusiness ? 'eq' : 'is', isBusiness ? activeCompany?.id : null),
-                isBusiness ? supabase.from('sales').select('*, sale_items(total_price, quantity)').gte('date', startOfMonth).lte('date', endOfMonth).filter('company_id', 'eq', activeCompany?.id) : Promise.resolve({ data: [] })
+                isBusiness ? supabase.from('sales').select('*, sale_items(total_price, quantity, products(name))').gte('date', startOfMonth).lte('date', endOfMonth).filter('company_id', 'eq', activeCompany?.id) : Promise.resolve({ data: [] })
             ]);
 
             // 2. Prepare context for the AI
@@ -42,17 +43,64 @@ export const useAIAdvisor = () => {
 
             let totalSalesRevenue = 0;
             let totalSalesCount = 0;
+            let salesExtra = "";
+
             if (isBusiness) {
+                const storeMap: Record<string, number> = {};
+                const hourMap: Record<string, number> = {};
+                const dayMap: Record<number, number> = {};
+                const prodMap: Record<string, number> = {};
+
                 sales.forEach(sale => {
                     let sTotal = Number(sale.total_amount || 0);
                     let itemSum = 0;
                     if (sale.sale_items && sale.sale_items.length > 0) {
-                        sale.sale_items.forEach((it: any) => itemSum += Number(it.total_price || 0));
+                        sale.sale_items.forEach((it: any) => {
+                            const lineTotal = Number(it.total_price || 0) || (Number(it.unit_price || 0) * Number(it.quantity || 1));
+                            itemSum += lineTotal;
+                            const prodName = it.products?.name || 'Desconhecido';
+                            prodMap[prodName] = (prodMap[prodName] || 0) + Number(it.quantity || 1);
+                        });
                     }
-                    totalSalesRevenue += Math.max(sTotal, itemSum);
+                    const rev = Math.max(sTotal, itemSum);
+                    totalSalesRevenue += rev;
                     totalSalesCount++;
+
+                    const stName = sale.store_name?.trim() || 'Principal';
+                    storeMap[stName] = (storeMap[stName] || 0) + rev;
+
+                    if (sale.time) {
+                        let hourStr = sale.time || '12:00';
+                        let hour = parseInt(hourStr.split(':')[0], 10);
+                        if (isNaN(hour)) hour = 12;
+                        let block = 'Madrugada (00h-06h)';
+                        if (hour >= 6 && hour < 12) block = 'Manhã (06h-12h)';
+                        else if (hour >= 12 && hour < 18) block = 'Tarde (12h-18h)';
+                        else if (hour >= 18) block = 'Noite (18h-24h)';
+                        hourMap[block] = (hourMap[block] || 0) + rev;
+                    }
+
+                    if (sale.date) {
+                         const obj = new Date(sale.date + 'T12:00:00');
+                         const d = obj.getDay();
+                         dayMap[d] = (dayMap[d] || 0) + rev;
+                    }
                 });
+
+                const bestStore = Object.entries(storeMap).sort((a,b)=>b[1]-a[1]);
+                const bestHour = Object.entries(hourMap).sort((a,b)=>b[1]-a[1]);
+                const bestDay = Object.entries(dayMap).sort((a,b)=>b[1]-a[1]);
+                const daysStr = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+                const topProducts = Object.entries(prodMap).sort((a,b)=>b[1]-a[1]).slice(0,10).map(x => `${x[0]} (${x[1]} un)`).join(', ');
+
+                salesExtra = `DADOS EXTRAS DE VENDAS PARA CONSULTA NO CHAT (Use essas informações se for perguntado sobre análises de vendas, volume ou desempenho geral):
+- Ranking de Faturamento de Lojas: ${bestStore.map(s => `${s[0]} (R$ ${s[1].toFixed(2)})`).join(', ')}.
+- Faturamento por Faixa de Horário: ${bestHour.map(s => `${s[0]} (R$ ${s[1].toFixed(2)})`).join(', ')}.
+- Faturamento por Dia da Semana: ${bestDay.map(s => `${daysStr[Number(s[0])]} (R$ ${s[1].toFixed(2)})`).join(', ')}.
+- Top 10 Produtos Mais Vendidos no Mês (Volume): ${topProducts}.`;
             }
+            
+            setExtraContext(salesExtra);
 
             const categoryTotal: Record<string, number> = {};
             txs.filter(t => t.type === 'expense').forEach(t => {
@@ -229,8 +277,9 @@ export const useAIAdvisor = () => {
     }, [isBusiness, activeCompany]);
 
     return {
-        insights,
         loading,
-        generateInsights
+        insights,
+        generateInsights,
+        extraContext
     };
 };
