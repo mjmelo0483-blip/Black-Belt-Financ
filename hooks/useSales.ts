@@ -22,10 +22,11 @@ export const useSales = () => {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session?.user) return { data: [], error: null };
 
-                // Ensure select string is compact (no newlines/extra spaces) to avoid PostgREST parsing issues
+                // Compact select to ensure PostgREST nested retrieval works. 
+                // Removed all potential formatting issues that could cause partial returns.
                 let query = supabase
                     .from('sales')
-                    .select('id, date, time, store_name, payment_method, total_amount, sale_items(total_price, unit_price, quantity, unit_cost, products(name, code, category, sub_category, cost))');
+                    .select('id,date,time,store_name,payment_method,total_amount,sale_items(total_price,unit_price,quantity,unit_cost,products(name,code,category,sub_category,cost))');
 
                 if (activeCompany) {
                     query = query.eq('company_id', activeCompany.id);
@@ -36,13 +37,14 @@ export const useSales = () => {
                 if (filters?.startDate) query = query.gte('date', filters.startDate);
                 if (filters?.endDate) query = query.lte('date', filters.endDate);
                 if (filters?.month !== undefined && filters?.year !== undefined) {
-                    const startDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-01`;
-                    const lastDayOfM = new Date(filters.year, filters.month + 1, 0).getDate();
-                    const endDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-${String(lastDayOfM).padStart(2, '0')}`;
+                    const mStr = String(filters.month + 1).padStart(2, '0');
+                    const startDate = `${filters.year}-${mStr}-01`;
+                    const lastDay = new Date(filters.year, filters.month + 1, 0).getDate();
+                    const endDate = `${filters.year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
                     query = query.gte('date', startDate).lte('date', endDate);
                 }
 
-                // Apply ordering and range. Stable sort (date, time, id) prevents pagination duplicates.
+                // Strictly stable sort (date, time, id) is vital for correct pagination
                 query = query
                     .order('date', { ascending: false })
                     .order('time', { ascending: false })
@@ -52,6 +54,7 @@ export const useSales = () => {
                 const { data, error } = await withRetry(async () => await query);
 
                 if (error) throw error;
+                
                 if (!data || data.length === 0) {
                     hasMore = false;
                 } else {
@@ -63,7 +66,7 @@ export const useSales = () => {
                     }
                 }
 
-                if (page > 200) break;
+                if (page > 100) break; // Reasonable limit for monthly data
             }
 
             // Final deduplication for absolute safety
