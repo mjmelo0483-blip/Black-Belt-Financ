@@ -481,79 +481,77 @@ export const useSales = () => {
                 diagProcessed++;
             });
 
+            // 2. Prepare Data for Insertion
             const allSalesData = Array.from(salesGroups.values()).map(s => {
                 const { items, spreadsheet_order_total, ...saleData } = s;
-
-                // CRITICAL FIX: If our calculated total_amount is 0 (or much smaller than the spreadsheet's order total),
-                // and we only have ONE row for this order, the spreadsheet's "Total" column was likely the item total.
                 let finalTotal = s.total_amount;
                 if (finalTotal === 0 && spreadsheet_order_total > 0) {
                     finalTotal = spreadsheet_order_total;
                 }
-
                 return { ...saleData, total_amount: finalTotal, items };
             });
 
-            // Bulk Upsert Sales in larger chunks to improve speed
-            const chunkSize = 500;
+            // 3. Robust Chunked Upsert
+            const chunkSize = 100; // Smallest safe chunk size to prevent timeouts on high-volume data
             for (let i = 0; i < allSalesData.length; i += chunkSize) {
                 const chunk = allSalesData.slice(i, i + chunkSize);
-
-                // DEDUPLICATE by external_code to prevent "ON CONFLICT DO UPDATE cannot affect row a second time"
-                const deduped = new Map<string, any>();
-                chunk.forEach(sale => {
-                    const key = sale.external_code;
-                    if (deduped.has(key)) {
-                        // Merge items and totals from duplicate entries
-                        const existing = deduped.get(key);
-                        existing.items = [...existing.items, ...sale.items];
-                        existing.total_amount += sale.total_amount;
-                    } else {
-                        deduped.set(key, { ...sale });
-                    }
-                });
-                const dedupedChunk = Array.from(deduped.values());
-
-                const salesToUpsert = dedupedChunk.map(({ items, ...sale }) => sale);
+                
+                // Ensure every row has the correct identifiers (double-safety)
+                const salesToUpsert = chunk.map(({ items, ...sale }) => ({
+                    ...sale,
+                    user_id: user.id,
+                    company_id: activeCompany?.id || null 
+                }));
 
                 const { data: upsertedSales, error: upsertError } = await supabase
                     .from('sales')
                     .upsert(salesToUpsert, { onConflict: 'user_id, external_code, company_id' })
                     .select('id, external_code');
 
-                if (upsertError) throw upsertError;
+                if (upsertError) {
+                    console.error('Upsert sales error at chunk:', i, upsertError);
+                    throw new Error(`Erro ao salvar bloco de vendas: ${upsertError.message}`);
+                }
 
-                // Prepare items for this chunk
+                if (!upsertedSales) continue;
+
+                // Process items for successfully upserted sales
                 const itemsToInsert: any[] = [];
-                const saleIdsToDelete: string[] = [];
+                const saleIdsToClean: string[] = [];
 
-                upsertedSales?.forEach(insertedSale => {
-                    const originalSale = dedupedChunk.find(s => s.external_code === insertedSale.external_code);
-                    if (originalSale && originalSale.items.length > 0) {
-                        saleIdsToDelete.push(insertedSale.id);
+                upsertedSales.forEach(insertedSale => {
+                    const originalSale = chunk.find(s => s.external_code === insertedSale.external_code);
+                    if (originalSale && originalSale.items && originalSale.items.length > 0) {
+                        saleIdsToClean.push(insertedSale.id);
                         originalSale.items.forEach((item: any) => {
                             itemsToInsert.push({
-                                ...item,
-                                sale_id: insertedSale.id
+                                sale_id: insertedSale.id,
+                                product_id: productsMap.get(item.product_id) || item.product_id || null,
+                                quantity: item.quantity,
+                                unit_price: item.unit_price,
+                                total_price: item.total_price,
+                                unit_cost: item.unit_cost
                             });
                         });
                     }
                 });
 
-                // Clear and Re-insert items in bulk for this chunk
-                if (saleIdsToDelete.length > 0) {
-                    await supabase.from('sale_items').delete().in('sale_id', saleIdsToDelete);
+                // Clear previous items (cleanup for retry/stability) and insert new ones
+                if (saleIdsToClean.length > 0) {
+                    await supabase.from('sale_items').delete().in('sale_id', saleIdsToClean);
                 }
                 if (itemsToInsert.length > 0) {
-                    const { error: itemError } = await supabase.from('sale_items').insert(itemsToInsert);
-                    if (itemError) console.error('Error inserting items:', itemError);
+                    const { error: itemsError } = await supabase.from('sale_items').insert(itemsToInsert);
+                    if (itemsError) {
+                        console.error('Items insertion error:', itemsError);
+                    }
                 }
             }
 
-            return { success: true, diagnostics: { totalRows: rows.length, processed: diagProcessed, cancelled: diagCancelled, noDate: diagNoDate, empty: diagEmpty, salesCreated: allSalesData.length, firstRowKeys: diagFirstRowKeys, firstRowSample: diagFirstRowSample } };
+            return { success: true, count: allSalesData.length, diagnostics: { processed: diagProcessed, cancelled: diagCancelled, noDate: diagNoDate } };
         } catch (err: any) {
-            console.error('Import error:', err);
-            return { error: formatError(err) };
+            console.error('Global import failure:', err);
+            return { error: formatError(err), success: false };
         } finally {
             setLoading(false);
         }
