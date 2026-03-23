@@ -159,30 +159,42 @@ const SalesDashboard: React.FC = () => {
                 }
             }
 
-            // Fetch periods
-            let allDates: any[] = [];
-            let page = 0;
-            while (page < 100) {
-                let q = supabase.from('sales').select('date');
-                if (activeCompany) q = q.eq('company_id', activeCompany.id);
-                else q = q.eq('user_id', session.user.id).is('company_id', null);
-                const { data } = await q.order('date', { ascending: false }).range(page * 1000, (page + 1) * 1000 - 1);
-                if (!data || data.length === 0) break;
-                allDates = [...allDates, ...data];
-                if (data.length < 1000) break;
-                page++;
+            // Robust period fetch: just get min and max dates
+            let qMin = supabase.from('sales').select('date').order('date', { ascending: true }).limit(1);
+            let qMax = supabase.from('sales').select('date').order('date', { ascending: false }).limit(1);
+
+            if (activeCompany) {
+                qMin = qMin.eq('company_id', activeCompany.id);
+                qMax = qMax.eq('company_id', activeCompany.id);
+            } else {
+                qMin = qMin.eq('user_id', session.user.id).is('company_id', null);
+                qMax = qMax.eq('user_id', session.user.id).is('company_id', null);
             }
-            if (allDates.length > 0) {
+
+            const [{ data: minData }, { data: maxData }] = await Promise.all([qMin.maybeSingle(), qMax.maybeSingle()]);
+
+            if (minData?.date && maxData?.date) {
+                const start = new Date(minData.date + 'T00:00:00');
+                const end = new Date(maxData.date + 'T12:00:00');
                 const p = new Set<string>();
-                allDates.forEach((s: any) => {
-                    const parts = s.date?.split('-');
-                    if (parts?.length === 3) p.add(`${parseInt(parts[1]) - 1}-${parts[0]}`);
-                });
+                
+                let curr = new Date(start.getFullYear(), start.getMonth(), 1);
+                while (curr <= end) {
+                    p.add(`${curr.getMonth()}-${curr.getFullYear()}`);
+                    curr.setMonth(curr.getMonth() + 1);
+                }
+                
+                // Also ensure currently selected month is in the list
+                p.add(`${selectedMonth}-${selectedYear}`);
+
                 setAllPeriods(Array.from(p).sort((a, b) => {
                     const [am, ay] = a.split('-').map(Number);
                     const [bm, by] = b.split('-').map(Number);
                     return ay !== by ? ay - by : am - bm;
                 }));
+            } else {
+                // If no sales, just show current month
+                setAllPeriods([`${selectedMonth}-${selectedYear}`]);
             }
         };
         init();

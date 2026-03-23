@@ -76,51 +76,50 @@ const DRE: React.FC = () => {
             if (!session?.user) return;
 
             // Fetch periods
-            let allDates: any[] = [];
-            let page = 0;
-            const pageSize = 1000;
-            let hasMore = true;
+            // Robust period fetch
+            let qMin = supabase.from('sales').select('date').order('date', { ascending: true }).limit(1);
+            let qMax = supabase.from('sales').select('date').order('date', { ascending: false }).limit(1);
 
-            while (hasMore) {
-                let query = supabase
-                    .from('sales')
-                    .select('date');
-
-                if (activeCompany) {
-                    query = query.eq('company_id', activeCompany.id);
-                } else {
-                    query = query.eq('user_id', session.user.id).is('company_id', null);
-                }
-
-                const { data, error } = await query
-                    .order('date', { ascending: false })
-                    .range(page * pageSize, (page + 1) * pageSize - 1);
-
-                if (error) break;
-                if (!data || data.length === 0) {
-                    hasMore = false;
-                } else {
-                    allDates = [...allDates, ...data];
-                    if (data.length < pageSize) hasMore = false;
-                    else page++;
-                }
-                if (page > 100) break;
+            if (activeCompany) {
+                qMin = qMin.eq('company_id', activeCompany.id);
+                qMax = qMax.eq('company_id', activeCompany.id);
+            } else {
+                qMin = qMin.eq('user_id', session.user.id).is('company_id', null);
+                qMax = qMax.eq('user_id', session.user.id).is('company_id', null);
             }
 
-            if (allDates.length > 0) {
+            const [{ data: minS }, { data: maxS }] = await Promise.all([qMin.maybeSingle(), qMax.maybeSingle()]);
+
+            // Also check transactions for dates
+            let tMin = supabase.from('transactions').select('date').eq('is_business', true).order('date', { ascending: true }).limit(1);
+            let tMax = supabase.from('transactions').select('date').eq('is_business', true).order('date', { ascending: false }).limit(1);
+            if (activeCompany) {
+                tMin = tMin.eq('company_id', activeCompany.id);
+                tMax = tMax.eq('company_id', activeCompany.id);
+            } else {
+                tMin = tMin.eq('user_id', session.user.id).is('company_id', null);
+                tMax = tMax.eq('user_id', session.user.id).is('company_id', null);
+            }
+            const [{ data: minT }, { data: maxT }] = await Promise.all([tMin.maybeSingle(), tMax.maybeSingle()]);
+
+            const finalMin = [minS?.date, minT?.date].filter(Boolean).sort()[0];
+            const finalMax = [maxS?.date, maxT?.date].filter(Boolean).sort().reverse()[0];
+
+            if (finalMin && finalMax) {
+                const start = new Date(finalMin + 'T00:00:00');
+                const end = new Date(finalMax + 'T12:00:00');
                 const p = new Set<string>();
-                allDates.forEach((s: any) => {
-                    const parts = s.date?.split('-');
-                    if (parts?.length === 3) {
-                        p.add(`${parseInt(parts[1]) - 1}-${parts[0]}`);
-                    }
-                });
-                const sortedPeriods = Array.from(p).sort((a, b) => {
+                let curr = new Date(start.getFullYear(), start.getMonth(), 1);
+                while (curr <= end) {
+                    p.add(`${curr.getMonth()}-${curr.getFullYear()}`);
+                    curr.setMonth(curr.getMonth() + 1);
+                }
+                p.add(`${selectedMonth}-${selectedYear}`);
+                setAllPeriods(Array.from(p).sort((a,b) => {
                     const [am, ay] = a.split('-').map(Number);
                     const [bm, by] = b.split('-').map(Number);
                     return ay !== by ? ay - by : am - bm;
-                });
-                setAllPeriods(sortedPeriods);
+                }));
             }
 
             // Fetch DRE structure from company
