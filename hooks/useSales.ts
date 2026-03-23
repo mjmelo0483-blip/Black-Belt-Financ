@@ -419,11 +419,12 @@ export const useSales = () => {
                     : (lastCode || `ROW_${index}_${date}`);
                 lastCode = (rawCode && rawCode !== 'undefined' && rawCode !== '') ? rawCode : lastCode;
 
-                const groupKey = `${finalCode}_${store}_${date}`;
+                // CRITICAL protection: Include fileName in the groupKey to prevent a September file 
+                // from accidentally overwriting a December record if dates are misparsed.
+                const groupKey = `${fileName}_${finalCode}_${store}_${date}`;
 
                 if (!salesGroups.has(groupKey)) {
                     salesGroups.set(groupKey, {
-                        user_id: user.id,
                         external_code: groupKey,
                         customer_id: customersMap.get(getVal(row, customerCpfKeys)) ||
                             customersMap.get(getVal(row, customerValueKeys)) || null,
@@ -433,9 +434,7 @@ export const useSales = () => {
                         store_name: store,
                         device: getVal(row, deviceKeys),
                         import_filename: fileName,
-                        company_id: activeCompany?.id || null,
                         total_amount: 0,
-                        // Store the spreadsheet's stated total for this order to use as fallback
                         spreadsheet_order_total: parseNumber(getVal(row, orderTotalKeys)),
                         items: []
                     });
