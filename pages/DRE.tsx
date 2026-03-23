@@ -645,7 +645,7 @@ const DRE: React.FC = () => {
                 const rates = params.cashback_rates as Record<string, number>;
                 const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === sNorm);
                 const rate = rateKey ? rates[rateKey] : 0;
-                if (varGroups[params.cashback_group_id] && varGroups[params.cashback_group_id].amount === 0) {
+                if (varGroups[params.cashback_group_id]) {
                     varGroups[params.cashback_group_id].amount += (totalRev * (rate / 100));
                 }
             }
@@ -662,7 +662,7 @@ const DRE: React.FC = () => {
                     const rateKey = Object.keys(rates).find(rk => normalizeStore(rk) === normalizeStore(s));
                     const rate = rateKey ? rates[rateKey] : 0;
                     const sRev = storeRevMap[s] || 0;
-                    if (varGroups[params.cashback_group_id] && varGroups[params.cashback_group_id].amount === 0) {
+                    if (varGroups[params.cashback_group_id]) {
                         varGroups[params.cashback_group_id].amount += (sRev * (rate / 100));
                     }
                 }

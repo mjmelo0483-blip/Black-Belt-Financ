@@ -444,7 +444,7 @@ const SalesDashboard: React.FC = () => {
                 const rates = params.cashback_rates as Record<string, number>;
                 const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === sNorm);
                 const rate = rateKey ? rates[rateKey] : 0;
-                if (varGroups[(params as any).cashback_group_id] && varGroups[(params as any).cashback_group_id].amount === 0) {
+                if (varGroups[(params as any).cashback_group_id]) {
                     varGroups[(params as any).cashback_group_id].amount += (totalRev * (rate / 100));
                 }
             }
@@ -460,7 +460,7 @@ const SalesDashboard: React.FC = () => {
                     const rateKey = Object.keys(rates).find(rk => normalizeS(rk) === normalizeS(s));
                     const rate = rateKey ? rates[rateKey] : 0;
                     const sRev = storeRevMapTotal[normalizeS(s)] || 0;
-                    if (varGroups[(params as any).cashback_group_id] && varGroups[(params as any).cashback_group_id].amount === 0) {
+                    if (varGroups[(params as any).cashback_group_id]) {
                         varGroups[(params as any).cashback_group_id].amount += (sRev * (rate / 100));
                     }
                 }
