@@ -22,16 +22,10 @@ export const useSales = () => {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session?.user) return { data: [], error: null };
 
-                // Ensure basic query filters are applied BEFORE range/limit for better optimization
+                // Ensure select string is compact (no newlines/extra spaces) to avoid PostgREST parsing issues
                 let query = supabase
                     .from('sales')
-                    .select(`
-                    id, date, time, store_name, payment_method, total_amount,
-                    sale_items (
-                        total_price, unit_price, quantity, unit_cost,
-                        products (name, code, category, sub_category, cost)
-                    )
-                `);
+                    .select('id, date, time, store_name, payment_method, total_amount, sale_items(total_price, unit_price, quantity, unit_cost, products(name, code, category, sub_category, cost))');
 
                 if (activeCompany) {
                     query = query.eq('company_id', activeCompany.id);
@@ -39,7 +33,6 @@ export const useSales = () => {
                     query = query.eq('user_id', session.user.id).is('company_id', null);
                 }
 
-                // Apply date filters early
                 if (filters?.startDate) query = query.gte('date', filters.startDate);
                 if (filters?.endDate) query = query.lte('date', filters.endDate);
                 if (filters?.month !== undefined && filters?.year !== undefined) {
@@ -49,10 +42,11 @@ export const useSales = () => {
                     query = query.gte('date', startDate).lte('date', endDate);
                 }
 
-                // Apply ordering and range last
+                // Apply ordering and range. Stable sort (date, time, id) prevents pagination duplicates.
                 query = query
                     .order('date', { ascending: false })
                     .order('time', { ascending: false })
+                    .order('id', { ascending: true })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 
                 const { data, error } = await withRetry(async () => await query);
@@ -69,11 +63,12 @@ export const useSales = () => {
                     }
                 }
 
-                // Increased safety break to 200 pages (200,000 records) to handle high-volume companies
                 if (page > 200) break;
             }
 
-            return { data: allData, error: null };
+            // Final deduplication for absolute safety
+            const uniqueData = Array.from(new Map(allData.map(item => [item.id, item])).values());
+            return { data: uniqueData, error: null };
         } catch (err: any) {
             console.error('Fetch sales error detail:', err);
             return { error: err, data: [] };
