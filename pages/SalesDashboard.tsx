@@ -162,7 +162,7 @@ const SalesDashboard: React.FC = () => {
             // Fetch periods
             let allDates: any[] = [];
             let page = 0;
-            while (page < 20) {
+            while (page < 100) {
                 let q = supabase.from('sales').select('date');
                 if (activeCompany) q = q.eq('company_id', activeCompany.id);
                 else q = q.eq('user_id', session.user.id).is('company_id', null);

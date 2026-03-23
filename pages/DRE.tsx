@@ -104,7 +104,7 @@ const DRE: React.FC = () => {
                     if (data.length < pageSize) hasMore = false;
                     else page++;
                 }
-                if (page > 5) break;
+                if (page > 100) break;
             }
 
             if (allDates.length > 0) {
