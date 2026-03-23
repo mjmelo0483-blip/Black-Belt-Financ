@@ -113,8 +113,13 @@ const SalesDashboard: React.FC = () => {
             }
 
             // 3. Fetch Sales
-            const { data: sData } = await fetchSales({ month: selectedMonth, year: selectedYear });
-            if (sData) setSalesData(sData);
+            const { data: sData, error: sError } = await fetchSales({ month: selectedMonth, year: selectedYear });
+            if (sError) {
+                console.error('Erro ao carregar vendas do dashboard:', sError);
+                setSalesData([]);
+            } else if (sData) {
+                setSalesData(sData);
+            }
 
             // 4. Fetch Expenses with correct date range
             const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
@@ -218,13 +223,14 @@ const SalesDashboard: React.FC = () => {
         const storeMap = new Map<string, string>();
 
         const addStore = (name: string) => {
-            if (!name) return;
+            if (!name || typeof name !== 'string') return;
             const normalized = normalize(name);
             const current = storeMap.get(normalized);
-            const getScore = (s: string) => (s.match(/[A-Z]/g)?.length || 0) + (s.match(/[áéíóúâêîôûãõàèìòù]/gi)?.length || 0);
+            // Use a higher score for names with more capital letters or accents (higher probability of being 'the' official name)
+            const getScore = (s: string) => (s && typeof s === 'string') ? (s.match(/[A-Z]/g)?.length || 0) + (s.match(/[áéíóúâêîôûãõàèìòù]/gi)?.length || 0) : 0;
 
             if (!current || getScore(name) > getScore(current)) {
-                storeMap.set(normalized, name);
+                storeMap.set(normalized, name.trim());
             }
         };
 
@@ -879,7 +885,12 @@ const SalesDashboard: React.FC = () => {
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                                         <XAxis
                                             dataKey="date"
-                                            tickFormatter={(val) => parseInt(val.split('-')[2]).toString()}
+                                            tickFormatter={(val) => {
+                                                if (typeof val !== 'string' || !val.includes('-')) return '';
+                                                const parts = val.split('-');
+                                                return parts[2] ? parseInt(parts[2]).toString() : '';
+                                            }}
+
                                             stroke="#64748b"
                                             fontSize={10}
                                             axisLine={false}
@@ -968,7 +979,12 @@ const SalesDashboard: React.FC = () => {
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                                         <XAxis
                                             dataKey="date"
-                                            tickFormatter={(val) => parseInt(val.split('-')[2]).toString()}
+                                            tickFormatter={(val) => {
+                                                if (typeof val !== 'string' || !val.includes('-')) return '';
+                                                const parts = val.split('-');
+                                                return parts[2] ? parseInt(parts[2]).toString() : '';
+                                            }}
+
                                             stroke="#64748b"
                                             fontSize={10}
                                             axisLine={false}

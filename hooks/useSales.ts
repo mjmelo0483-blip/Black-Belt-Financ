@@ -22,6 +22,7 @@ export const useSales = () => {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session?.user) return { data: [], error: null };
 
+                // Ensure basic query filters are applied BEFORE range/limit for better optimization
                 let query = supabase
                     .from('sales')
                     .select(`
@@ -38,18 +39,21 @@ export const useSales = () => {
                     query = query.eq('user_id', session.user.id).is('company_id', null);
                 }
 
-                query = query
-                    .order('date', { ascending: false })
-                    .range(page * pageSize, (page + 1) * pageSize - 1);
-
+                // Apply date filters early
                 if (filters?.startDate) query = query.gte('date', filters.startDate);
                 if (filters?.endDate) query = query.lte('date', filters.endDate);
                 if (filters?.month !== undefined && filters?.year !== undefined) {
                     const startDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-01`;
-                    const lastDay = new Date(filters.year, filters.month + 1, 0).getDate();
-                    const endDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+                    const lastDayOfM = new Date(filters.year, filters.month + 1, 0).getDate();
+                    const endDate = `${filters.year}-${String(filters.month + 1).padStart(2, '0')}-${String(lastDayOfM).padStart(2, '0')}`;
                     query = query.gte('date', startDate).lte('date', endDate);
                 }
+
+                // Apply ordering and range last
+                query = query
+                    .order('date', { ascending: false })
+                    .order('time', { ascending: false })
+                    .range(page * pageSize, (page + 1) * pageSize - 1);
 
                 const { data, error } = await withRetry(async () => await query);
 
@@ -65,14 +69,14 @@ export const useSales = () => {
                     }
                 }
 
-                // Safety break to avoid infinite loops if something goes wrong
-                if (page > 50) break;
+                // Increased safety break to 200 pages (200,000 records) to handle high-volume companies
+                if (page > 200) break;
             }
 
             return { data: allData, error: null };
         } catch (err: any) {
-            console.error('Fetch sales error:', err);
-            return { error: err };
+            console.error('Fetch sales error detail:', err);
+            return { error: err, data: [] };
         } finally {
             setLoading(false);
         }
