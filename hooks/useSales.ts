@@ -15,15 +15,16 @@ export const useSales = () => {
         try {
             let allData: any[] = [];
             let page = 0;
-            const pageSize = 1000;
+            // CRITICAL: Small page size (250) because each sale includes nested sale_items + products.
+            // With 1000 per page, PostgREST responses exceed size limits, causing truncated/empty item arrays.
+            const pageSize = 250;
             let hasMore = true;
+            let consecutiveErrors = 0;
+
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) return { data: [], error: null };
 
             while (hasMore) {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session?.user) return { data: [], error: null };
-
-                // Compact select to ensure PostgREST nested retrieval works. 
-                // Removed all potential formatting issues that could cause partial returns.
                 let query = supabase
                     .from('sales')
                     .select('id,date,time,store_name,payment_method,total_amount,sale_items(total_price,unit_price,quantity,unit_cost,products(name,code,category,sub_category,cost))');
@@ -44,29 +45,50 @@ export const useSales = () => {
                     query = query.gte('date', startDate).lte('date', endDate);
                 }
 
-                // Strictly stable sort (date, time, id) is vital for correct pagination
                 query = query
                     .order('date', { ascending: false })
                     .order('time', { ascending: false })
                     .order('id', { ascending: true })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 
-                const { data, error } = await withRetry(async () => await query);
+                try {
+                    const { data, error } = await withRetry(async () => await query);
 
-                if (error) throw error;
-                
-                if (!data || data.length === 0) {
-                    hasMore = false;
-                } else {
-                    allData = [...allData, ...data];
-                    if (data.length < pageSize) {
+                    if (error) {
+                        console.error(`fetchSales page ${page} error:`, error);
+                        consecutiveErrors++;
+                        if (consecutiveErrors >= 3) {
+                            console.error('Too many consecutive page errors, stopping');
+                            hasMore = false;
+                        } else {
+                            page++;
+                        }
+                        continue;
+                    }
+
+                    consecutiveErrors = 0;
+                    
+                    if (!data || data.length === 0) {
+                        hasMore = false;
+                    } else {
+                        allData = [...allData, ...data];
+                        if (data.length < pageSize) {
+                            hasMore = false;
+                        } else {
+                            page++;
+                        }
+                    }
+                } catch (pageErr) {
+                    console.error(`fetchSales page ${page} exception:`, pageErr);
+                    consecutiveErrors++;
+                    if (consecutiveErrors >= 3) {
                         hasMore = false;
                     } else {
                         page++;
                     }
                 }
 
-                if (page > 100) break; // Reasonable limit for monthly data
+                if (page > 200) break;
             }
 
             // Final deduplication for absolute safety
