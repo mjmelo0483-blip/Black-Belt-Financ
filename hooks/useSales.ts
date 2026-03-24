@@ -15,11 +15,11 @@ export const useSales = () => {
         try {
             let allData: any[] = [];
             let page = 0;
-            // CRITICAL: Small page size (250) because each sale includes nested sale_items + products.
-            // With 1000 per page, PostgREST responses exceed size limits, causing truncated/empty item arrays.
-            const pageSize = 250;
+            // Very small page size because each sale includes nested sale_items + products.
+            // Large pages cause PostgREST response truncation, losing items and later records.
+            const pageSize = 100;
             let hasMore = true;
-            let consecutiveErrors = 0;
+            let totalRetries = 0;
 
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return { data: [], error: null };
@@ -51,44 +51,31 @@ export const useSales = () => {
                     .order('id', { ascending: true })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 
-                try {
-                    const { data, error } = await withRetry(async () => await query);
+                const { data, error } = await withRetry(async () => await query);
 
-                    if (error) {
-                        console.error(`fetchSales page ${page} error:`, error);
-                        consecutiveErrors++;
-                        if (consecutiveErrors >= 3) {
-                            console.error('Too many consecutive page errors, stopping');
-                            hasMore = false;
-                        } else {
-                            page++;
-                        }
-                        continue;
-                    }
-
-                    consecutiveErrors = 0;
-                    
-                    if (!data || data.length === 0) {
+                if (error) {
+                    console.error(`fetchSales page ${page} error:`, error);
+                    totalRetries++;
+                    if (totalRetries >= 10) {
+                        console.error('Too many total errors, stopping with partial data');
                         hasMore = false;
-                    } else {
-                        allData = [...allData, ...data];
-                        if (data.length < pageSize) {
-                            hasMore = false;
-                        } else {
-                            page++;
-                        }
                     }
-                } catch (pageErr) {
-                    console.error(`fetchSales page ${page} exception:`, pageErr);
-                    consecutiveErrors++;
-                    if (consecutiveErrors >= 3) {
+                    // DO NOT skip page - just retry by continuing the loop
+                    continue;
+                }
+                
+                if (!data || data.length === 0) {
+                    hasMore = false;
+                } else {
+                    allData = [...allData, ...data];
+                    if (data.length < pageSize) {
                         hasMore = false;
                     } else {
                         page++;
                     }
                 }
 
-                if (page > 200) break;
+                if (page > 500) break; // Safety: 50k records max
             }
 
             // Final deduplication for absolute safety
