@@ -13,69 +13,93 @@ export const useSales = () => {
         if (!isBusiness) return { data: [], error: null };
         setLoading(true);
         try {
-            let allData: any[] = [];
-            let page = 0;
-            // Very small page size because each sale includes nested sale_items + products.
-            // Large pages cause PostgREST response truncation, losing items and later records.
-            const pageSize = 100;
-            let hasMore = true;
-            let totalRetries = 0;
-
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return { data: [], error: null };
 
+            // ---- STEP 1: Fetch ALL sale IDs for the period (lightweight, no nested data) ----
+            let allIds: string[] = [];
+            let page = 0;
+            const idPageSize = 1000; // Large pages since there's no nested data
+            let hasMore = true;
+
             while (hasMore) {
-                let query = supabase
+                let idQuery = supabase
                     .from('sales')
-                    .select('id,date,time,store_name,payment_method,total_amount,sale_items(total_price,unit_price,quantity,unit_cost,products(name,code,category,sub_category,cost))');
+                    .select('id');
 
                 if (activeCompany) {
-                    query = query.eq('company_id', activeCompany.id);
+                    idQuery = idQuery.eq('company_id', activeCompany.id);
                 } else {
-                    query = query.eq('user_id', session.user.id).is('company_id', null);
+                    idQuery = idQuery.eq('user_id', session.user.id).is('company_id', null);
                 }
 
-                if (filters?.startDate) query = query.gte('date', filters.startDate);
-                if (filters?.endDate) query = query.lte('date', filters.endDate);
+                if (filters?.startDate) idQuery = idQuery.gte('date', filters.startDate);
+                if (filters?.endDate) idQuery = idQuery.lte('date', filters.endDate);
                 if (filters?.month !== undefined && filters?.year !== undefined) {
                     const mStr = String(filters.month + 1).padStart(2, '0');
                     const startDate = `${filters.year}-${mStr}-01`;
                     const lastDay = new Date(filters.year, filters.month + 1, 0).getDate();
                     const endDate = `${filters.year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
-                    query = query.gte('date', startDate).lte('date', endDate);
+                    idQuery = idQuery.gte('date', startDate).lte('date', endDate);
                 }
 
-                query = query
-                    .order('date', { ascending: false })
-                    .order('time', { ascending: false })
-                    .order('id', { ascending: true })
-                    .range(page * pageSize, (page + 1) * pageSize - 1);
+                idQuery = idQuery.order('id', { ascending: true }).range(page * idPageSize, (page + 1) * idPageSize - 1);
 
-                const { data, error } = await withRetry(async () => await query);
+                const { data, error } = await idQuery;
 
                 if (error) {
-                    console.error(`fetchSales page ${page} error:`, error);
-                    totalRetries++;
-                    if (totalRetries >= 10) {
-                        console.error('Too many total errors, stopping with partial data');
-                        hasMore = false;
-                    }
-                    // DO NOT skip page - just retry by continuing the loop
-                    continue;
+                    console.error(`fetchSales ID page ${page} error:`, error);
+                    break;
                 }
-                
+
                 if (!data || data.length === 0) {
                     hasMore = false;
                 } else {
-                    allData = [...allData, ...data];
-                    if (data.length < pageSize) {
+                    allIds = [...allIds, ...data.map(d => d.id)];
+                    if (data.length < idPageSize) {
                         hasMore = false;
                     } else {
                         page++;
                     }
                 }
 
-                if (page > 500) break; // Safety: 50k records max
+                if (page > 200) break; // Safety: 200k records max
+            }
+
+            if (allIds.length === 0) {
+                return { data: [], error: null };
+            }
+
+            // ---- STEP 2: Fetch complete sales with nested items in small batches by ID ----
+            let allData: any[] = [];
+            const batchSize = 50; // Small enough to avoid PostgREST response size limits with nested data
+            let totalRetries = 0;
+
+            for (let i = 0; i < allIds.length; i += batchSize) {
+                const batch = allIds.slice(i, i + batchSize);
+
+                const { data, error } = await withRetry(async () =>
+                    await supabase
+                        .from('sales')
+                        .select('id,date,time,store_name,payment_method,total_amount,sale_items(total_price,unit_price,quantity,unit_cost,products(name,code,category,sub_category,cost))')
+                        .in('id', batch)
+                );
+
+                if (error) {
+                    console.error(`fetchSales batch at ${i} error:`, error);
+                    totalRetries++;
+                    if (totalRetries >= 10) {
+                        console.error('Too many total errors, stopping with partial data');
+                        break;
+                    }
+                    // Retry this batch
+                    i -= batchSize;
+                    continue;
+                }
+
+                if (data) {
+                    allData = [...allData, ...data];
+                }
             }
 
             // Final deduplication for absolute safety
