@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import { supabase, withRetry } from '../supabase';
 import { useSales } from '../hooks/useSales';
 import { useView } from '../contexts/ViewContext';
@@ -716,6 +717,150 @@ const DRE: React.FC = () => {
         };
     }, [salesData, expensesData, params, selectedStore, dreGroups]);
 
+    const buildDRERows = useCallback(() => {
+        const fmt = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const pct = (v: number) => metrics.totalRev > 0 ? ((v / metrics.totalRev) * 100).toFixed(2) + '%' : '--';
+        const rows: { label: string; value: string; percentage: string; isSection?: boolean; isTotal?: boolean; isFinal?: boolean; isNegative?: boolean }[] = [];
+
+        rows.push({ label: 'RECEITAS', value: '', percentage: '', isSection: true });
+        Object.values(metrics.revGroups).forEach((group: any) => {
+            rows.push({ label: group.label, value: fmt(group.amount), percentage: pct(group.amount) });
+            if (group.label.toLowerCase().includes('venda') && metrics.totalRev > 0) {
+                (Object.entries(metrics.revByMethod) as [string, number][])
+                    .filter(([_, v]) => v > 0)
+                    .sort((a, b) => b[1] - a[1])
+                    .forEach(([method, value]) => {
+                        rows.push({ label: `  • ${method}`, value: fmt(value), percentage: pct(value) });
+                    });
+            }
+        });
+
+        rows.push({ label: 'RECEITA BRUTA (RB)', value: fmt(metrics.totalRev), percentage: '100.00%', isTotal: true });
+        rows.push({ label: dreGroups.find(g => g.id === params.tax_group_id)?.label || 'Impostos sobre faturamento', value: '- ' + fmt(metrics.impostos), percentage: pct(metrics.impostos), isNegative: true });
+        rows.push({ label: 'RECEITA LÍQUIDA (RL)', value: fmt(metrics.rl), percentage: pct(metrics.rl), isTotal: true });
+        rows.push({ label: activeCompany?.business_type === 'services' ? 'Custos de serviços prestados (CSP)' : 'Custos de mercadoria vendida (CMV)', value: '- ' + fmt(metrics.cmv), percentage: pct(metrics.cmv), isNegative: true });
+        rows.push({ label: 'MARGEM BRUTA', value: fmt(metrics.grossMargin), percentage: pct(metrics.grossMargin), isTotal: true });
+        rows.push({ label: dreGroups.find(g => g.id === params.loss_group_id)?.label || 'Perda do estoque', value: '- ' + fmt(metrics.perdaEstoque), percentage: pct(metrics.perdaEstoque), isNegative: true });
+        rows.push({ label: activeCompany?.business_type === 'services' ? 'MARGEM BRUTA SEM PERDAS' : 'MARGEM BRUTA SEM PERDA DE ESTOQUE', value: fmt(metrics.marginAfterLoss), percentage: pct(metrics.marginAfterLoss), isTotal: true });
+
+        rows.push({ label: '', value: '', percentage: '' });
+        rows.push({ label: 'DESPESAS VARIÁVEIS', value: '', percentage: '', isSection: true });
+        Object.entries(metrics.varGroups)
+            .filter(([id]) => id !== params.tax_group_id && id !== params.loss_group_id)
+            .forEach(([_, group]: [string, any]) => {
+                rows.push({ label: group.label, value: '- ' + fmt(group.amount), percentage: pct(group.amount), isNegative: true });
+            });
+        rows.push({ label: 'TOTAL DESPESAS VARIÁVEIS', value: '- ' + fmt(metrics.totalVar), percentage: pct(metrics.totalVar), isTotal: true, isNegative: true });
+
+        rows.push({ label: 'MARGEM DE CONTRIBUIÇÃO', value: fmt(metrics.marginAfterLoss - metrics.totalVar), percentage: pct(metrics.marginAfterLoss - metrics.totalVar), isTotal: true });
+
+        rows.push({ label: '', value: '', percentage: '' });
+        rows.push({ label: 'DESPESAS FIXAS', value: '', percentage: '', isSection: true });
+        Object.values(metrics.fixGroups).forEach((group: any) => {
+            rows.push({ label: group.label, value: '- ' + fmt(group.amount), percentage: pct(group.amount), isNegative: true });
+        });
+        rows.push({ label: 'TOTAL DESPESAS FIXAS', value: '- ' + fmt(metrics.totalFix), percentage: pct(metrics.totalFix), isTotal: true, isNegative: true });
+
+        rows.push({ label: '', value: '', percentage: '' });
+        rows.push({ label: metrics.netProfit >= 0 ? 'LUCRO LÍQUIDO' : 'PREJUÍZO LÍQUIDO', value: (metrics.netProfit < 0 ? '- ' : '') + fmt(metrics.netProfit), percentage: pct(metrics.netProfit), isFinal: true });
+
+        rows.push({ label: '', value: '', percentage: '' });
+        rows.push({ label: 'Índice de Margem (IMC)', value: (metrics.IMC * 100).toFixed(2) + '%', percentage: '' });
+        rows.push({ label: 'Ponto de Equilíbrio (Faturamento)', value: 'R$ ' + metrics.breakEven.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), percentage: '' });
+
+        return rows;
+    }, [metrics, params, dreGroups, activeCompany]);
+
+    const exportToExcel = useCallback(() => {
+        const rows = buildDRERows();
+        const periodLabel = `${monthNames[selectedMonth]}/${selectedYear}`;
+        const storeLabel = selectedStore === 'Todas' ? 'Todas as Lojas' : selectedStore;
+
+        const wsData = [
+            ['DRE - DEMONSTRATIVO DE RESULTADO'],
+            [`Período: ${periodLabel}`, `Loja: ${storeLabel}`],
+            [],
+            ['Descrição', 'Valor (R$)', '% s/ Receita'],
+            ...rows.map(r => [r.label, r.value, r.percentage])
+        ];
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // Column widths
+        ws['!cols'] = [{ wch: 50 }, { wch: 22 }, { wch: 15 }];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'DRE');
+        XLSX.writeFile(wb, `DRE_${monthNames[selectedMonth]}_${selectedYear}_${storeLabel.replace(/\s+/g, '_')}.xlsx`);
+    }, [buildDRERows, selectedMonth, selectedYear, selectedStore, monthNames]);
+
+    const exportToPDF = useCallback(() => {
+        const rows = buildDRERows();
+        const periodLabel = `${monthNames[selectedMonth]}/${selectedYear}`;
+        const storeLabel = selectedStore === 'Todas' ? 'Todas as Lojas' : selectedStore;
+        const companyName = activeCompany?.name || 'Minha Empresa';
+
+        const tableRows = rows.map(r => {
+            if (r.isSection) {
+                return `<tr class="section"><td colspan="3">${r.label}</td></tr>`;
+            }
+            if (r.label === '' && r.value === '') {
+                return `<tr class="spacer"><td colspan="3"></td></tr>`;
+            }
+            const cls = [r.isTotal ? 'total' : '', r.isFinal ? 'final' : '', r.isNegative ? 'negative' : ''].filter(Boolean).join(' ');
+            return `<tr class="${cls}">
+                <td>${r.label}</td>
+                <td class="val">${r.value}</td>
+                <td class="pct">${r.percentage}</td>
+            </tr>`;
+        }).join('');
+
+        const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>DRE - ${periodLabel}</title>
+<style>
+  @page { size: A4; margin: 15mm 12mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10px; color: #1e293b; background: #fff; }
+  .header { text-align: center; margin-bottom: 18px; border-bottom: 2px solid #4f46e5; padding-bottom: 12px; }
+  .header h1 { font-size: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #1e293b; margin-bottom: 4px; }
+  .header .sub { font-size: 11px; color: #64748b; font-weight: 600; }
+  .header .company { font-size: 13px; color: #4f46e5; font-weight: 800; margin-bottom: 2px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 4px 8px; border-bottom: 1px solid #e2e8f0; font-size: 10px; }
+  td.val { text-align: right; font-weight: 700; width: 140px; }
+  td.pct { text-align: right; width: 90px; color: #64748b; font-size: 9px; }
+  tr.section td { font-weight: 900; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #4f46e5; background: #f1f5f9; padding: 6px 8px; border: none; }
+  tr.total td { font-weight: 900; text-transform: uppercase; font-size: 10px; background: #f8fafc; border-top: 1.5px solid #cbd5e1; border-bottom: 1.5px solid #cbd5e1; padding: 5px 8px; }
+  tr.final td { font-weight: 900; text-transform: uppercase; font-size: 12px; border-top: 2px solid #1e293b; border-bottom: 2px solid #1e293b; padding: 8px; }
+  tr.negative td.val { color: #dc2626; }
+  tr.spacer td { border: none; height: 8px; }
+  .footer { text-align: center; margin-top: 20px; font-size: 8px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+</style></head><body>
+<div class="header">
+  <div class="company">${companyName}</div>
+  <h1>DRE - Demonstrativo de Resultado</h1>
+  <div class="sub">${periodLabel} &bull; ${storeLabel}</div>
+</div>
+<table>
+  <thead><tr style="border-bottom:2px solid #334155;">
+    <td style="font-weight:900;text-transform:uppercase;letter-spacing:1px;font-size:9px;color:#64748b;">Descrição</td>
+    <td class="val" style="font-weight:900;text-transform:uppercase;letter-spacing:1px;font-size:9px;color:#64748b;">Valor (R$)</td>
+    <td class="pct" style="font-weight:900;text-transform:uppercase;letter-spacing:1px;font-size:9px;color:#64748b;">% s/ Receita</td>
+  </tr></thead>
+  <tbody>${tableRows}</tbody>
+</table>
+<div class="footer">Gerado automaticamente pelo Nexo Finance Pro &bull; ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+</body></html>`;
+
+        const printWindow = window.open('', '_blank', 'width=800,height=900');
+        if (printWindow) {
+            printWindow.document.write(html);
+            printWindow.document.close();
+            setTimeout(() => printWindow.print(), 400);
+        }
+    }, [buildDRERows, selectedMonth, selectedYear, selectedStore, monthNames, activeCompany]);
+
+
     const Row = ({ label, value, percentage, isTotal, isSubTotal, isNegative, isFinal, onClick }: any) => (
         <div
             onClick={onClick}
@@ -766,6 +911,24 @@ const DRE: React.FC = () => {
                     >
                         <span className="material-symbols-outlined text-sm">settings</span>
                         Taxas/Config
+                    </button>
+
+                    <button
+                        onClick={exportToExcel}
+                        className="p-2 rounded-xl transition-all flex items-center gap-2 text-xs font-bold border bg-[#1e293b] border-[#334155] text-emerald-400 hover:bg-emerald-600/10 hover:border-emerald-500/50"
+                        title="Exportar para Excel"
+                    >
+                        <span className="material-symbols-outlined text-sm">table_view</span>
+                        Excel
+                    </button>
+
+                    <button
+                        onClick={exportToPDF}
+                        className="p-2 rounded-xl transition-all flex items-center gap-2 text-xs font-bold border bg-[#1e293b] border-[#334155] text-red-400 hover:bg-red-600/10 hover:border-red-500/50"
+                        title="Exportar para PDF"
+                    >
+                        <span className="material-symbols-outlined text-sm">picture_as_pdf</span>
+                        PDF
                     </button>
 
                     <div className="flex gap-1 flex-nowrap overflow-x-auto pb-1 max-w-[600px] custom-scrollbar">
